@@ -46,34 +46,23 @@ def get_visit_histories(patient_visits: list[dict]) -> dict[int, dict[int, str]]
 
     return visit_histories
 
-def get_visit_strings(patient_data: list[dict]) -> dict[str, dict[int, dict[tuple[str, int], str]]]:
+def get_visit_strings(patient_data: list[dict], window_len: int = 5) -> dict[str, dict[int, dict[tuple[str, int], str]]]:
     """
-    For all window sizes and all patients, return:
-      {
-        patient_id: {
-          window_length: {
-            (patient_id, end_idx): "visit history string",
-            ...
-          },
-          ...
-        },
-        ...
-      }
+    For all patients, return a flat dictionary mapping:
+        (patient_id, end_idx) → visit history string of the given window_len
     """
     result = {}
     for patient in patient_data:
         patient_id = patient["patient_id"]
         patient_visits = patient["visits"]
         visit_histories = get_visit_histories(patient_visits)
-        
-        # Convert: {window_len: {end_idx: string}} → {window_len: {(pid, end_idx): string}}
-        result[patient_id] = {
-            window_len: {
-                (patient_id, end_idx): visit_str
-                for end_idx, visit_str in windows.items()
-            }
-            for window_len, windows in visit_histories.items()
-        }
+
+        if window_len not in visit_histories:
+            continue  # Skip if this window length isn't valid for this patient
+
+        for end_idx, visit_str in visit_histories[window_len].items():
+            key = (patient_id, end_idx)
+            result[key] = visit_str
 
     return result
 

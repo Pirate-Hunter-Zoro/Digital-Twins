@@ -35,8 +35,8 @@ def generate_prompt(patient: dict, n: int, num_neighbors: int=5) -> str:
     Generate a prompt to get the patient's (n+1)st visit (of index n).
     """
     patient_id = patient["patient_id"]
-    visit_idx = n  # We use the latest visit *up to* the prediction point
-    key = f"{patient_id}_{visit_idx}"
+    window_size_used = n  # We use the latest visit *up to* the prediction point
+    key = f"{patient_id}_{window_size_used}"
     if key not in all_prompts.keys():
         # Then we need to generate the prompt
 
@@ -44,10 +44,12 @@ def generate_prompt(patient: dict, n: int, num_neighbors: int=5) -> str:
             turn_to_sentence(visit) for visit in patient["visits"][:n]
         )
 
-        relevant_neighbors = nearest_neighbors.get((patient_id, visit_idx), [])
+        relevant_neighbors = nearest_neighbors.get((patient_id, window_size_used), [])
         neighbor_section = "\n".join(
-            all_patient_strings[neighbor_key_score[0]] for neighbor_key_score in relevant_neighbors[:min(len(relevant_neighbors), num_neighbors+1)]
+            all_patient_strings[neighbor_key_score[0]]
+            for neighbor_key_score in relevant_neighbors[:min(len(relevant_neighbors), num_neighbors+1)]
         )
+
         random_diagnoses = ', '.join(random.sample(sorted(all_diagnoses), min(len(all_diagnoses), 3)))
         random_medications = ', '.join(random.sample(sorted(all_medications), min(len(all_medications), 3)))
         random_treatments = ', '.join(random.sample(sorted(all_treatments), min(len(all_treatments), 3)))
