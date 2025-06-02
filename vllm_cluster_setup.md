@@ -1,0 +1,106 @@
+# Running vLLM with Qwen3-30B on LIBR Cluster
+
+This guide walks you through launching `vllm` on a compute node, using a local Conda environment, and testing the model with the OpenAI-compatible API.
+
+---
+
+## 🧪 1. Set up your Conda environment
+
+Use Python 3.10–3.12. Run the following:
+
+```bash
+conda create -n vllm_env python=3.12 -y
+conda activate vllm_env
+pip install -r requirements.txt
+```
+
+Your `requirements.txt` should include at minimum:
+
+```
+vllm
+torch
+transformers
+openai
+```
+
+---
+
+## 🚀 2. Launch the vLLM server on a compute node
+
+From `submit0`, request a GPU compute node:
+
+```bash
+srun --partition=c3_short --gres=gpu --pty bash
+```
+
+Once you're in the compute node (e.g. `compute305`):
+
+Obtain the snapshot of the model you have downloaded from running ```download_model.py```
+```bash
+ls ~/.cache/huggingface/hub/models--cognitivecomputations--Qwen3-30B-A3B-AWQ/snapshots
+```
+Then, with that obtained snapshot key, paste it into the following command (e.g.):
+```bash
+mkdir -p ~/models
+ln -s ~/.cache/huggingface/hub/models--cognitivecomputations--Qwen3-30B-A3B-AWQ/snapshots/1ba5586ace54cc9de85addac384eb88576f94598 ~/models/qwen3-30b
+```
+You should only have to do that once. What you'll have to do every time follows:
+```bash
+conda activate vllm_env
+vllm serve ~/models/qwen3-30b
+```
+
+Wait for the server to fully load. You should see a message like:
+
+```
+INFO:     Started server process [xxxxx]
+INFO:     Application startup complete.
+```
+
+---
+
+## 🧵 3. From a second terminal, run your query script
+
+In a second terminal, SSH to `submit0` and then SSH to the same compute node (do not request a GPU again).
+
+```bash
+ssh compute305
+```
+
+Then:
+
+```bash
+conda activate vllm_env
+python query_llm.py
+```
+
+---
+
+## 🧠 `query_llm.py` (example)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",  # or replace with internal IP if remote access
+    api_key="not-needed-for-localhost",   # any non-empty string to avoid Bearer header errors
+)
+
+response = client.chat.completions.create(
+    model="cognitivecomputations/Qwen3-30B-A3B-AWQ",  # Must match name in `vllm serve`
+    messages=[{"role": "user", "content": "What is the capital of France?"}],
+    temperature=0.7,
+)
+
+print(response.choices[0].message.content)
+```
+
+---
+
+## ✅ Summary
+
+- Launch `vllm serve` on a compute node.
+- SSH into that exact node from another terminal to make API calls.
+- Make sure both terminals use the same Conda environment.
+
+Happy inferencing!
