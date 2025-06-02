@@ -41,14 +41,14 @@ def inspect_visit(patient_id: str, visit_idx: int, k: int = 5, output_path="exam
                 if debug:
                     output.append(f"\n📝 Prompt for {patient_id} visit {visit_idx}:\n{prompt}\n")
 
-                output.append("🔍 Closest Neighbors (later is closer):")
+                output.append("🔍 Closest Sequence of Visits from Other Patients (later is closer):")
                 for i in range(k - 1, -1, -1):
                     (neighbor_pid, neighbor_vidx), similarity = neighbors[i]
                     narrative = get_narrative(patient_lookup[neighbor_pid]["visits"], neighbor_vidx)
                     output.append(f"  {k - i}. ID: ({neighbor_pid}, {neighbor_vidx}), Cosine Similarity: {similarity:.4f}")
                     output.append(f"    Patient Narrative: {narrative}\n")
 
-                output.append("🧭 Farthest Neighbors (later is farther):")
+                output.append("🧭 Farthest Sequence of Visits from Other Patients (later is farther):")
                 for i in range(n - k, n):
                     (neighbor_pid, neighbor_vidx), similarity = neighbors[i]
                     narrative = get_narrative(patient_lookup[neighbor_pid]["visits"], neighbor_vidx)
