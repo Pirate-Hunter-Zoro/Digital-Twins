@@ -3,6 +3,7 @@
 ---
 
 ### ✅ 1. Look into Sentence Similarity  
+**Be wary of all nearby neighbors coming from same patient - concatenate contiguous sequences of visits coming from same patient - have system search for X number of patients; not X number of windows - keep polling until you reach desired number of patients and concatenate if you've already seen the patient
 **Goal:** Improve patient similarity with sentence embeddings.  
 **Augmented Insight:**  
 - Test biomedical-specific models (`BioBERT`, `PubMedBERT`, `BioMistral`)  

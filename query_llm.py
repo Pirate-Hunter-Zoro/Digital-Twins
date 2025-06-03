@@ -30,7 +30,7 @@ def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> 
     llm_client = get_llm_client()
     try:
         output = llm_client.chat.completions.create(
-            model="/home/librad.laureateinstitute.org/mferguson/models/qwen3-30b",
+            model="llama3",
             messages=[
                 {"role": "system", "content": "You are a helpful medical assistant. Only return structured responses."},
                 {"role": "user", "content": prompt}

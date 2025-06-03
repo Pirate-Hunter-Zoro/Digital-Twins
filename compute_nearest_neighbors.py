@@ -67,23 +67,22 @@ def get_visit_strings(patient_data: list[dict], window_len: int = 5) -> dict[str
     return result
 
 ######################################################################
-# Initialize the TF-IDF vectorizer to turn visit strings into vectors
+# Use an sentence transformer to get vectors for each visit sequence
+from sentence_transformers import SentenceTransformer
+from huggingface_hub import login
+import numpy as np
 
-vectorizer = TfidfVectorizer()
+login(token="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")
+embedder = SentenceTransformer("/home/librad.laureateinstitute.org/mferguson/models/BioBERT-mnli-snli-scinli-scitail-mednli-stsb", local_files_only=True)
 
 def get_visit_vectors(
     patient_data: list[dict],
     k: int,
-    vectorizer=None
 ) -> dict[tuple[str, int], np.ndarray]:
     """
     Return TF-IDF vectors for each patient's visit sequences of length k.
     Keys are (patient_id, end_idx), values are np.ndarray vectors.
     """
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    if vectorizer is None:
-        vectorizer = TfidfVectorizer()
-
     all_visit_strings = []
     all_keys = []
 
@@ -99,10 +98,9 @@ def get_visit_vectors(
             all_keys.append((patient_id, end_idx))
             all_visit_strings.append(visit_string)
 
-    vectors = vectorizer.fit_transform(all_visit_strings)
-    dense_vectors = vectors.toarray()
+    vectors = embedder.encode(all_visit_strings, show_progress_bar=False, convert_to_numpy=True)
 
-    return {key: vec for key, vec in zip(all_keys, dense_vectors)}
+    return {key: vec for key, vec in zip(all_keys, vectors)}
 
 def get_neighbors(patient_data, num_visits: int=5) -> dict[tuple[str, int], list[tuple[tuple[str, int], float]]]:
     """

@@ -52,8 +52,7 @@ Activate your environment and launch the server:
 ```bash
 conda activate vllm_env
 
-vllm serve \
-  --model ~/models/biogpt \
+vllm serve ~/models/biogpt \
   --dtype float16 \
   --served-model-name biogpt
 ```

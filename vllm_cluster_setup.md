@@ -34,20 +34,15 @@ srun --partition=c3_short --gres=gpu --pty bash
 ```
 
 Once you're in the compute node (e.g. `compute305`):
+```bash
+conda activate vllm_env
+```
 
 Obtain the snapshot of the model you have downloaded from running ```download_model.py```
 ```bash
-ls ~/.cache/huggingface/hub/models--cognitivecomputations--Qwen3-30B-A3B-AWQ/snapshots
-```
-Then, with that obtained snapshot key, paste it into the following command (e.g.):
-```bash
-mkdir -p ~/models
-ln -s ~/.cache/huggingface/hub/models--cognitivecomputations--Qwen3-30B-A3B-AWQ/snapshots/1ba5586ace54cc9de85addac384eb88576f94598 ~/models/qwen3-30b
-```
-You should only have to do that once. What you'll have to do every time follows:
-```bash
-conda activate vllm_env
-vllm serve ~/models/qwen3-30b
+vllm serve ../models/Meta-Llama \
+  --dtype float16 \
+  --served-model-name llama3
 ```
 
 Wait for the server to fully load. You should see a message like:
