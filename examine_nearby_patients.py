@@ -1,7 +1,7 @@
 import json
 import pickle
 from generate_patients import load_patient_data
-from generate_narrative import get_narrative
+from llm_helper import get_narrative
 
 debug = False
 

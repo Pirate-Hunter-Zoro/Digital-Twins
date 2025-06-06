@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --partition=c3_short
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --nodes=1
+#SBATCH --mem=64GB                 # INCREASED MEMORY
+#SBATCH --time=02:00:00           # 2 hours for full download. Can increase to 10:00:00 or more if needed.
+#SBATCH --output=logs/download_models-%J.stdout
+#SBATCH --error=logs/download_models-%J.stderr
+#SBATCH --job-name=download_llms
+#SBATCH --mail-user=your_email@laureateinstitute.org # Replace with your LIBR email
+#SBATCH --mail-type=ALL
+
+echo "Starting download_models.ssub script (FINAL Conda activation attempt and increased memory, no chdir)."
+echo "Current directory: $(pwd)"
+echo "---"
+
+# Load the Anaconda module
+module load Anaconda3/2022.05
+
+# Initialize Conda for the current shell (this still sets up necessary functions like `conda run`)
+source $(conda info --base)/etc/profile.d/conda.sh
+
+# Explicitly use 'conda run' to execute commands within the environment
+echo "Running commands via 'conda run -n vllm_env'..."
+
+# Ensure huggingface_hub is installed within this active conda environment.
+conda run -n vllm_env pip install huggingface_hub
+
+# Run your Python script (download_model.py)
+conda run -n vllm_env python3 download_model.py
+
+echo "download_model.py execution requested via conda run."
+echo "Script finished."
