@@ -12,11 +12,11 @@ try:
 except Exception as e:
     print(f"⚠️ Could not load stored results: {e}")
 
-def process_patient(patient: dict) -> tuple[str, list[dict]]:
+def process_patient(patient: dict, vectorizer: str="sentence_transformer", distance_metric: str="cosine") -> tuple[str, list[dict]]:
     try:
         results = []
         for visit_idx in range(1, len(patient["visits"])):
-            prompt = generate_prompt(patient, visit_idx)
+            prompt = generate_prompt(patient, visit_idx, vectorizer=vectorizer, distance_metric=distance_metric)
             if prompt in stored_results:
                 predicted_next_visit = parse_llm_response(clean_response(stored_results[prompt]).strip())
             else:

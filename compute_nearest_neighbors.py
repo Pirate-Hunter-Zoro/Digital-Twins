@@ -131,6 +131,8 @@ def get_neighbors(patient_data, num_visits: int=5, distance_metric: str="cosine"
             neighbors = pickle.load(f)
     except:
         vectors_dict = get_visit_vectors(patient_data, num_visits, vectorizer=vectorizer)
+        with open(f"all_vectors_{vectorizer}_{num_visits}.pkl", "wb") as f:
+            pickle.dump(vectors_dict, f)
         keys = list(vectors_dict.keys())
         matrix = np.vstack([vectors_dict[key] for key in keys])
         # Compute cosine similarity between every pair of visits, where sim_matrix[i][j] is the similarity between keys[i] and keys[j]
@@ -149,7 +151,7 @@ def get_neighbors(patient_data, num_visits: int=5, distance_metric: str="cosine"
         for i, patient_by_visit in enumerate(keys):
             sims = sim_matrix[i]
             # Create a list of tuples - first element is tuple is patient/visit_idx pair, and second element is the cosine similarity between that patient/visit_idx pair and this one
-            sim_pairs = [(keys[j], sims[j]) for j in range(len(keys)) if j != i]
+            sim_pairs = [(keys[j], sims[j], vectors_dict[keys[j]]) for j in range(len(keys)) if j != i]
             # Sort by decreasing cosine similarity, because that's what's farther away
             sim_pairs.sort(key=lambda x: x[1], reverse=True)
             neighbors[patient_by_visit] = [pair for pair in sim_pairs]

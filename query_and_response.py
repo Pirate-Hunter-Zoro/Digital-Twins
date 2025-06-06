@@ -5,12 +5,6 @@ from query_llm import query_llm
 import random
 import textwrap
 
-try:
-    with open("all_prompts.json", "r") as f:
-        all_prompts = json.load(f)
-except:
-    all_prompts = {}
-
 patient_data = load_patient_data()
 all_medications = set()
 all_treatments = set()
@@ -27,13 +21,20 @@ all_response_options = {
     "treatments": sorted(all_treatments)
 }
 
-all_patient_strings = get_visit_strings(patient_data)
-nearest_neighbors = get_neighbors(patient_data)
+all_patient_strings = get_visit_strings(patient_data, window_len=5)
 
-def generate_prompt(patient: dict, n: int, num_neighbors: int=5) -> str:
+def generate_prompt(patient: dict, n: int, num_neighbors: int=5, vectorizer: str="sentence_transformer", distance_metric: str="cosine") -> str:
     """
     Generate a prompt to get the patient's (n+1)st visit (of index n).
     """
+    nearest_neighbors = get_neighbors(patient_data, vectorizer=vectorizer, distance_metric=distance_metric)
+
+    try:
+        with open(f"all_prompts_{vectorizer}_{distance_metric}.json", "r") as f:
+            all_prompts = json.load(f)
+    except:
+        all_prompts = {}
+
     patient_id = patient["patient_id"]
     window_size_used = n  # We use the latest visit *up to* the prediction point
     key = f"{patient_id}_{window_size_used}"
