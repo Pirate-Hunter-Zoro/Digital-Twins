@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --partition=c3_short
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8       # llama.cpp server can use multiple CPU cores
+#SBATCH --cpus-per-task=8
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:1            # Request 1 GPU for llama.cpp server
-#SBATCH --mem=20GB              # Adjust memory for 17GB GGUF model + server overhead
-#SBATCH --time=10:00:00         # Time for the server to stay up (e.g., 10 hours)
+#SBATCH --gres=gpu:1
+#SBATCH --mem=20GB
+#SBATCH --time=10:00:00
 #SBATCH --output=logs/llama_cpp_server-%J.stdout
 #SBATCH --error=logs/llama_cpp_server-%J.stderr
 #SBATCH --job-name=llama_cpp_medgemma_server
@@ -18,12 +18,17 @@ echo "Running on host: $(hostname)"
 echo "Current directory: $(pwd)"
 echo "---"
 
-# Path to your compiled llama.cpp directory (assuming it's in your home folder)
+# Load CUDA and CMake modules (if needed for the environment where this SBatch job runs)
+# It's good practice to ensure the environment is fully set up in the SBatch script.
+module load CUDA/12.5.0 # Or the specific version you used for compilation
+module load CMake # Or the specific version you used for compilation
+
+# Path to your compiled llama.cpp directory
 LLAMA_CPP_DIR="/home/librad.laureateinstitute.org/mferguson/llama.cpp"
 # Path to your downloaded MedGemma GGUF model
 MEDGEMMA_MODEL_PATH="/home/librad.laureateinstitute.org/mferguson/models/MedGemma-27B-text-it-GGUF/medgemma-27b-text-it-Q4_K_M.gguf"
 # The port the server will listen on
-SERVER_PORT="8001" # Using 8001 to distinguish from vLLM default 8000, just in case
+SERVER_PORT="8001"
 
 # Check if model exists
 if [ ! -f "$MEDGEMMA_MODEL_PATH" ]; then
@@ -33,30 +38,21 @@ fi
 
 echo "Launching llama.cpp HTTP server..."
 # Run the llama.cpp server in the background
-# --model: path to your GGUF model
-# --port: port to listen on
-# --n-gpu-layers: number of layers to offload to GPU (-1 means all if possible)
-# --n-ctx: context window size (adjust based on model's capacity and your needs, default 2048 or 4096 is common)
-# --host: listen on all interfaces (0.0.0.0) so it's accessible from other nodes
-# > /dev/null 2>&1 & : Redirects stdout/stderr to /dev/null and runs in background.
-# This makes Slurm think the script finished, but the server keeps running.
-# Use 'sleep infinity' to keep the batch job alive until the server process is killed or time runs out.
-"$LLAMA_CPP_DIR"/build/bin/llama-cpp-python -m "$MEDGEMMA_MODEL_PATH" \
+# CRITICAL CHANGE: Use 'bin/llama-server' instead of 'bin/server'
+"$LLAMA_CPP_DIR"/build/bin/llama-server \
+  --model "$MEDGEMMA_MODEL_PATH" \
   --port "$SERVER_PORT" \
   --n-gpu-layers -1 \
   --n-ctx 4096 \
-  --host 0.0.0.0 > /dev/null 2>&1 &
+  --host 0.0.0.0 > "$LLAMA_CPP_DIR"/server_output.log 2>&1 & # Redirect output to a log file
 
 # Capture the PID of the background process
 SERVER_PID=$!
 echo "llama.cpp server launched with PID: $SERVER_PID"
+echo "Server output is being redirected to: $LLAMA_CPP_DIR/server_output.log"
 
 # Keep the Slurm job alive while the server runs in the background
-# This will keep the compute node allocated for the server.
 # The server will stop when this job exits (due to time limit or scancel).
-wait $SERVER_PID
-# If the server is correctly backgrounded and doesn't exit, this 'wait' will never return.
-# A common pattern is to just sleep indefinitely if you want the job to hold the resource:
-# sleep infinity
+sleep infinity # This will keep the Slurm job active indefinitely (until time limit)
 
-echo "llama.cpp server job finished (this message likely won't appear if server is running indefinitely)."
+echo "llama.cpp server job finished (this message will only appear if 'sleep infinity' is interrupted)."
