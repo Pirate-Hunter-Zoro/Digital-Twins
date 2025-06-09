@@ -119,7 +119,7 @@ def get_visit_vectors(
 
     return {key: vec for key, vec in zip(all_keys, vectors)}
 
-def get_neighbors(patient_data, num_visits: int=5, distance_metric: str="cosine", vectorizer: str="sentence_transformer") -> dict[tuple[str, int], list[tuple[tuple[str, int], float]]]:
+def get_neighbors(patient_data, use_synthetic_data: bool=False, num_visits: int=5, distance_metric: str="cosine", vectorizer: str="sentence_transformer") -> dict[tuple[str, int], list[tuple[tuple[str, int], float]]]:
     """
     Compute and sort by closeness the neighbors for each visit sequence of length `num_visits`.
 
@@ -127,7 +127,7 @@ def get_neighbors(patient_data, num_visits: int=5, distance_metric: str="cosine"
         dict mapping (patient_id, visit_idx) to list of (neighbor_id, similarity score)
     """
     try:
-        with open(f"neighbors_{vectorizer}_{distance_metric}.pkl", "rb") as f:
+        with open(f"{'data' if use_synthetic_data else 'real_data'}/neighbors_{vectorizer}_{distance_metric}.pkl", "rb") as f:
             neighbors = pickle.load(f)
     except:
         vectors_dict = get_visit_vectors(patient_data, num_visits, vectorizer=vectorizer)
@@ -156,7 +156,7 @@ def get_neighbors(patient_data, num_visits: int=5, distance_metric: str="cosine"
             sim_pairs.sort(key=lambda x: x[1], reverse=True)
             neighbors[patient_by_visit] = [pair for pair in sim_pairs]
 
-        with open(f"neighbors_{vectorizer}_{distance_metric}.pkl", "wb") as f:
+        with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/neighbors_{vectorizer}_{distance_metric}.pkl", "wb") as f:
             pickle.dump(neighbors, f)
         
     return neighbors

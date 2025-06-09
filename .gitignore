@@ -1,4 +1,5 @@
 __pycache__
-*.jsonl
-*.json
-*.pkl
+.vscode/
+logs/
+synthetic_data/
+real_data/

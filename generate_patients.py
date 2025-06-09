@@ -45,9 +45,9 @@ def generate_visit() -> dict[str, list[str]]:
     Generate a random visit with a diagnoses, medication, and treatment plan.
     """
 
-    diagnoses = random.sample(diagnosis_pool, k=random.randint(1, min(3, len(diagnosis_pool))))  # Two diagnoses for complexity
-    medications = random.sample(medication_pool, k=random.randint(1, min(3, len(diagnosis_pool))))
-    treatments = random.sample(treatment_pool, k=random.randint(1, min(3, len(treatment_pool))))
+    diagnoses = random.sample(diagnosis_pool, k=random.randint(1, min(5, len(diagnosis_pool))))  # Two diagnoses for complexity
+    medications = random.sample(medication_pool, k=random.randint(1, min(5, len(diagnosis_pool))))
+    treatments = random.sample(treatment_pool, k=random.randint(1, min(5, len(treatment_pool))))
 
     visit = {
         "diagnoses": diagnoses,
@@ -57,15 +57,12 @@ def generate_visit() -> dict[str, list[str]]:
 
     return visit
 
-min_visits = 5
-max_visits = 10
 total_patients = 0
-def generate_patient() -> dict[str, object]:
+def generate_patient(num_visits: int=5) -> dict[str, object]:
     """
     Generate a random patient with a unique ID and a list of visits.
     """
     global total_patients
-    num_visits = random.randint(min_visits, max_visits)
     visits = [generate_visit() for _ in range(num_visits)]
     total_patients += 1
     id = "P" + str(total_patients).zfill(7)
@@ -75,21 +72,29 @@ def generate_patient() -> dict[str, object]:
     }
     return patient
 
-def write_and_generate_patients(n_patients: int=100) -> None:
+def write_and_generate_patients(n_patients: int=100, num_visits: int=5) -> None:
     """
     Generate a list of n random patients.
     """
-    patients = [generate_patient() for _ in range(n_patients)]
-    with open("patient_data.json", "w") as f:
+    patients = [generate_patient(num_visits=num_visits) for _ in range(n_patients)]
+    with open(f"synthetic_data/patient_data_{n_patients}_{num_visits}.json", "w") as f:
         json.dump(patients, f, indent=4)
 
-def load_patient_data() -> list[dict]:
+def load_patient_data(use_synthetic_data: bool=False, num_visits: int=5, num_patients: int=100) -> list[dict]:
     """
     Load patient data from the JSON file.
     """
-    try:
-        with open("patient_data.json", "r") as f:
-            return json.load(f)
-    except:
-        write_and_generate_patients()
-        return load_patient_data()
+    if use_synthetic_data:
+        try:
+            with open(f"synthetic_data/patient_data_{num_patients}_{num_visits}.json", "r") as f:
+                return json.load(f)
+        except:
+            write_and_generate_patients(num_patients=num_patients, num_visits=num_visits)
+            return load_patient_data()
+    else:
+        try:
+            with open(f"real_data/patient_data_{num_patients}.json", "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            # TODO - parse the real data files and generate the JSON file for the number of patients
+            pass

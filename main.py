@@ -29,17 +29,30 @@ if __name__ == "__main__":
         print("LLM query complete. Now processing patient data...")
 
     parser = argparse.ArgumentParser(description="Evaluate all JSON files in a directory in parallel.")
-    parser.add_argument("--workers", type=int, default=1, help="Number of worker processes to use.")
+    parser.add_argument("--workers", type=int, default=4, help="Number of worker processes to use.")
     parser.add_argument("--save_every", type=int, default=10, help="Frequency of saving results per patients processed.")
     parser.add_argument("--output", type=str, default="patient_output_results.json", help="Output file to save results.")
+    parser.add_argument("--vectorizer_method", type=str, default="sentence-transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
+    parser.add_argument("--distance_metric", type=str, default="cosine", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
+    parser.add_argument("--use_synthetic_data", type=bool, default=False, help="Use synthetic data for testing purposes.")
+    parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
+    parser.add_argument("--num_patients", type=int, default=100, help="Number of patients to process (random subset of the real or synthetic population).")
     args = parser.parse_args()
 
-    patient_data = load_patient_data()
+    patient_data = load_patient_data(use_synthetic_data=args.use_synthetic_data, num_visits=args.num_visits, num_patients=args.num_patients)
     all_results = {}
     patients_processed = 0
 
+    # We need a partial function to run process_patient with the additional parameters from args
+    from functools import partial
+    partial_process_patient = partial(
+        process_patient,
+        vectorizer=args.vectorizer_method,
+        distance_metric=args.distance_metric
+    )
+
     process_pool = Pool(processes=args.workers)
-    pool_results = process_pool.imap_unordered(process_patient, patient_data)
+    pool_results = process_pool.imap_unordered(partial_process_patient, patient_data)
 
     try:
         for patient_id, result in pool_results:

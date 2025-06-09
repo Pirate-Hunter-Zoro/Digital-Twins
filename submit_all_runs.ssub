@@ -1,0 +1,34 @@
+# submit_all_runs.ssub
+#!/bin/bash
+#SBATCH --partition=c3_short
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --nodes=1
+#SBATCH --time=00:10:00           # This script just submits, so it's short
+#SBATCH --output=logs/submit_all_runs-%J.stdout
+#SBATCH --error=logs/submit_all_runs-%J.stderr
+#SBATCH --job-name=submit_dt_experiments
+#SBATCH --mail-user=mferguson@laureateinstitute.org
+#SBATCH --mail-type=END
+
+echo "Starting master submission script."
+echo "Current directory: $(pwd)"
+echo "---"
+
+VECTORIZERS=("tfidf" "sentence_transformer") # Add more as needed (E1-E6)
+DISTANCES=("cosine" "euclidean") # Add more as needed
+
+for VEC in "${VECTORIZERS[@]}"; do
+    for DIST in "${DISTANCES[@]}"; do
+        JOB_NAME_PREFIX="dt_${VEC}_${DIST}"
+        # Use sed to replace placeholders in the template and submit
+        sbatch \
+            --export=VECTORIZER="$VEC",DISTANCE="$DIST" \
+            --job-name="$JOB_NAME_PREFIX" \
+            run_main_template.ssub
+        sleep 1 # Small delay to prevent overwhelming the scheduler
+    done
+done
+
+echo "All experiment jobs submitted."
+echo "Script finished."

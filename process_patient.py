@@ -10,7 +10,7 @@ try:
             conversation = json.loads(line)
             stored_results[conversation["prompt"]] = conversation["response"]
 except Exception as e:
-    print(f"⚠️ Could not load stored results: {e}")
+    print(f"Could not load stored results: {e}")
 
 def process_patient(patient: dict, vectorizer: str="sentence_transformer", distance_metric: str="cosine") -> tuple[str, list[dict]]:
     try:
@@ -32,5 +32,5 @@ def process_patient(patient: dict, vectorizer: str="sentence_transformer", dista
             })
         return patient["patient_id"], results
     except Exception as e:
-        print(f"⚠️ Error processing patient {patient.get('patient_id', 'unknown')}: {e}")
+        print(f"Error processing patient {patient.get('patient_id', 'unknown')}: {e}")
         return patient.get("patient_id", "unknown"), {"error": str(e)}

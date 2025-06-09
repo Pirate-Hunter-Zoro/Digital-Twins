@@ -23,14 +23,14 @@ all_response_options = {
 
 all_patient_strings = get_visit_strings(patient_data, window_len=5)
 
-def generate_prompt(patient: dict, n: int, num_neighbors: int=5, vectorizer: str="sentence_transformer", distance_metric: str="cosine") -> str:
+def generate_prompt(patient: dict, n: int, use_synthetic_data: bool=False, num_neighbors: int=5, vectorizer: str="sentence_transformer", distance_metric: str="cosine") -> str:
     """
     Generate a prompt to get the patient's (n+1)st visit (of index n).
     """
-    nearest_neighbors = get_neighbors(patient_data, vectorizer=vectorizer, distance_metric=distance_metric)
+    nearest_neighbors = get_neighbors(patient_data, use_synthetic_data=use_synthetic_data, vectorizer=vectorizer, distance_metric=distance_metric)
 
     try:
-        with open(f"all_prompts_{vectorizer}_{distance_metric}.json", "r") as f:
+        with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/all_prompts_{vectorizer}_{distance_metric}.json", "r") as f:
             all_prompts = json.load(f)
     except:
         all_prompts = {}
