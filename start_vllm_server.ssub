@@ -1,0 +1,64 @@
+#!/bin/bash
+#SBATCH --partition=c3_short
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8       # Adjust based on your model/CPU needs
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:1            # Request 1 GPU
+#SBATCH --mem=70GB              # Adjust memory for 70B model + vLLM overhead. Start high.
+#SBATCH --time=10:00:00         # Time for the server to stay up (e.g., 10 hours)
+#SBATCH --output=logs/vllm_server-%J.stdout
+#SBATCH --error=logs/vllm_server-%J.stderr
+#SBATCH --job-name=vllm_llama3_server
+#SBATCH --mail-user=mferguson@laureateinstitute.org
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+echo "Starting vLLM server job."
+echo "Job ID: $SLURM_JOB_ID"
+echo "Running on host: $(hostname)"
+echo "Current directory: $(pwd)"
+echo "---"
+
+# Load Anaconda module
+module load Anaconda3/2022.05
+
+# Activate Conda environment
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate vllm_env
+
+# IMPORTANT: Get the actual path to your Llama 3.1 70B GGUF model
+# This path is relative to your home directory, or absolute if you saved it there.
+# Ensure this matches where you SCP'd the file!
+MODEL_PATH="/home/librad.laureateinstitute.org/mferguson/models/Llama-3.1-70B-Instruct-GGUF/" # Assuming you put it here
+SERVED_MODEL_NAME="llama3-70b-instruct" # This name is what your query script will use
+
+# Check if the model path exists
+if [ ! -d "$MODEL_PATH" ]; then
+    echo "ERROR: Model directory not found at $MODEL_PATH"
+    exit 1
+fi
+
+echo "Launching vLLM server for $MODEL_PATH with name $SERVED_MODEL_NAME..."
+# Launch vLLM server
+# --tensor-parallel-size=1 (use 1 GPU) or adjust if you have multiple GPUs and your model supports sharding
+# --dtype float16 or bfloat16 for speed/memory, or quantized if using GGUF/AWQ/GPTQ (vLLM loads its own formats)
+# For GGUF files, vLLM would need to load it via llama.cpp or similar, which might not be direct.
+# Note: vLLM typically handles standard Hugging Face model formats (e.g., safetensors).
+# If you downloaded a GGUF, you might need vLLM's specific GGUF support or a different serving method.
+# For Llama 3.1 70B, you'll likely need the full float16/bfloat16 model for vLLM,
+# or a vLLM-compatible quantized format (e.g. AWQ, GPTQ, not GGUF usually).
+# If you downloaded GGUF, you likely need to convert it or use a different serving library.
+# Let's assume you downloaded the full float16 version of a vLLM-compatible Llama 3.1 70B model.
+# If you downloaded GGUF, we need to adjust the vLLM command significantly.
+
+# **CRITICAL**: If you downloaded a GGUF, vLLM cannot directly serve it like this.
+# vLLM expects models in their original Hugging Face format (e.g., safetensors, PyTorch, TF).
+# If you want to serve a GGUF, you would typically use llama.cpp's server or another tool.
+# Let's assume you've got the standard HF safetensors for 70B. If not, we need to re-evaluate.
+# For now, let's assume `vllm` can read the `Meta-Llama` folder structure.
+vllm serve "$MODEL_PATH" \
+  --dtype float16 \
+  --served-model-name "$SERVED_MODEL_NAME" \
+  --worker-use-ray false # Often needed if Ray isn't fully configured/wanted
+
+# The server will run until the time limit or manual cancellation.
+echo "vLLM server started. Check logs for status."

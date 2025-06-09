@@ -1,27 +1,71 @@
-# run_main_template.ssub
 #!/bin/bash
 #SBATCH --partition=c3_short
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8       # Let's start with more CPUs for embedding generation/multiprocessing
+#SBATCH --cpus-per-task=8       # CPUs for main.py's multiprocessing (embedding/NN search)
 #SBATCH --nodes=1
-#SBATCH --mem=32GB              # Adjust as needed, less if just running inference, more if generating embeddings
-#SBATCH --time=04:00:00         # Give it more time per run
-#SBATCH --output=logs/run_dt_%j_%x.stdout
-#SBATCH --error=logs/run_dt_%j_%x.stderr
-#SBATCH --job-name=dt_run_${VECTORIZER}_${DISTANCE} # Dynamic job name
+#SBATCH --mem=32GB              # Memory for main.py (patient data, embeddings, etc.)
+#SBATCH --time=04:00:00         # Time for this client job to run
+#SBATCH --output=logs/run_dt_client-%j-%x.stdout # Use %j for job ID, %x for job name
+#SBATCH --error=logs/run_dt_client-%j-%x.stderr
+#SBATCH --job-name=dt_client_${VECTORIZER}_${DISTANCE} # Dynamic job name for client
 #SBATCH --mail-user=mferguson@laureateinstitute.org
-#SBATCH --mail-type=END
+#SBATCH --mail-type=END,FAIL
 
-echo "Starting digital twin run for Vectorizer: $VECTORIZER, Distance: $DISTANCE"
+# These variables will be passed from your submit_all_runs.ssub
+# Make sure your submit_all_runs.ssub exports VLLM_SERVER_JOB_ID and VLLM_SERVER_HOST
+# Example: sbatch --export=VECTORIZER="$VEC",DISTANCE="$DIST",VLLM_SERVER_JOB_ID="$SERVER_JOB_ID",VLLM_SERVER_HOST="$SERVER_HOST" run_main_template.ssub
+
+echo "Starting digital twin client run for Vectorizer: $VECTORIZER, Distance: $DISTANCE"
 echo "Current directory: $(pwd)"
 echo "---"
 
+# Load Anaconda module
 module load Anaconda3/2022.05
-source $(conda info --base)/etc/profile.d/conda.sh
 
+# Activate Conda environment
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate vllm_env
+
+# --- Configure vLLM Server Connection ---
+# IMPORTANT: These variables must be exported from the submitting script
+# (e.g., submit_all_runs.ssub) or manually set if running interactively.
+# VLLM_SERVER_HOST should be the specific compute node where the vLLM server is running.
+# VLLM_SERVER_PORT is usually 8000.
+VLLM_SERVER_HOST=${VLLM_SERVER_HOST:-"UNKNOWN_HOST"} # Fallback if not set
+VLLM_SERVER_PORT=${VLLM_SERVER_PORT:-"8000"} # Default vLLM port
+
+echo "Attempting to connect to vLLM server on: http://$VLLM_SERVER_HOST:$VLLM_SERVER_PORT/v1"
+
+# Add a loop to wait for the vLLM server to be ready
+# This is crucial so your main.py doesn't try to connect before the server is up.
+echo "Waiting for vLLM server on $VLLM_SERVER_HOST:$VLLM_SERVER_PORT to be ready..."
+for i in {1..20}; do # Increased attempts and total wait time for large models
+    # Using 'curl -s' for silent mode, '-f' for fail silently on 4xx/5xx errors
+    if curl -s -f "http://$VLLM_SERVER_HOST:$VLLM_SERVER_PORT/v1/models" > /dev/null; then
+        echo "vLLM server is ready!"
+        break
+    else
+        echo "Attempt $i: Server not ready. Retrying in 15 seconds..." # Increased delay
+        sleep 15
+    fi
+    if [ "$i" -eq 20 ]; then
+        echo "ERROR: vLLM server did not become ready after 20 attempts (300s/5min wait). Exiting."
+        exit 1
+    fi
+done
+
+# Set environment variables for the OpenAI client in your Python script
+# Your main.py or query_llm.py needs to read these for the base_url and api_key.
+export OPENAI_API_BASE="http://$VLLM_SERVER_HOST:$VLLM_SERVER_PORT/v1"
+export OPENAI_API_KEY="not-needed-for-localhost" # Any non-empty string is fine for vLLM local server
+
+echo "Running main.py script with LLM integration..."
+# Run your Python script (main.py)
 conda run -n vllm_env python3 main.py \
     --vectorizer_method "$VECTORIZER" \
     --distance_metric "$DISTANCE" \
-    --use_synthetic_data true # Or false once you're ready for real data
+    --use_synthetic_data true \
+    --num_patients 100 \
+    --num_visits 5
 
 echo "Script finished for $VECTORIZER - $DISTANCE."
