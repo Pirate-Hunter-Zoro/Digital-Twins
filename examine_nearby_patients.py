@@ -5,23 +5,23 @@ from llm_helper import get_narrative, get_relevance_score
 from scipy.spatial.distance import mahalanobis
 import numpy as np
 
-def inspect_visit(patient_id: str, visit_idx: int, k: int = 5, vectorizor: str="sentence_transformer", distance_metric: str="cosine") -> None:
+def inspect_visit(patient_id: str, visit_idx: int, k: int = 5, num_patients: int = 100, vectorizor: str="sentence_transformer", distance_metric: str = "cosine", use_synthetic_data: bool = False) -> None:
     output = []
-    output_path = f"neighbor_inspection_{patient_id}_{visit_idx}_{vectorizor}_{distance_metric}.txt"
+    output_path = f"{'synthetic_data' if use_synthetic_data else 'real_data'}/neighbor_inspection_{patient_id}_{visit_idx}_{vectorizor}_{distance_metric}.txt"
 
-    patients = load_patient_data(vectorizor=vectorizor, distance_metric=distance_metric)
+    patients = load_patient_data(use_synthetic_data = use_synthetic_data, num_visits = visit_idx, num_patients = 100)
     patient_lookup = {p["patient_id"]: p for p in patients}
 
-    with open(f"patient_lookup_{vectorizor}_{distance_metric}.json", "r") as f:
+    with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/patient_results_{num_patients}_{visit_idx}_{vectorizor}_{distance_metric}.json", "r") as f:
         patient_output_results = json.load(f)
 
-    with open(f"all_prompts_{vectorizor}_{distance_metric}.json", "r") as f:
+    with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/all_prompts_{vectorizor}_{distance_metric}.json", "r") as f:
         all_prompts = json.load(f)
 
-    with open(f"nearest_neighbors_{vectorizor}_{distance_metric}.pkl", "rb") as f:
+    with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/nearest_neighbors_{vectorizor}_{distance_metric}.pkl", "rb") as f:
         nearest_neighbors = pickle.load(f)
 
-    with open(f"all_vectors_{vectorizor}_{visit_idx}.pkl", "rb") as f:
+    with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/all_vectors_{vectorizor}_{visit_idx}.pkl", "rb") as f:
         all_vectors = pickle.load(f)
 
     key = (patient_id, visit_idx)
@@ -84,4 +84,4 @@ def inspect_visit(patient_id: str, visit_idx: int, k: int = 5, vectorizor: str="
         f.write("\n".join(output))
 
 if __name__ == "__main__":
-    inspect_visit("P0000001", 3, 2)  # Output will be written to 'examine_output.txt' by default
+    inspect_visit(patient_id = "P0000001", visit_idx = 5, k = 5, num_patients = 100, use_synthetic_data=True)  # Output will be written to 'examine_output.txt' by default

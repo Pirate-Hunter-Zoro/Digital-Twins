@@ -72,12 +72,12 @@ def generate_patient(num_visits: int=5) -> dict[str, object]:
     }
     return patient
 
-def write_and_generate_patients(n_patients: int=100, num_visits: int=5) -> None:
+def write_and_generate_patients(num_patients: int=100, num_visits: int=5) -> None:
     """
     Generate a list of n random patients.
     """
-    patients = [generate_patient(num_visits=num_visits) for _ in range(n_patients)]
-    with open(f"synthetic_data/patient_data_{n_patients}_{num_visits}.json", "w") as f:
+    patients = [generate_patient(num_visits=num_visits) for _ in range(num_patients)]
+    with open(f"synthetic_data/patient_data_{num_patients}_{num_visits}.json", "w") as f:
         json.dump(patients, f, indent=4)
 
 def load_patient_data(use_synthetic_data: bool=False, num_visits: int=5, num_patients: int=100) -> list[dict]:

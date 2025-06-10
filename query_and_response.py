@@ -5,28 +5,49 @@ from query_llm import query_llm
 import random
 import textwrap
 
-patient_data = load_patient_data()
+all_patient_strings = {}
 all_medications = set()
 all_treatments = set()
 all_diagnoses = set()
-for patient in patient_data:
-    for visit in patient["visits"]:
-        all_medications.update(visit.get("medications", []))
-        all_treatments.update(visit.get("treatments", []))
-        all_diagnoses.update(visit.get("diagnoses", []))
+patient_data = None
+all_response_options = None
 
-all_response_options = {
-    "diagnoses": sorted(all_diagnoses),
-    "medications": sorted(all_medications),
-    "treatments": sorted(all_treatments)
-}
+def setup(use_synthetic_data: bool=False, num_patients: int=5, num_visits: int=100):
+    global all_patient_strings
+    global all_medications
+    global all_treatments
+    global all_diagnoses
+    global patient_data
+    global all_response_options
 
-all_patient_strings = get_visit_strings(patient_data, window_len=5)
+    patient_data = load_patient_data(use_synthetic_data=use_synthetic_data, num_patients=num_patients, num_visits=num_visits)
+    all_medications = set()
+    all_treatments = set()
+    all_diagnoses = set()
+    for patient in patient_data:
+        for visit in patient["visits"]:
+            all_medications.update(visit.get("medications", []))
+            all_treatments.update(visit.get("treatments", []))
+            all_diagnoses.update(visit.get("diagnoses", []))
+
+    all_response_options = {
+        "diagnoses": sorted(all_diagnoses),
+        "medications": sorted(all_medications),
+        "treatments": sorted(all_treatments)
+    }
+
+    all_patient_strings = get_visit_strings(patient_data, window_len=5)
 
 def generate_prompt(patient: dict, n: int, use_synthetic_data: bool=False, num_neighbors: int=5, vectorizer: str="sentence_transformer", distance_metric: str="cosine") -> str:
     """
     Generate a prompt to get the patient's (n+1)st visit (of index n).
     """
+    global all_patient_strings
+    global all_medications
+    global all_treatments
+    global all_diagnoses
+    global patient_data
+    global all_response_options
     nearest_neighbors = get_neighbors(patient_data, use_synthetic_data=use_synthetic_data, vectorizer=vectorizer, distance_metric=distance_metric)
 
     try:
@@ -84,7 +105,7 @@ def generate_prompt(patient: dict, n: int, use_synthetic_data: bool=False, num_n
 
         # Save the prompt for future use
         all_prompts[key] = prompt
-        with open("all_prompts.json", "w") as f:
+        with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/all_prompts_{vectorizer}_{distance_metric}.json", "r") as f:
             json.dump(all_prompts, f, indent=4)
             
     return all_prompts[key]

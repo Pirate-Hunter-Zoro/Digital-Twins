@@ -7,6 +7,7 @@ from multiprocessing import Pool
 from generate_patients import load_patient_data
 from process_patient import process_patient
 from query_llm import query_llm
+from query_and_response import setup
 
 def convert_sets_to_lists(obj):
     if isinstance(obj, dict):
@@ -31,8 +32,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate all JSON files in a directory in parallel.")
     parser.add_argument("--workers", type=int, default=4, help="Number of worker processes to use.")
     parser.add_argument("--save_every", type=int, default=10, help="Frequency of saving results per patients processed.")
-    parser.add_argument("--output", type=str, default="patient_output_results.json", help="Output file to save results.")
-    parser.add_argument("--vectorizer_method", type=str, default="sentence-transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
+    parser.add_argument("--vectorizer_method", type=str, default="sentence_transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
     parser.add_argument("--distance_metric", type=str, default="cosine", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
     parser.add_argument("--use_synthetic_data", type=bool, default=False, help="Use synthetic data for testing purposes.")
     parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
@@ -42,6 +42,8 @@ if __name__ == "__main__":
     patient_data = load_patient_data(use_synthetic_data=args.use_synthetic_data, num_visits=args.num_visits, num_patients=args.num_patients)
     all_results = {}
     patients_processed = 0
+
+    setup(use_synthetic_data=args.use_synthetic_data, num_patients=args.num_patients, num_visits=args.num_visits)
 
     # We need a partial function to run process_patient with the additional parameters from args
     from functools import partial
@@ -53,6 +55,7 @@ if __name__ == "__main__":
 
     process_pool = Pool(processes=args.workers)
     pool_results = process_pool.imap_unordered(partial_process_patient, patient_data)
+    output_file = f"patient_results_{args.vectorizer_method}_{args.distance_metric}"
 
     try:
         for patient_id, result in pool_results:

@@ -26,7 +26,7 @@ def clean_response(raw_response: str) -> str:
     # Collapse excess whitespace to avoid awkward gaps
     return re.sub(r"\s+", " ", clean).strip()
 
-def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> str:
+def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7, num_patients: int = 100, num_visits: int = 5, use_synthetic_data: bool = True) -> str:
     llm_client = get_llm_client()
     try:
         output = llm_client.chat.completions.create(
