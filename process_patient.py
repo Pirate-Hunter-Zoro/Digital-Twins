@@ -1,36 +1,21 @@
 from evaluate import evaluate_prediction_by_category
-from query_llm import clean_response
-from query_and_response import force_valid_prediction, generate_prompt, parse_llm_response
-import json
+from query_and_response import force_valid_prediction, generate_prompt
+from main import GLOBAL_CONFIG
 
-stored_results = {}
-try:
-    with open("debug_prompts_and_responses.jsonl", "r") as f:
-        for line in f:
-            conversation = json.loads(line)
-            stored_results[conversation["prompt"]] = conversation["response"]
-except Exception as e:
-    print(f"Could not load stored results: {e}")
-
-def process_patient(patient: dict, vectorizer: str="sentence_transformer", distance_metric: str="cosine") -> tuple[str, list[dict]]:
+def process_patient(patient: dict) -> tuple[str, dict]:
     try:
-        results = []
-        for visit_idx in range(1, len(patient["visits"])):
-            prompt = generate_prompt(patient, visit_idx, vectorizer=vectorizer, distance_metric=distance_metric)
-            if prompt in stored_results:
-                predicted_next_visit = parse_llm_response(clean_response(stored_results[prompt]).strip())
-            else:
-                predicted_next_visit = force_valid_prediction(prompt)
-            actual_next_visit = patient["visits"][visit_idx]
-            actual = {k: set(actual_next_visit[k]) for k in ["diagnoses", "medications", "treatments"]}
-            scores = evaluate_prediction_by_category(predicted_next_visit, actual)
-            results.append({
-                "visit_idx": visit_idx + 1,
+        prompt = generate_prompt(patient)
+        predicted_next_visit = force_valid_prediction(prompt)
+        actual_next_visit = patient["visits"][GLOBAL_CONFIG.num_visits-1]
+        actual = {k: set(actual_next_visit[k]) for k in ["diagnoses", "medications", "treatments"]}
+        scores = evaluate_prediction_by_category(predicted_next_visit, actual)
+        result = {
+                "visit_idx": GLOBAL_CONFIG.num_visits-1,
                 "predicted": predicted_next_visit,
                 "actual": actual,
                 "scores": scores
-            })
-        return patient["patient_id"], results
+            }
+        return patient["patient_id"], result
     except Exception as e:
         print(f"Error processing patient {patient.get('patient_id', 'unknown')}: {e}")
         return patient.get("patient_id", "unknown"), {"error": str(e)}

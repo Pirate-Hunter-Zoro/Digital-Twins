@@ -1,5 +1,6 @@
 import json
 from openai import APIConnectionError, OpenAI
+from main import GLOBAL_CONFIG
 
 # Lazy singleton pattern so we only load the model once
 _llm_client = None
@@ -26,7 +27,7 @@ def clean_response(raw_response: str) -> str:
     # Collapse excess whitespace to avoid awkward gaps
     return re.sub(r"\s+", " ", clean).strip()
 
-def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7, num_patients: int = 100, num_visits: int = 5, use_synthetic_data: bool = True) -> str:
+def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> str:
     llm_client = get_llm_client()
     try:
         output = llm_client.chat.completions.create(
@@ -42,7 +43,7 @@ def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7, num
     except APIConnectionError as e:
         response = f"ERROR: API connection failed - {str(e)}"
 
-    with open("debug_prompts_and_responses.jsonl", "a") as f:
+    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/debug_prompts_and_responses.jsonl", "a") as f:
         f.write(json.dumps({"prompt": prompt, "response": response}) + "\n")
     
     return clean_response(response).strip()

@@ -1,5 +1,6 @@
 import random
 import json
+from main import GLOBAL_CONFIG
 
 diagnosis_pool = [
     "E11",        # Type 2 Diabetes
@@ -58,12 +59,12 @@ def generate_visit() -> dict[str, list[str]]:
     return visit
 
 total_patients = 0
-def generate_patient(num_visits: int=5) -> dict[str, object]:
+def generate_patient() -> dict[str, object]:
     """
     Generate a random patient with a unique ID and a list of visits.
     """
     global total_patients
-    visits = [generate_visit() for _ in range(num_visits)]
+    visits = [generate_visit() for _ in range(GLOBAL_CONFIG.num_visits)]
     total_patients += 1
     id = "P" + str(total_patients).zfill(7)
     patient = {
@@ -72,28 +73,28 @@ def generate_patient(num_visits: int=5) -> dict[str, object]:
     }
     return patient
 
-def write_and_generate_patients(num_patients: int=100, num_visits: int=5) -> None:
+def write_and_generate_patients() -> None:
     """
     Generate a list of n random patients.
     """
-    patients = [generate_patient(num_visits=num_visits) for _ in range(num_patients)]
-    with open(f"synthetic_data/patient_data_{num_patients}_{num_visits}.json", "w") as f:
+    patients = [generate_patient() for _ in range(GLOBAL_CONFIG.num_patients)]
+    with open(f"synthetic_data/patient_data_{GLOBAL_CONFIG.num_patients}_{GLOBAL_CONFIG.num_visits}.json", "w") as f:
         json.dump(patients, f, indent=4)
 
-def load_patient_data(use_synthetic_data: bool=False, num_visits: int=5, num_patients: int=100) -> list[dict]:
+def load_patient_data() -> list[dict]:
     """
     Load patient data from the JSON file.
     """
-    if use_synthetic_data:
+    if GLOBAL_CONFIG.use_synthetic_data:
         try:
-            with open(f"synthetic_data/patient_data_{num_patients}_{num_visits}.json", "r") as f:
+            with open(f"synthetic_data/patient_data_{GLOBAL_CONFIG.num_patients}_{GLOBAL_CONFIG.num_visits}.json", "r") as f:
                 return json.load(f)
         except:
-            write_and_generate_patients(num_patients=num_patients, num_visits=num_visits)
+            write_and_generate_patients()
             return load_patient_data()
     else:
         try:
-            with open(f"real_data/patient_data_{num_patients}.json", "r") as f:
+            with open(f"real_data/patient_data_{GLOBAL_CONFIG.num_patients}.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
             # TODO - parse the real data files and generate the JSON file for the number of patients

@@ -7,7 +7,8 @@ from multiprocessing import Pool
 from generate_patients import load_patient_data
 from process_patient import process_patient
 from query_llm import query_llm
-from query_and_response import setup
+from query_and_response import setup_prompt_generation
+from config import Config
 
 def convert_sets_to_lists(obj):
     if isinstance(obj, dict):
@@ -20,8 +21,10 @@ def convert_sets_to_lists(obj):
         return obj
 
 querying = False
+GLOBAL_CONFIG = None
 
 if __name__ == "__main__":
+
     if querying:
         query = "What are the diagnoses, medications, and treatments for a patient with symptoms of diabetes and hypertension? Return as JSON."
         print("Querying LLM with the following question:")
@@ -39,22 +42,22 @@ if __name__ == "__main__":
     parser.add_argument("--num_patients", type=int, default=100, help="Number of patients to process (random subset of the real or synthetic population).")
     args = parser.parse_args()
 
+    GLOBAL_CONFIG = Config(
+        vectorizer_method=args.vectorizer_method,
+        distance_metric=args.distance_metric,
+        use_synthetic_data=args.use_synthetic_data,
+        num_visits=args.num_visits,
+        num_patients=args.num_patients
+    )
+
     patient_data = load_patient_data(use_synthetic_data=args.use_synthetic_data, num_visits=args.num_visits, num_patients=args.num_patients)
     all_results = {}
     patients_processed = 0
 
-    setup(use_synthetic_data=args.use_synthetic_data, num_patients=args.num_patients, num_visits=args.num_visits)
-
-    # We need a partial function to run process_patient with the additional parameters from args
-    from functools import partial
-    partial_process_patient = partial(
-        process_patient,
-        vectorizer=args.vectorizer_method,
-        distance_metric=args.distance_metric
-    )
+    setup_prompt_generation()
 
     process_pool = Pool(processes=args.workers)
-    pool_results = process_pool.imap_unordered(partial_process_patient, patient_data)
+    pool_results = process_pool.imap_unordered(process_patient, patient_data)
     output_file = f"patient_results_{args.vectorizer_method}_{args.distance_metric}"
 
     try:
@@ -62,16 +65,16 @@ if __name__ == "__main__":
             all_results[patient_id] = convert_sets_to_lists(result)
             patients_processed += 1
             if patients_processed % args.save_every == 0:
-                with open(args.output, "w") as f:
+                with open(output_file, "w") as f:
                     json.dump(all_results, f, indent=4)
                 print(f"Saved results after processing {patients_processed} patients.")
     except Exception as e:
         print(f"Error during multiprocessing: {e}")
 
     # Final save
-    with open(args.output, "w") as f:
+    with open(output_file, "w") as f:
         json.dump(all_results, f, indent=4)
-    print(f"Finished processing {patients_processed} patients. Results saved to {args.output}.")
+    print(f"Finished processing {patients_processed} patients. Results saved to {output_file}.")
 
     process_pool.close()
     process_pool.join()

@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
+from main import GLOBAL_CONFIG
 
 #####################################################################
 # Helper functions for turning visit data into strings
@@ -21,13 +22,9 @@ def turn_to_sentence(visit: dict) -> str:
 
 def get_visit_histories(patient_visits: list[dict]) -> dict[int, dict[int, str]]:
     """
-    For ONE patient, returns a nested dictionary:
-      Outer key = window length (number of visits in the sequence)
-      Inner key = ending visit index (inclusive)
-      Value = string representation of that window's visit history
-
-    Example:
-      visit_histories[2][3] = summary of visits [2, 3]
+    For ONE patient, returns a dictionary:
+      Key = ending visit index (inclusive)
+      Value = string representation of that window's visit history for the global config's window length.
     """
     visit_histories = {}
 
@@ -35,18 +32,17 @@ def get_visit_histories(patient_visits: list[dict]) -> dict[int, dict[int, str]]
     if n < 1:
         return visit_histories  # No visits to process
 
-    for window_length in range(1, n + 1):
-        visit_histories[window_length] = {}
-        for start_idx in range(n - window_length + 1):
-            end_idx = start_idx + window_length - 1
-            history = " | ".join(
-                turn_to_sentence(patient_visits[i]) for i in range(start_idx, end_idx + 1)
-            )
-            visit_histories[window_length][end_idx] = history
+    visit_histories = {}
+    for start_idx in range(n - GLOBAL_CONFIG.num_visits + 1):
+        end_idx = start_idx + GLOBAL_CONFIG.num_visits - 1
+        history = " | ".join(
+            turn_to_sentence(patient_visits[i]) for i in range(start_idx, end_idx + 1)
+        )
+        visit_histories[end_idx] = history
 
     return visit_histories
 
-def get_visit_strings(patient_data: list[dict], window_len: int = 5) -> dict[str, dict[int, dict[tuple[str, int], str]]]:
+def get_visit_strings(patient_data: list[dict]) -> dict[str, dict[int, dict[tuple[str, int], str]]]:
     """
     For all patients, return a flat dictionary mapping:
         (patient_id, end_idx) → visit history string of the given window_len
@@ -57,10 +53,7 @@ def get_visit_strings(patient_data: list[dict], window_len: int = 5) -> dict[str
         patient_visits = patient["visits"]
         visit_histories = get_visit_histories(patient_visits)
 
-        if window_len not in visit_histories:
-            continue  # Skip if this window length isn't valid for this patient
-
-        for end_idx, visit_str in visit_histories[window_len].items():
+        for end_idx, visit_str in visit_histories.items():
             key = (patient_id, end_idx)
             result[key] = visit_str
 
@@ -74,11 +67,8 @@ import numpy as np
 
 def get_visit_vectors(
     patient_data: list[dict],
-    k: int,
-    vectorizer: str = "sentence_transformer"
 ) -> dict[tuple[str, int], np.ndarray]:
     """
-    Return TF-IDF vectors for each patient's visit sequences of length k.
     Keys are (patient_id, end_idx), values are np.ndarray vectors.
     """
     all_visit_strings = []
@@ -89,14 +79,11 @@ def get_visit_vectors(
         patient_visits = patient["visits"]
         visit_histories = get_visit_histories(patient_visits)
 
-        if k not in visit_histories:
-            continue
-
-        for end_idx, visit_string in visit_histories[k].items():
+        for end_idx, visit_string in visit_histories.items():
             all_keys.append((patient_id, end_idx))
             all_visit_strings.append(visit_string)
 
-    if vectorizer == "tfidf":
+    if GLOBAL_CONFIG.vectorizer_method == "tfidf":
         vectorizer_instance = TfidfVectorizer(
                                 analyzer="word",
                                 ngram_range=(1, 2),  # Unigrams and bigrams
@@ -109,17 +96,17 @@ def get_visit_vectors(
                                 sublinear_tf=True,  # Use sublinear term frequency scaling
                             ),
         vectors = vectorizer_instance.fit_transform(all_visit_strings).toarray()
-    elif vectorizer == "sentence_transformer":
+    elif GLOBAL_CONFIG.vectorizer_method == "sentence_transformer":
         login(token="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")
         vectorizer_instance = SentenceTransformer("/home/librad.laureateinstitute.org/mferguson/models/BioBERT-mnli-snli-scinli-scitail-mednli-stsb", local_files_only=True)
         # Encode the visit strings using the sentence transformer
         vectors = vectorizer_instance.encode(all_visit_strings, show_progress_bar=False, convert_to_numpy=True)
     else:
-        assert False, f"Unknown vectorizer: {vectorizer}"
+        assert False, f"Unknown vectorizer: {GLOBAL_CONFIG.vectorizer_method}"
 
     return {key: vec for key, vec in zip(all_keys, vectors)}
 
-def get_neighbors(patient_data, use_synthetic_data: bool=False, num_visits: int=5, distance_metric: str="cosine", vectorizer: str="sentence_transformer") -> dict[tuple[str, int], list[tuple[tuple[str, int], float]]]:
+def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, int], float]]]:
     """
     Compute and sort by closeness the neighbors for each visit sequence of length `num_visits`.
 
@@ -127,24 +114,24 @@ def get_neighbors(patient_data, use_synthetic_data: bool=False, num_visits: int=
         dict mapping (patient_id, visit_idx) to list of (neighbor_id, similarity score)
     """
     try:
-        with open(f"{'data' if use_synthetic_data else 'real_data'}/neighbors_{vectorizer}_{distance_metric}.pkl", "rb") as f:
+        with open(f"{'data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/neighbors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.pkl", "rb") as f:
             neighbors = pickle.load(f)
     except:
-        vectors_dict = get_visit_vectors(patient_data, num_visits, vectorizer=vectorizer)
-        with open(f"all_vectors_{vectorizer}_{num_visits}.pkl", "wb") as f:
+        vectors_dict = get_visit_vectors(patient_data)
+        with open(f"all_vectors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.num_visits}.pkl", "wb") as f:
             pickle.dump(vectors_dict, f)
         keys = list(vectors_dict.keys())
         matrix = np.vstack([vectors_dict[key] for key in keys])
         # Compute cosine similarity between every pair of visits, where sim_matrix[i][j] is the similarity between keys[i] and keys[j]
-        if distance_metric == "euclidean":
+        if GLOBAL_CONFIG.distance_metric == "euclidean":
             # Use negative distances to convert to similarity (higher is closer)
             sim_matrix = -euclidean_distances(matrix)
-        elif distance_metric == "cosine":
+        elif GLOBAL_CONFIG.distance_metric == "cosine":
             # Normalize the vectors to unit length before computing cosine similarity
             matrix = matrix / np.linalg.norm(matrix, axis=1, keepdims=True)
             sim_matrix = cosine_similarity(matrix)
         else:
-            assert False, f"Unknown distance metric: {distance_metric}"
+            assert False, f"Unknown distance metric: {GLOBAL_CONFIG.distance_metric}"
 
         neighbors = {}
 
@@ -156,7 +143,7 @@ def get_neighbors(patient_data, use_synthetic_data: bool=False, num_visits: int=
             sim_pairs.sort(key=lambda x: x[1], reverse=True)
             neighbors[patient_by_visit] = [pair for pair in sim_pairs]
 
-        with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/neighbors_{vectorizer}_{distance_metric}.pkl", "wb") as f:
+        with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/neighbors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.pkl", "wb") as f:
             pickle.dump(neighbors, f)
         
     return neighbors
