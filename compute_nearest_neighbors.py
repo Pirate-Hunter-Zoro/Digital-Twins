@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
-from main import GLOBAL_CONFIG
+from config import GLOBAL_CONFIG
 
 #####################################################################
 # Helper functions for turning visit data into strings

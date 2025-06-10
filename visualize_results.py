@@ -2,7 +2,7 @@ import json
 import pandas as pd
 from matplotlib import pyplot as plt
 import os
-from main import GLOBAL_CONFIG
+from config import GLOBAL_CONFIG
 
 def visualize_results():
     # Create directory for saving plots if it doesn't exist

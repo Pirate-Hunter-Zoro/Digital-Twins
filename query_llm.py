@@ -1,6 +1,6 @@
 import json
 from openai import APIConnectionError, OpenAI
-from main import GLOBAL_CONFIG
+from config import GLOBAL_CONFIG
 
 # Lazy singleton pattern so we only load the model once
 _llm_client = None

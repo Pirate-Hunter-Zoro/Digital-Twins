@@ -1,6 +1,6 @@
 from evaluate import evaluate_prediction_by_category
 from query_and_response import force_valid_prediction, generate_prompt
-from main import GLOBAL_CONFIG
+from config import GLOBAL_CONFIG
 
 def process_patient(patient: dict) -> tuple[str, dict]:
     try:

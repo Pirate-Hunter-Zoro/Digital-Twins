@@ -1,7 +1,7 @@
 from query_llm import query_llm
 import json
 import re
-from main import GLOBAL_CONFIG
+from config import GLOBAL_CONFIG
 
 def get_narrative(patient: list[dict[str, list[str]]]) -> str:
     """

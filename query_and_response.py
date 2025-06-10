@@ -4,7 +4,7 @@ from generate_patients import load_patient_data
 from query_llm import query_llm
 import random
 import textwrap
-from main import GLOBAL_CONFIG
+from config import GLOBAL_CONFIG
 
 all_patient_strings = {}
 all_medications = set()

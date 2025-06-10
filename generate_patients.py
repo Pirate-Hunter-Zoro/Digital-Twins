@@ -1,6 +1,6 @@
 import random
 import json
-from main import GLOBAL_CONFIG
+from config import GLOBAL_CONFIG
 
 diagnosis_pool = [
     "E11",        # Type 2 Diabetes

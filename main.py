@@ -6,9 +6,8 @@ import json
 from multiprocessing import Pool
 from generate_patients import load_patient_data
 from process_patient import process_patient
-from query_llm import query_llm
 from query_and_response import setup_prompt_generation
-from config import Config
+from config import setup_config, GLOBAL_CONFIG
 
 def convert_sets_to_lists(obj):
     if isinstance(obj, dict):
@@ -20,17 +19,7 @@ def convert_sets_to_lists(obj):
     else:
         return obj
 
-querying = False
-GLOBAL_CONFIG = None
-
 if __name__ == "__main__":
-
-    if querying:
-        query = "What are the diagnoses, medications, and treatments for a patient with symptoms of diabetes and hypertension? Return as JSON."
-        print("Querying LLM with the following question:")
-        print(query)
-        print(query_llm(query))
-        print("LLM query complete. Now processing patient data...")
 
     parser = argparse.ArgumentParser(description="Evaluate all JSON files in a directory in parallel.")
     parser.add_argument("--workers", type=int, default=4, help="Number of worker processes to use.")
@@ -42,7 +31,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_patients", type=int, default=100, help="Number of patients to process (random subset of the real or synthetic population).")
     args = parser.parse_args()
 
-    GLOBAL_CONFIG = Config(
+    setup_config(
         vectorizer_method=args.vectorizer_method,
         distance_metric=args.distance_metric,
         use_synthetic_data=args.use_synthetic_data,
@@ -50,7 +39,7 @@ if __name__ == "__main__":
         num_patients=args.num_patients
     )
 
-    patient_data = load_patient_data(use_synthetic_data=args.use_synthetic_data, num_visits=args.num_visits, num_patients=args.num_patients)
+    patient_data = load_patient_data()
     all_results = {}
     patients_processed = 0
 
@@ -58,7 +47,7 @@ if __name__ == "__main__":
 
     process_pool = Pool(processes=args.workers)
     pool_results = process_pool.imap_unordered(process_patient, patient_data)
-    output_file = f"patient_results_{args.vectorizer_method}_{args.distance_metric}"
+    output_file = f"patient_results_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}"
 
     try:
         for patient_id, result in pool_results:
