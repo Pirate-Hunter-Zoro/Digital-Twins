@@ -4,27 +4,28 @@ from generate_patients import load_patient_data
 from llm_helper import get_narrative, get_relevance_score
 from scipy.spatial.distance import mahalanobis
 import numpy as np
+from config import GLOBAL_CONFIG
 
-def inspect_visit(patient_id: str, visit_idx: int, k: int = 5, num_patients: int = 100, vectorizor: str="sentence_transformer", distance_metric: str = "cosine", use_synthetic_data: bool = False) -> None:
+def inspect_visit(patient_id: str,k: int = 5) -> None:
     output = []
-    output_path = f"{'synthetic_data' if use_synthetic_data else 'real_data'}/neighbor_inspection_{patient_id}_{visit_idx}_{vectorizor}_{distance_metric}.txt"
+    output_path = f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/neighbor_inspection_{patient_id}_{GLOBAL_CONFIG.num_visits}_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.txt"
 
-    patients = load_patient_data(use_synthetic_data = use_synthetic_data, num_visits = visit_idx, num_patients = 100)
+    patients = load_patient_data()
     patient_lookup = {p["patient_id"]: p for p in patients}
 
-    with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/patient_results_{num_patients}_{visit_idx}_{vectorizor}_{distance_metric}.json", "r") as f:
+    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/patient_results_{GLOBAL_CONFIG.num_patients}_{GLOBAL_CONFIG.num_visits}_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.json", "r") as f:
         patient_output_results = json.load(f)
 
-    with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/all_prompts_{vectorizor}_{distance_metric}.json", "r") as f:
+    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/all_prompts_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.json", "r") as f:
         all_prompts = json.load(f)
 
-    with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/nearest_neighbors_{vectorizor}_{distance_metric}.pkl", "rb") as f:
+    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/nearest_neighbors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.pkl", "rb") as f:
         nearest_neighbors = pickle.load(f)
 
-    with open(f"{'synthetic_data' if use_synthetic_data else 'real_data'}/all_vectors_{vectorizor}_{visit_idx}.pkl", "rb") as f:
+    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/all_vectors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.pkl", "rb") as f:
         all_vectors = pickle.load(f)
 
-    key = (patient_id, visit_idx)
+    key = (patient_id, GLOBAL_CONFIG.num_visits - 1)  # We use the latest visit *up to* the prediction point
     neighbors = nearest_neighbors.get(key)
     if not neighbors:
         output.append(f"No neighbors found for {key}\n")
@@ -33,10 +34,10 @@ def inspect_visit(patient_id: str, visit_idx: int, k: int = 5, num_patients: int
         if 2 * k > n:
             output.append(f"Not enough neighbors (have {n}, need {2*k})\n")
         else:
-            prompt_key = f"{patient_id}_{visit_idx}"
+            prompt_key = f"{patient_id}_{GLOBAL_CONFIG.num_visits - 1}"
             prompt = all_prompts.get(prompt_key)
-            target_narrative = get_narrative(patient_lookup[patient_id]["visits"], visit_idx)
-            output.append(f"\nTarget Patient Narrative (up to Visit {visit_idx}):\n{target_narrative}\n")
+            target_narrative = get_narrative(patient_lookup[patient_id]["visits"], GLOBAL_CONFIG.num_visits - 1)
+            output.append(f"\nTarget Patient Narrative (up to Visit {GLOBAL_CONFIG.num_visits-1}):\n{target_narrative}\n")
             if prompt is None:
                 output.append(f"No prompt found for {prompt_key}\n")
             else:
@@ -53,20 +54,16 @@ def inspect_visit(patient_id: str, visit_idx: int, k: int = 5, num_patients: int
                 for i in range(n - k, n):
                     (neighbor_pid, neighbor_vidx), similarity, _ = neighbors[i]
                     narrative = get_narrative(patient_lookup[neighbor_pid]["visits"], neighbor_vidx)
-                    output.append(f"  {i - (n - k) + 1}. ID: ({neighbor_pid}, {neighbor_vidx}), Cosine Similarity: {similarity:.4f}")
+                    output.append(f"  {i - (n - k) + 1}. ID: ({neighbor_pid}, {neighbor_vidx}), Distance: {similarity:.4f}")
                     output.append(f"    Patient Narrative: {narrative}\n")
                     relevance_score = get_relevance_score(target_narrative, narrative)
                     output.append(f"    Relevance Score: {relevance_score:.4f}\n")
 
-                results = patient_output_results.get(patient_id, [])
-                if visit_idx < len(results):
-                    result = results[visit_idx]
-                    output.append(f"Predicted: {result['predicted']}")
-                    output.append(f"Actual: {result['actual']}")
-                    output.append(f"Scores: {result.get('scores', {})}")
-                else:
-                    output.append("No prediction result found for this visit.")
-
+                result = patient_output_results[patient_id][GLOBAL_CONFIG.num_visits - 1]
+                output.append(f"Predicted: {result['predicted']}")
+                output.append(f"Actual: {result['actual']}")
+                output.append(f"Scores: {result.get('scores', {})}")
+               
                 # Compute the Mahalanobis distance for the target visit from all the nearest neighbors
                 nearest_neighbor_vectors = [neighbor[2] for neighbor in neighbors[:k]]
                 target_vector = all_vectors.get(key)
@@ -84,4 +81,4 @@ def inspect_visit(patient_id: str, visit_idx: int, k: int = 5, num_patients: int
         f.write("\n".join(output))
 
 if __name__ == "__main__":
-    inspect_visit(patient_id = "P0000001", visit_idx = 5, k = 5, num_patients = 100, use_synthetic_data=True)  # Output will be written to 'examine_output.txt' by default
+    inspect_visit(patient_id = "P0000001")
