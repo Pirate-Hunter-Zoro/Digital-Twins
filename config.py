@@ -9,7 +9,7 @@ class ProjectConfig:
         self.num_patients = num_patients
         self.num_visits = num_visits
         self.use_synthetic_data = use_synthetic_data
-        self.vectorizer = vectorizer_method
+        self.vectorizer_method = vectorizer_method
         self.distance_metric = distance_metric
 
 GLOBAL_CONFIG = ProjectConfig()
