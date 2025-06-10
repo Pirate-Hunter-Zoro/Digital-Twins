@@ -2,13 +2,14 @@ import json
 import pandas as pd
 from matplotlib import pyplot as plt
 import os
+from main import GLOBAL_CONFIG
 
 def visualize_results():
     # Create directory for saving plots if it doesn't exist
     if not os.path.exists('jaccard_scores'):
         os.makedirs('jaccard_scores', exist_ok=True)
 
-    with open('patient_output_results.json', 'r') as file:
+    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/patient_results_{GLOBAL_CONFIG.num_patients}_{GLOBAL_CONFIG.num_visits}_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.json", 'r') as file:
         data = json.load(file)
 
         for patient_id, visits in data.items():
@@ -37,7 +38,7 @@ def visualize_results():
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
-            plt.savefig(f'jaccard_scores/patient_{patient_id}_scores.png')
+            plt.savefig(f'{"synthetic_data" if GLOBAL_CONFIG.use_synthetic_data else "real_data"}/jaccard_scores/patient_{patient_id}_scores.png')
             plt.close()
 
 if __name__ == "__main__":
