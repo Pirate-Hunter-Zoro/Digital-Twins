@@ -40,9 +40,7 @@ conda activate vllm_env
 
 Obtain the snapshot of the model you have downloaded from running ```download_model.py```
 ```bash
-vllm serve ../models/Meta-Llama \
-  --dtype float16 \
-  --served-model-name llama3
+vllm serve unsloth/medgemma-27b-text-it-bnb-4bit --dtype float16 --served-model-name medgemma
 ```
 
 Wait for the server to fully load. You should see a message like:

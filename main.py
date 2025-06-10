@@ -63,12 +63,12 @@ if __name__ == "__main__":
                     json.dump(all_results, f, indent=4)
                 print(f"Saved results after processing {patients_processed} patients.")
     except Exception as e:
-        print(f"⚠️ Error during multiprocessing: {e}")
+        print(f"Error during multiprocessing: {e}")
 
     # Final save
     with open(args.output, "w") as f:
         json.dump(all_results, f, indent=4)
-    print(f"✅ Finished processing {patients_processed} patients. Results saved to {args.output}.")
+    print(f"Finished processing {patients_processed} patients. Results saved to {args.output}.")
 
     process_pool.close()
     process_pool.join()
