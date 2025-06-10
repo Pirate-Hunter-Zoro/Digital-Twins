@@ -6,11 +6,11 @@ class ProjectConfig:
                  use_synthetic_data: bool = False,
                  vectorizer_method: str = "sentence_transformer",
                  distance_metric: str = "cosine"):
-        self.NUM_PATIENTS = num_patients
-        self.NUM_VISITS = num_visits
-        self.USE_SYNTHETIC_DATA = use_synthetic_data
-        self.VECTORIZER = vectorizer_method
-        self.DISTANCE_METRIC = distance_metric
+        self.num_patients = num_patients
+        self.num_visits = num_visits
+        self.use_synthetic_data = use_synthetic_data
+        self.vectorizer = vectorizer_method
+        self.distance_metric = distance_metric
 
 GLOBAL_CONFIG = ProjectConfig()
 def setup_config(
