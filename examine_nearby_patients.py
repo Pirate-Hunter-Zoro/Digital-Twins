@@ -20,7 +20,7 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
     with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
         all_prompts = json.load(f)
 
-    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/nearest_neighbors_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
+    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
         nearest_neighbors = pickle.load(f)
 
     with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
