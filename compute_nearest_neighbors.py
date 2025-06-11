@@ -114,11 +114,11 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
         dict mapping (patient_id, visit_idx) to list of (neighbor_id, similarity score)
     """
     try:
-        with open(f"{'data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
+        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
             neighbors = pickle.load(f)
     except:
         vectors_dict = get_visit_vectors(patient_data)
-        with open(f"{'data' if get_global_config().use_synthetic_data else 'real_data'}/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().num_visits}.pkl", "wb") as f:
+        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().num_visits}.pkl", "wb") as f:
             pickle.dump(vectors_dict, f)
         keys = list(vectors_dict.keys())
         matrix = np.vstack([vectors_dict[key] for key in keys])
