@@ -29,6 +29,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_synthetic_data", type=bool, default=False, help="Use synthetic data for testing purposes.")
     parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
     parser.add_argument("--num_patients", type=int, default=100, help="Number of patients to process (random subset of the real or synthetic population).")
+    parser.add_argument("--num_neighbors", type=int, default=5, help="Number of nearest neighbors to consider for each visit.")
     args = parser.parse_args()
 
     setup_config(
@@ -36,7 +37,8 @@ if __name__ == "__main__":
         distance_metric=args.distance_metric,
         use_synthetic_data=args.use_synthetic_data,
         num_visits=args.num_visits,
-        num_patients=args.num_patients
+        num_patients=args.num_patients,
+        num_neighbors=args.num_neighbors,
     )
 
     patient_data = load_patient_data()

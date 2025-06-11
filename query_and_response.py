@@ -70,7 +70,7 @@ def generate_prompt(patient: dict) -> str:
         relevant_neighbors = nearest_neighbors.get((patient_id, window_size_used), [])
         neighbor_section = "\n".join(
             all_patient_strings[neighbor_key_score[0]]
-            for neighbor_key_score in relevant_neighbors[:min(len(relevant_neighbors), get_global_config().num_patients+1)]
+            for neighbor_key_score in relevant_neighbors[:min(len(relevant_neighbors), get_global_config().num_neighbors+1)]
         )
 
         random_diagnoses = ', '.join(random.sample(sorted(all_diagnoses), min(len(all_diagnoses), 3)))

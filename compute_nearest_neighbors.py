@@ -97,7 +97,6 @@ def get_visit_vectors(
                             ),
         vectors = vectorizer_instance.fit_transform(all_visit_strings).toarray()
     elif get_global_config().vectorizer_method == "sentence_transformer":
-        login(token="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")
         vectorizer_instance = SentenceTransformer("/home/librad.laureateinstitute.org/mferguson/models/BioBERT-mnli-snli-scinli-scitail-mednli-stsb", local_files_only=True)
         # Encode the visit strings using the sentence transformer
         vectors = vectorizer_instance.encode(all_visit_strings, show_progress_bar=False, convert_to_numpy=True)

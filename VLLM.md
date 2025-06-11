@@ -40,7 +40,12 @@ conda activate vllm_env
 
 Obtain the snapshot of the model you have downloaded from running ```download_model.py```
 ```bash
-vllm serve unsloth/medgemma-27b-text-it-bnb-4bit --dtype float16 --served-model-name medgemma
+vllm serve unsloth/medgemma-27b-text-it-bnb-4bit \
+  --dtype float16 \
+  --served-model-name medgemma \
+  --gpu-memory-utilization 0.6 \
+  --host 0.0.0.0 \
+  --max-model-len 4096
 ```
 
 Wait for the server to fully load. You should see a message like:

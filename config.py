@@ -1,7 +1,8 @@
 class ProjectConfig:
     def __init__(self,
                  num_patients: int = 100,
-                 num_visits: int = 5,
+                 num_visits: int = 10,
+                 num_neighbors: int = 5,
                  use_synthetic_data: bool = False,
                  vectorizer_method: str = "sentence_transformer",
                  distance_metric: str = "cosine"):
@@ -18,7 +19,8 @@ def setup_config(
         distance_metric: str,
         use_synthetic_data: bool,
         num_visits: int,
-        num_patients: int
+        num_patients: int,
+        num_neighbors: int,
     ):
     global __global_config
     __global_config = ProjectConfig(
@@ -26,7 +28,8 @@ def setup_config(
         distance_metric=distance_metric,
         use_synthetic_data=use_synthetic_data,
         num_visits=num_visits,
-        num_patients=num_patients
+        num_patients=num_patients,
+        num_neighbors=num_neighbors
     )
 
 def get_global_config():
