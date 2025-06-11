@@ -43,9 +43,9 @@ Obtain the snapshot of the model you have downloaded from running ```download_mo
 vllm serve unsloth/medgemma-27b-text-it-bnb-4bit \
   --dtype float16 \
   --served-model-name medgemma \
-  --gpu-memory-utilization 0.6 \
+  --gpu-memory-utilization 0.5 \
   --host 0.0.0.0 \
-  --max-model-len 4096
+  --max-model-len 5000
 ```
 
 Wait for the server to fully load. You should see a message like:

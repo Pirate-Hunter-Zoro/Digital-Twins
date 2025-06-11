@@ -2,6 +2,7 @@ from query_llm import query_llm
 import json
 import re
 from config import get_global_config
+from query_and_response import turn_to_sentence
 
 def get_narrative(patient: list[dict[str, list[str]]]) -> str:
     """
@@ -13,7 +14,7 @@ def get_narrative(patient: list[dict[str, list[str]]]) -> str:
     )
 
     for i, visit in enumerate(patient[:get_global_config().num_visits-1]):
-        prompt += f"\nVisit {i}:\n{json.dumps(visit, indent=2)}\n"
+        prompt += f"\nVisit {i}:\n{turn_to_sentence(visit)}\n"
 
     return query_llm(prompt)
 

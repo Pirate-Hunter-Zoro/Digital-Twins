@@ -142,7 +142,7 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
             sim_pairs.sort(key=lambda x: x[1], reverse=True)
             neighbors[patient_by_visit] = [pair for pair in sim_pairs]
 
-        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "wb") as f:
+        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "wb") as f:
             pickle.dump(neighbors, f)
         
     return neighbors

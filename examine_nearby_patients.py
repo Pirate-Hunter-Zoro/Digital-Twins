@@ -23,7 +23,7 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
     with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
         nearest_neighbors = pickle.load(f)
 
-    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
+    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().num_visits}.pkl", "rb") as f:
         all_vectors = pickle.load(f)
 
     key = (patient_id, get_global_config().num_visits - 1)  # We use the latest visit *up to* the prediction point
@@ -37,7 +37,7 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
         else:
             prompt_key = f"{patient_id}_{get_global_config().num_visits - 1}"
             prompt = all_prompts.get(prompt_key)
-            target_narrative = get_narrative(patient_lookup[patient_id]["visits"], get_global_config().num_visits - 1)
+            target_narrative = get_narrative(patient_lookup[patient_id]["visits"])
             output.append(f"\nTarget Patient Narrative (up to Visit {get_global_config().num_visits-1}):\n{target_narrative}\n")
             if prompt is None:
                 output.append(f"No prompt found for {prompt_key}\n")
@@ -45,7 +45,7 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
                 output.append("Closest Sequence of Visits from Other Patients (later is closer):")
                 for i in range(k - 1, -1, -1):
                     (neighbor_pid, neighbor_vidx), similarity, _ = neighbors[i]
-                    narrative = get_narrative(patient_lookup[neighbor_pid]["visits"], neighbor_vidx)
+                    narrative = get_narrative(patient_lookup[neighbor_pid]["visits"])
                     output.append(f"  {k - i}. ID: ({neighbor_pid}, {neighbor_vidx}), Cosine Similarity: {similarity:.4f}")
                     output.append(f"    Patient Narrative: {narrative}\n")
                     relevance_score = get_relevance_score(target_narrative, narrative)
@@ -54,13 +54,13 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
                 output.append("Farthest Sequence of Visits from Other Patients (later is farther):")
                 for i in range(n - k, n):
                     (neighbor_pid, neighbor_vidx), similarity, _ = neighbors[i]
-                    narrative = get_narrative(patient_lookup[neighbor_pid]["visits"], neighbor_vidx)
+                    narrative = get_narrative(patient_lookup[neighbor_pid]["visits"])
                     output.append(f"  {i - (n - k) + 1}. ID: ({neighbor_pid}, {neighbor_vidx}), Distance: {similarity:.4f}")
                     output.append(f"    Patient Narrative: {narrative}\n")
                     relevance_score = get_relevance_score(target_narrative, narrative)
                     output.append(f"    Relevance Score: {relevance_score:.4f}\n")
 
-                result = patient_output_results[patient_id][get_global_config().num_visits - 1]
+                result = patient_output_results[patient_id]
                 output.append(f"Predicted: {result['predicted']}")
                 output.append(f"Actual: {result['actual']}")
                 output.append(f"Scores: {result.get('scores', {})}")
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument("--distance_metric", type=str, default="cosine", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
     parser.add_argument("--use_synthetic_data", type=bool, default=False, help="Use synthetic data for testing purposes.")
     parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
-    parser.add_argument("--num_patients", type=int, default=100, help="Number of patients to process (random subset of the real or synthetic population).")
+    parser.add_argument("--num_patients", type=int, default=50, help="Number of patients to process (random subset of the real or synthetic population).")
     parser.add_argument("--num_neighbors", type=int, default=5, help="Number of nearest neighbors to consider for each visit.")
     args = parser.parse_args()
 

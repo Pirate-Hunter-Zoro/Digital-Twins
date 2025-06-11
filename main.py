@@ -28,7 +28,7 @@ if __name__ == "__main__":
     parser.add_argument("--distance_metric", type=str, default="cosine", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
     parser.add_argument("--use_synthetic_data", type=bool, default=False, help="Use synthetic data for testing purposes.")
     parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
-    parser.add_argument("--num_patients", type=int, default=100, help="Number of patients to process (random subset of the real or synthetic population).")
+    parser.add_argument("--num_patients", type=int, default=50, help="Number of patients to process (random subset of the real or synthetic population).")
     parser.add_argument("--num_neighbors", type=int, default=5, help="Number of nearest neighbors to consider for each visit.")
     args = parser.parse_args()
 
@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     process_pool = Pool(processes=args.workers)
     pool_results = process_pool.imap_unordered(process_patient, patient_data)
-    output_file = f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/patient_results_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
+    output_file = f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
 
     try:
         for patient_id, result in pool_results:

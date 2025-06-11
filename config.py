@@ -1,6 +1,6 @@
 class ProjectConfig:
     def __init__(self,
-                 num_patients: int = 100,
+                 num_patients: int = 50,
                  num_visits: int = 10,
                  num_neighbors: int = 5,
                  use_synthetic_data: bool = False,
@@ -8,6 +8,7 @@ class ProjectConfig:
                  distance_metric: str = "cosine"):
         self.num_patients = num_patients
         self.num_visits = num_visits
+        self.num_neighbors = num_neighbors
         self.use_synthetic_data = use_synthetic_data
         self.vectorizer_method = vectorizer_method
         self.distance_metric = distance_metric
