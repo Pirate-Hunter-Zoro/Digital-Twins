@@ -1,6 +1,6 @@
 import random
 import json
-from config import GLOBAL_CONFIG
+from config import get_global_config
 
 diagnosis_pool = [
     "E11",        # Type 2 Diabetes
@@ -64,7 +64,7 @@ def generate_patient() -> dict[str, object]:
     Generate a random patient with a unique ID and a list of visits.
     """
     global total_patients
-    visits = [generate_visit() for _ in range(GLOBAL_CONFIG.num_visits)]
+    visits = [generate_visit() for _ in range(get_global_config().num_visits)]
     total_patients += 1
     id = "P" + str(total_patients).zfill(7)
     patient = {
@@ -77,24 +77,24 @@ def write_and_generate_patients() -> None:
     """
     Generate a list of n random patients.
     """
-    patients = [generate_patient() for _ in range(GLOBAL_CONFIG.num_patients)]
-    with open(f"synthetic_data/patient_data_{GLOBAL_CONFIG.num_patients}_{GLOBAL_CONFIG.num_visits}.json", "w") as f:
+    patients = [generate_patient() for _ in range(get_global_config().num_patients)]
+    with open(f"synthetic_data/patient_data_{get_global_config().num_patients}_{get_global_config().num_visits}.json", "w") as f:
         json.dump(patients, f, indent=4)
 
 def load_patient_data() -> list[dict]:
     """
     Load patient data from the JSON file.
     """
-    if GLOBAL_CONFIG.use_synthetic_data:
+    if get_global_config().use_synthetic_data:
         try:
-            with open(f"synthetic_data/patient_data_{GLOBAL_CONFIG.num_patients}_{GLOBAL_CONFIG.num_visits}.json", "r") as f:
+            with open(f"synthetic_data/patient_data_{get_global_config().num_patients}_{get_global_config().num_visits}.json", "r") as f:
                 return json.load(f)
         except:
             write_and_generate_patients()
             return load_patient_data()
     else:
         try:
-            with open(f"real_data/patient_data_{GLOBAL_CONFIG.num_patients}.json", "r") as f:
+            with open(f"real_data/patient_data_{get_global_config().num_patients}.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
             # TODO - parse the real data files and generate the JSON file for the number of patients

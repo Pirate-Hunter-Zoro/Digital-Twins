@@ -1,4 +1,3 @@
-# config.py
 class ProjectConfig:
     def __init__(self,
                  num_patients: int = 100,
@@ -12,7 +11,8 @@ class ProjectConfig:
         self.vectorizer_method = vectorizer_method
         self.distance_metric = distance_metric
 
-GLOBAL_CONFIG = ProjectConfig()
+__global_config = None
+
 def setup_config(
         vectorizer_method: str,
         distance_metric: str,
@@ -20,11 +20,14 @@ def setup_config(
         num_visits: int,
         num_patients: int
     ):
-    global GLOBAL_CONFIG
-    GLOBAL_CONFIG = ProjectConfig(
+    global __global_config
+    __global_config = ProjectConfig(
         vectorizer_method=vectorizer_method,
         distance_metric=distance_metric,
         use_synthetic_data=use_synthetic_data,
         num_visits=num_visits,
         num_patients=num_patients
     )
+
+def get_global_config():
+    return __global_config

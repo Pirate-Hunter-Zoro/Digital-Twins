@@ -4,28 +4,29 @@ from generate_patients import load_patient_data
 from llm_helper import get_narrative, get_relevance_score
 from scipy.spatial.distance import mahalanobis
 import numpy as np
-from config import GLOBAL_CONFIG
+from config import setup_config, get_global_config
+import argparse
 
 def inspect_visit(patient_id: str,k: int = 5) -> None:
     output = []
-    output_path = f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/neighbor_inspection_{patient_id}_{GLOBAL_CONFIG.num_visits}_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.txt"
+    output_path = f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbor_inspection_{patient_id}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.txt"
 
     patients = load_patient_data()
     patient_lookup = {p["patient_id"]: p for p in patients}
 
-    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/patient_results_{GLOBAL_CONFIG.num_patients}_{GLOBAL_CONFIG.num_visits}_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.json", "r") as f:
+    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
         patient_output_results = json.load(f)
 
-    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/all_prompts_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.json", "r") as f:
+    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
         all_prompts = json.load(f)
 
-    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/nearest_neighbors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.pkl", "rb") as f:
+    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/nearest_neighbors_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
         nearest_neighbors = pickle.load(f)
 
-    with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/all_vectors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.pkl", "rb") as f:
+    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
         all_vectors = pickle.load(f)
 
-    key = (patient_id, GLOBAL_CONFIG.num_visits - 1)  # We use the latest visit *up to* the prediction point
+    key = (patient_id, get_global_config().num_visits - 1)  # We use the latest visit *up to* the prediction point
     neighbors = nearest_neighbors.get(key)
     if not neighbors:
         output.append(f"No neighbors found for {key}\n")
@@ -34,10 +35,10 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
         if 2 * k > n:
             output.append(f"Not enough neighbors (have {n}, need {2*k})\n")
         else:
-            prompt_key = f"{patient_id}_{GLOBAL_CONFIG.num_visits - 1}"
+            prompt_key = f"{patient_id}_{get_global_config().num_visits - 1}"
             prompt = all_prompts.get(prompt_key)
-            target_narrative = get_narrative(patient_lookup[patient_id]["visits"], GLOBAL_CONFIG.num_visits - 1)
-            output.append(f"\nTarget Patient Narrative (up to Visit {GLOBAL_CONFIG.num_visits-1}):\n{target_narrative}\n")
+            target_narrative = get_narrative(patient_lookup[patient_id]["visits"], get_global_config().num_visits - 1)
+            output.append(f"\nTarget Patient Narrative (up to Visit {get_global_config().num_visits-1}):\n{target_narrative}\n")
             if prompt is None:
                 output.append(f"No prompt found for {prompt_key}\n")
             else:
@@ -59,7 +60,7 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
                     relevance_score = get_relevance_score(target_narrative, narrative)
                     output.append(f"    Relevance Score: {relevance_score:.4f}\n")
 
-                result = patient_output_results[patient_id][GLOBAL_CONFIG.num_visits - 1]
+                result = patient_output_results[patient_id][get_global_config().num_visits - 1]
                 output.append(f"Predicted: {result['predicted']}")
                 output.append(f"Actual: {result['actual']}")
                 output.append(f"Scores: {result.get('scores', {})}")
@@ -81,4 +82,20 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
         f.write("\n".join(output))
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--vectorizer_method", type=str, default="sentence_transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
+    parser.add_argument("--distance_metric", type=str, default="cosine", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
+    parser.add_argument("--use_synthetic_data", type=bool, default=False, help="Use synthetic data for testing purposes.")
+    parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
+    parser.add_argument("--num_patients", type=int, default=100, help="Number of patients to process (random subset of the real or synthetic population).")
+    args = parser.parse_args()
+
+    setup_config(
+        vectorizer_method=args.vectorizer_method,
+        distance_metric=args.distance_metric,
+        use_synthetic_data=args.use_synthetic_data,
+        num_visits=args.num_visits,
+        num_patients=args.num_patients
+    )
+
     inspect_visit(patient_id = "P0000001")

@@ -1,7 +1,7 @@
 from query_llm import query_llm
 import json
 import re
-from config import GLOBAL_CONFIG
+from config import get_global_config
 
 def get_narrative(patient: list[dict[str, list[str]]]) -> str:
     """
@@ -12,7 +12,7 @@ def get_narrative(patient: list[dict[str, list[str]]]) -> str:
         "Mention key conditions, medications, or treatments if relevant.\n\n"
     )
 
-    for i, visit in enumerate(patient[:GLOBAL_CONFIG.num_visits-1]):
+    for i, visit in enumerate(patient[:get_global_config().num_visits-1]):
         prompt += f"\nVisit {i}:\n{json.dumps(visit, indent=2)}\n"
 
     return query_llm(prompt)

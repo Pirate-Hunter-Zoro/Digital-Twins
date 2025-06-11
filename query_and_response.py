@@ -4,7 +4,7 @@ from generate_patients import load_patient_data
 from query_llm import query_llm
 import random
 import textwrap
-from config import GLOBAL_CONFIG
+from config import get_global_config
 
 all_patient_strings = {}
 all_medications = set()
@@ -37,7 +37,7 @@ def setup_prompt_generation():
         "treatments": sorted(all_treatments)
     }
 
-    all_patient_strings = get_visit_strings(patient_data, window_len=5)
+    all_patient_strings = get_visit_strings(patient_data)
 
 def generate_prompt(patient: dict) -> str:
     """
@@ -52,25 +52,25 @@ def generate_prompt(patient: dict) -> str:
     nearest_neighbors = get_neighbors(patient_data)
 
     try:
-        with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/all_prompts_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.json", "r") as f:
+        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
             all_prompts = json.load(f)
     except:
         all_prompts = {}
 
     patient_id = patient["patient_id"]
-    window_size_used = GLOBAL_CONFIG.num_visits-1  # We use the latest visit *up to* the prediction point
+    window_size_used = get_global_config().num_visits-1  # We use the latest visit *up to* the prediction point
     key = f"{patient_id}_{window_size_used}"
     if key not in all_prompts.keys():
         # Then we need to generate the prompt
 
         history_section = "\n".join(
-            turn_to_sentence(visit) for visit in patient["visits"][:GLOBAL_CONFIG.num_visits-1]
+            turn_to_sentence(visit) for visit in patient["visits"][:get_global_config().num_visits-1]
         )
 
         relevant_neighbors = nearest_neighbors.get((patient_id, window_size_used), [])
         neighbor_section = "\n".join(
             all_patient_strings[neighbor_key_score[0]]
-            for neighbor_key_score in relevant_neighbors[:min(len(relevant_neighbors), GLOBAL_CONFIG.num_neighbors+1)]
+            for neighbor_key_score in relevant_neighbors[:min(len(relevant_neighbors), get_global_config().num_neighbors+1)]
         )
 
         random_diagnoses = ', '.join(random.sample(sorted(all_diagnoses), min(len(all_diagnoses), 3)))
@@ -78,7 +78,7 @@ def generate_prompt(patient: dict) -> str:
         random_treatments = ', '.join(random.sample(sorted(all_treatments), min(len(all_treatments), 3)))
         # Create the prompt
         prompt = textwrap.dedent(f"""
-        Here is a list of all the patient's first {GLOBAL_CONFIG.num_visits-1} visits:
+        Here is a list of all the patient's first {get_global_config().num_visits-1} visits:
 
         {history_section}
 
@@ -106,7 +106,7 @@ def generate_prompt(patient: dict) -> str:
 
         # Save the prompt for future use
         all_prompts[key] = prompt
-        with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/all_prompts_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.json", "w") as f:
+        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "w") as f:
             json.dump(all_prompts, f, indent=4)
             
     return all_prompts[key]

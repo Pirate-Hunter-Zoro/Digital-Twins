@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
-from config import GLOBAL_CONFIG
+from config import get_global_config
 
 #####################################################################
 # Helper functions for turning visit data into strings
@@ -33,8 +33,8 @@ def get_visit_histories(patient_visits: list[dict]) -> dict[int, dict[int, str]]
         return visit_histories  # No visits to process
 
     visit_histories = {}
-    for start_idx in range(n - GLOBAL_CONFIG.num_visits + 1):
-        end_idx = start_idx + GLOBAL_CONFIG.num_visits - 1
+    for start_idx in range(n - get_global_config().num_visits + 1):
+        end_idx = start_idx + get_global_config().num_visits - 1
         history = " | ".join(
             turn_to_sentence(patient_visits[i]) for i in range(start_idx, end_idx + 1)
         )
@@ -83,7 +83,7 @@ def get_visit_vectors(
             all_keys.append((patient_id, end_idx))
             all_visit_strings.append(visit_string)
 
-    if GLOBAL_CONFIG.vectorizer_method == "tfidf":
+    if get_global_config().vectorizer_method == "tfidf":
         vectorizer_instance = TfidfVectorizer(
                                 analyzer="word",
                                 ngram_range=(1, 2),  # Unigrams and bigrams
@@ -96,13 +96,13 @@ def get_visit_vectors(
                                 sublinear_tf=True,  # Use sublinear term frequency scaling
                             ),
         vectors = vectorizer_instance.fit_transform(all_visit_strings).toarray()
-    elif GLOBAL_CONFIG.vectorizer_method == "sentence_transformer":
+    elif get_global_config().vectorizer_method == "sentence_transformer":
         login(token="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")
         vectorizer_instance = SentenceTransformer("/home/librad.laureateinstitute.org/mferguson/models/BioBERT-mnli-snli-scinli-scitail-mednli-stsb", local_files_only=True)
         # Encode the visit strings using the sentence transformer
         vectors = vectorizer_instance.encode(all_visit_strings, show_progress_bar=False, convert_to_numpy=True)
     else:
-        assert False, f"Unknown vectorizer: {GLOBAL_CONFIG.vectorizer_method}"
+        assert False, f"Unknown vectorizer: {get_global_config().vectorizer_method}"
 
     return {key: vec for key, vec in zip(all_keys, vectors)}
 
@@ -114,24 +114,24 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
         dict mapping (patient_id, visit_idx) to list of (neighbor_id, similarity score)
     """
     try:
-        with open(f"{'data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/neighbors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.pkl", "rb") as f:
+        with open(f"{'data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
             neighbors = pickle.load(f)
     except:
         vectors_dict = get_visit_vectors(patient_data)
-        with open(f"all_vectors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.num_visits}.pkl", "wb") as f:
+        with open(f"{'data' if get_global_config().use_synthetic_data else 'real_data'}/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().num_visits}.pkl", "wb") as f:
             pickle.dump(vectors_dict, f)
         keys = list(vectors_dict.keys())
         matrix = np.vstack([vectors_dict[key] for key in keys])
         # Compute cosine similarity between every pair of visits, where sim_matrix[i][j] is the similarity between keys[i] and keys[j]
-        if GLOBAL_CONFIG.distance_metric == "euclidean":
+        if get_global_config().distance_metric == "euclidean":
             # Use negative distances to convert to similarity (higher is closer)
             sim_matrix = -euclidean_distances(matrix)
-        elif GLOBAL_CONFIG.distance_metric == "cosine":
+        elif get_global_config().distance_metric == "cosine":
             # Normalize the vectors to unit length before computing cosine similarity
             matrix = matrix / np.linalg.norm(matrix, axis=1, keepdims=True)
             sim_matrix = cosine_similarity(matrix)
         else:
-            assert False, f"Unknown distance metric: {GLOBAL_CONFIG.distance_metric}"
+            assert False, f"Unknown distance metric: {get_global_config().distance_metric}"
 
         neighbors = {}
 
@@ -143,7 +143,7 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
             sim_pairs.sort(key=lambda x: x[1], reverse=True)
             neighbors[patient_by_visit] = [pair for pair in sim_pairs]
 
-        with open(f"{'synthetic_data' if GLOBAL_CONFIG.use_synthetic_data else 'real_data'}/neighbors_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}.pkl", "wb") as f:
+        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "wb") as f:
             pickle.dump(neighbors, f)
         
     return neighbors

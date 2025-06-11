@@ -1,0 +1,25 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Examine Nearby Patient Relevance (vllm_env)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examine_nearby_patients.py",
+            "console": "integratedTerminal",
+            "args": ["--use_synthetic_data=True"],
+            // --- ADD THIS SECTION ---
+            "python": "/home/librad.laureateinstitute.org/mferguson/.conda/envs/vllm_env/bin/python"
+            // OR (if you created it with `venv`):
+            // "python": "${workspaceFolder}/vllm_env/bin/python"
+            // OR, if you are unsure of the exact path, use the "envFile" approach
+            // "envFile": "${workspaceFolder}/.env"
+            // And in your .env file, add:
+            // PATH=/home/librad.laureateinstitute.org/mferguson/.conda/envs/vllm_env/bin:$PATH
+            // --- END ADDITION ---
+        }
+    ]
+}

@@ -7,7 +7,7 @@ from multiprocessing import Pool
 from generate_patients import load_patient_data
 from process_patient import process_patient
 from query_and_response import setup_prompt_generation
-from config import setup_config, GLOBAL_CONFIG
+from config import setup_config, get_global_config
 
 def convert_sets_to_lists(obj):
     if isinstance(obj, dict):
@@ -21,7 +21,7 @@ def convert_sets_to_lists(obj):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Evaluate all JSON files in a directory in parallel.")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--workers", type=int, default=4, help="Number of worker processes to use.")
     parser.add_argument("--save_every", type=int, default=10, help="Frequency of saving results per patients processed.")
     parser.add_argument("--vectorizer_method", type=str, default="sentence_transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     process_pool = Pool(processes=args.workers)
     pool_results = process_pool.imap_unordered(process_patient, patient_data)
-    output_file = f"patient_results_{GLOBAL_CONFIG.vectorizer_method}_{GLOBAL_CONFIG.distance_metric}"
+    output_file = f"{'data' if get_global_config().use_synthetic_data else 'real_data'}/patient_results_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}"
 
     try:
         for patient_id, result in pool_results:
