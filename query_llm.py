@@ -16,8 +16,10 @@ def get_llm_client():
 
 import re
 
+import re
+import json
+
 def clean_response(raw_response: str) -> str:
-    # First, attempt to extract summary from potential JSON output
     summary_content = None
     
     # Try to find a ```json ... ``` block
@@ -25,7 +27,10 @@ def clean_response(raw_response: str) -> str:
     if json_block_match:
         try:
             json_data = json.loads(json_block_match.group(1))
-            if "summary" in json_data:
+            # Prioritize 'patient_summary', then 'summary'
+            if "patient_summary" in json_data:
+                summary_content = json_data["patient_summary"]
+            elif "summary" in json_data:
                 summary_content = json_data["summary"]
         except json.JSONDecodeError:
             pass # Not valid JSON within the block
@@ -34,25 +39,21 @@ def clean_response(raw_response: str) -> str:
     if summary_content is None:
         try:
             direct_json_data = json.loads(raw_response)
-            if "summary" in direct_json_data:
+            # Prioritize 'patient_summary', then 'summary'
+            if "patient_summary" in direct_json_data:
+                summary_content = direct_json_data["patient_summary"]
+            elif "summary" in direct_json_data:
                 summary_content = direct_json_data["summary"]
         except json.JSONDecodeError:
             pass # Not direct JSON
 
     # If a summary was successfully extracted, return it clean
     if summary_content is not None:
-        # Collapse excess whitespace in the extracted summary
         return re.sub(r"\s+", " ", summary_content).strip()
 
     # If no valid JSON summary was found, fall back to original cleaning logic
-    # Remove <think>...</think> blocks (including multiline)
     no_thought = re.sub(r"<think>[\s\S]*?<\/think>", "", raw_response)
-
-    # Remove bracketed annotations like [probably], [maybe], etc.
-    # Only remove if they're not part of any actual diagnosis/med/tx string
     clean = re.sub(r"\s*\[.*?\]\s*", " ", no_thought)
-
-    # Collapse excess whitespace to avoid awkward gaps
     return re.sub(r"\s+", " ", clean).strip()
 
 def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> str:
