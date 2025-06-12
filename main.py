@@ -1,7 +1,7 @@
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-import argparse
+from parser import parse_data_args
 import json
 from multiprocessing import Pool
 from generate_patients import load_patient_data
@@ -21,16 +21,7 @@ def convert_sets_to_lists(obj):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--workers", type=int, default=4, help="Number of worker processes to use.")
-    parser.add_argument("--save_every", type=int, default=10, help="Frequency of saving results per patients processed.")
-    parser.add_argument("--vectorizer_method", type=str, default="sentence_transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
-    parser.add_argument("--distance_metric", type=str, default="cosine", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
-    parser.add_argument("--use_synthetic_data", type=bool, default=False, help="Use synthetic data for testing purposes.")
-    parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
-    parser.add_argument("--num_patients", type=int, default=50, help="Number of patients to process (random subset of the real or synthetic population).")
-    parser.add_argument("--num_neighbors", type=int, default=5, help="Number of nearest neighbors to consider for each visit.")
-    args = parser.parse_args()
+    args = parse_data_args()
 
     setup_config(
         vectorizer_method=args.vectorizer_method,

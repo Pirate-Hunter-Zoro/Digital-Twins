@@ -5,7 +5,7 @@ from llm_helper import get_narrative, get_relevance_score
 from scipy.spatial.distance import mahalanobis
 import numpy as np
 from config import setup_config, get_global_config
-import argparse
+from parser import parse_data_args
 
 def inspect_visit(patient_id: str,k: int = 5) -> None:
     output = []
@@ -46,7 +46,7 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
                 for i in range(k - 1, -1, -1):
                     (neighbor_pid, neighbor_vidx), similarity, _ = neighbors[i]
                     narrative = get_narrative(patient_lookup[neighbor_pid]["visits"])
-                    output.append(f"  {k - i}. ID: ({neighbor_pid}, {neighbor_vidx}), Cosine Similarity: {similarity:.4f}")
+                    output.append(f"  {k - i}. ID: ({neighbor_pid}, {neighbor_vidx}), Distance: {abs(similarity):.4f}")
                     output.append(f"    Patient Narrative: {narrative}\n")
                     relevance_score = get_relevance_score(target_narrative, narrative)
                     output.append(f"    Relevance Score: {relevance_score:.4f}\n")
@@ -55,7 +55,7 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
                 for i in range(n - k, n):
                     (neighbor_pid, neighbor_vidx), similarity, _ = neighbors[i]
                     narrative = get_narrative(patient_lookup[neighbor_pid]["visits"])
-                    output.append(f"  {i - (n - k) + 1}. ID: ({neighbor_pid}, {neighbor_vidx}), Distance: {similarity:.4f}")
+                    output.append(f"  {i - (n - k) + 1}. ID: ({neighbor_pid}, {neighbor_vidx}), Distance: {abs(similarity):.4f}")
                     output.append(f"    Patient Narrative: {narrative}\n")
                     relevance_score = get_relevance_score(target_narrative, narrative)
                     output.append(f"    Relevance Score: {relevance_score:.4f}\n")
@@ -82,14 +82,7 @@ def inspect_visit(patient_id: str,k: int = 5) -> None:
         f.write("\n".join(output))
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--vectorizer_method", type=str, default="sentence_transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
-    parser.add_argument("--distance_metric", type=str, default="cosine", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
-    parser.add_argument("--use_synthetic_data", type=bool, default=False, help="Use synthetic data for testing purposes.")
-    parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
-    parser.add_argument("--num_patients", type=int, default=50, help="Number of patients to process (random subset of the real or synthetic population).")
-    parser.add_argument("--num_neighbors", type=int, default=5, help="Number of nearest neighbors to consider for each visit.")
-    args = parser.parse_args()
+    args = parse_data_args()
 
     setup_config(
         vectorizer_method=args.vectorizer_method,

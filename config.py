@@ -1,11 +1,11 @@
 class ProjectConfig:
     def __init__(self,
-                 num_patients: int = 50,
-                 num_visits: int = 10,
-                 num_neighbors: int = 5,
-                 use_synthetic_data: bool = False,
-                 vectorizer_method: str = "sentence_transformer",
-                 distance_metric: str = "cosine"):
+                 num_patients: int,
+                 num_visits: int,
+                 num_neighbors: int,
+                 use_synthetic_data: bool,
+                 vectorizer_method: str,
+                 distance_metric: str):
         self.num_patients = num_patients
         self.num_visits = num_visits
         self.num_neighbors = num_neighbors
@@ -34,4 +34,5 @@ def setup_config(
     )
 
 def get_global_config():
+    assert __global_config, "Must call 'setup_config()' before 'get_global_config()'"
     return __global_config
