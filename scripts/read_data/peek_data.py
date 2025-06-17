@@ -23,11 +23,10 @@ if project_root not in sys.path:
 
 import ijson
 import json
-import os
 
 # Your combined JSON file path
 base_data_path = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/real_data/" # Your requested output directory
-combined_json_output_path = os.path.join(base_data_path, "all_patients_combined_streamed.json")
+combined_json_output_path = os.path.join(base_data_path, "all_patients_combined.json")
 
 num_patients_to_read = 5 # How many patient records you want to see
 

@@ -29,6 +29,17 @@ import numpy as np
 import multiprocessing
 import math
 import scripts.config as config
+import decimal
+
+# --- Helper function to convert Decimal objects within a DataFrame ---
+def convert_decimals_in_df(df):
+    """
+    Converts Decimal objects in all DataFrame cells to float.
+    Applies a lambda function element-wise across the DataFrame.
+    """
+    # Use .applymap() to apply the lambda function to every cell
+    # If an element is a decimal.Decimal instance, convert it to float, otherwise return it as is.
+    return df.applymap(lambda x: float(x) if isinstance(x, decimal.Decimal) else x)
 
 # --- Setup Project Configuration ---
 # You'll need to call setup_config with values appropriate for your project.
@@ -170,38 +181,28 @@ print("\n--- PHASE 3: Starting patient-centric JSON conversion (optimized with M
 def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_processed_ids_set):
     """
     Function to be run by each process, processing a chunk of patients.
-    Takes a DataFrame chunk, DB file path, output directory, and a set of already processed IDs.
-    Each process writes its results to a temporary JSON part file and returns IDs it successfully processed.
+    ... (docstring continues) ...
     """
     processed_count_in_chunk = 0
     ids_processed_by_this_chunk = []
 
-    # Each process needs its own database connection
-    # Note: If the SQLite DB file (ehr_data.db) itself is on NFS, we're still querying NFS.
-    # But writing temp JSON files locally will help isolate the write issue.
     with sqlite3.connect(db_file) as conn_query:
-        
-        # --- NEW: Direct temporary JSON part files to a LOCAL /tmp directory ---
-        # IMPORTANT: Verify that /tmp on compute300 is a local, large-enough partition!
-        local_temp_base_dir = f"/tmp/json_chunks_worker_{os.getpid()}" 
-        os.makedirs(local_temp_base_dir, exist_ok=True) # Create a unique temp directory for this worker
-        
-        chunk_output_file = os.path.join(local_temp_base_dir, f"temp_chunk_part_{np.random.randint(10000)}.json")
-        print(f"Process {os.getpid()}: Writing temp chunk part to: {chunk_output_file}", file=sys.stderr) # Log where it's writing
+        chunk_output_file = os.path.join(output_json_dir, f"temp_chunk_part_{os.getpid()}_{np.random.randint(10000)}.json")
 
-        outfile = None # Initialize outfile outside try block
+        outfile = None
         try:
             outfile = open(chunk_output_file, 'w')
-            outfile.write('[\n') # Start the JSON array for this chunk
+            outfile.write('[\n')
             is_first_patient_in_chunk = True
 
             for index, person_row in person_df_chunk.iterrows():
                 patient_id = person_row['person_id']
 
                 if patient_id in initial_processed_ids_set:
-                    continue 
+                    continue
 
-                try: # Inner try-except for patient processing
+                try:
+                    # No need to convert here explicitly, as person_df has fixed dtypes
                     demographics_dict = person_row.drop('person_id').replace({np.nan: None, pd.NA: None}).to_dict()
 
                     patient_data = {
@@ -210,35 +211,47 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
                         "encounters": []
                     }
 
+                    # --- Query and Convert Encounters ---
                     encounters_query = f"SELECT * FROM Encounter_Table WHERE PatientEpicId_SH = '{patient_id}'"
                     patient_encounters_df = pd.read_sql_query(encounters_query, conn_query)
-
                     if not patient_encounters_df.empty:
                         patient_encounters_df['EncounterId_SH'] = patient_encounters_df['EncounterId_SH'].astype(str)
                         patient_encounters_df = patient_encounters_df.replace({np.nan: None, pd.NA: None})
+                        # NEW: Convert Decimals in Encounter DataFrame
+                        patient_encounters_df = convert_decimals_in_df(patient_encounters_df)
 
                         patient_encounter_ids = patient_encounters_df['EncounterId_SH'].tolist()
 
                         if patient_encounter_ids:
                             ids_str = "','".join(patient_encounter_ids)
 
+                            # --- Query and Convert Diagnoses ---
                             diagnoses_query = f"SELECT * FROM Diagnosis_Table WHERE EncounterId_SH IN ('{ids_str}')"
                             patient_diagnoses_df = pd.read_sql_query(diagnoses_query, conn_query)
                             if not patient_diagnoses_df.empty:
                                 patient_diagnoses_df['EncounterId_SH'] = patient_diagnoses_df['EncounterId_SH'].astype(str)
                                 patient_diagnoses_df = patient_diagnoses_df.replace({np.nan: None, pd.NA: None})
+                                # NEW: Convert Decimals in Diagnosis DataFrame
+                                patient_diagnoses_df = convert_decimals_in_df(patient_diagnoses_df)
 
+                            # --- Query and Convert Medications ---
                             medications_query = f"SELECT * FROM Medication_Table WHERE EncounterId_SH IN ('{ids_str}')"
                             patient_medications_df = pd.read_sql_query(medications_query, conn_query)
                             if not patient_medications_df.empty:
                                 patient_medications_df['EncounterId_SH'] = patient_medications_df['EncounterId_SH'].astype(str)
                                 patient_medications_df = patient_medications_df.replace({np.nan: None, pd.NA: None})
+                                # NEW: Convert Decimals in Medication DataFrame
+                                patient_medications_df = convert_decimals_in_df(patient_medications_df)
 
+                            # --- Query and Convert Procedures ---
                             procedures_query = f"SELECT * FROM Procedure_Table WHERE EncounterId_SH IN ('{ids_str}')"
                             patient_procedures_df = pd.read_sql_query(procedures_query, conn_query)
                             if not patient_procedures_df.empty:
                                 patient_procedures_df['EncounterId_SH'] = patient_procedures_df['EncounterId_SH'].astype(str)
                                 patient_procedures_df = patient_procedures_df.replace({np.nan: None, pd.NA: None})
+                                # NEW: Convert Decimals in Procedure DataFrame
+                                patient_procedures_df = convert_decimals_in_df(patient_procedures_df)
+
 
                             for enc_index, encounter_row in patient_encounters_df.iterrows():
                                 encounter_id = encounter_row['EncounterId_SH']
@@ -266,35 +279,34 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
 
                                 patient_data["encounters"].append(current_encounter_data)
 
-                        if not is_first_patient_in_chunk:
-                            outfile.write(',\n')
-                        json.dump(patient_data, outfile, indent=4)
-                        is_first_patient_in_chunk = False
+                    # --- Write the current patient's JSON to this chunk's temporary file ---
+                    if not is_first_patient_in_chunk:
+                        outfile.write(',\n')
+                    json.dump(patient_data, outfile, indent=4)
+                    is_first_patient_in_chunk = False
 
-                        processed_count_in_chunk += 1
-                        ids_processed_by_this_chunk.append(patient_id)
-                        if processed_count_in_chunk % 1000 == 0:
-                            print(f"Process {os.getpid()}: Processed {processed_count_in_chunk} patients in this chunk.", file=sys.stderr) # Log to stderr
+                    processed_count_in_chunk += 1
+                    ids_processed_by_this_chunk.append(patient_id)
+                    if processed_count_in_chunk % 1000 == 0:
+                        print(f"Process {os.getpid()}: Processed {processed_count_in_chunk} patients in this chunk.", file=sys.stderr)
 
                 except Exception as e:
                     print(f"Process {os.getpid()}: ERROR processing patient {patient_id}: {e}", file=sys.stderr)
                     continue
 
             # End of for loop
-            # --- IMPORTANT CHECK BEFORE FINAL WRITE ---
             if outfile is not None and not outfile.closed:
                 outfile.write('\n]\n')
             else:
                 print(f"Process {os.getpid()}: WARNING: Output file was unexpectedly closed before closing bracket could be written for chunk {chunk_output_file}.", file=sys.stderr)
 
-        except Exception as e: # This catches errors related to file opening or the outer structure
+        except Exception as e:
             print(f"Process {os.getpid()}: CRITICAL ERROR in chunk processing (file I/O or outer loop): {e} for chunk {chunk_output_file}", file=sys.stderr)
-            raise # Re-raise to inform main process
+            raise
 
-        finally: # Ensure outfile is always closed if it was opened
+        finally:
             if outfile is not None and not outfile.closed:
                 outfile.close()
-            # Else, it was already closed or not opened successfully
 
     print(f"Process {os.getpid()} completed its chunk, processed {processed_count_in_chunk} patients.", file=sys.stderr)
     return chunk_output_file, ids_processed_by_this_chunk
@@ -337,7 +349,7 @@ with open(PROCESSED_IDS_LOG, 'a') as f:
         f.write(f"{patient_id}\n")
 print("Master processed IDs log updated.")
 
-print("\n--- Consolidating final combined JSON from all processed patients... ---")
+print(f"\n--- Consolidating final combined JSON from all processed patients... ---")
 final_combined_json_output_path = os.path.join(output_json_dir, "all_patients_combined.json")
 
 # Initialize processed_patients_count for this consolidation loop
@@ -372,6 +384,9 @@ else:
                 if not patient_encounters_df.empty:
                     patient_encounters_df['EncounterId_SH'] = patient_encounters_df['EncounterId_SH'].astype(str)
                     patient_encounters_df = patient_encounters_df.replace({np.nan: None, pd.NA: None})
+                    # NEW: Convert Decimals in Encounter DataFrame for consolidation
+                    patient_encounters_df = convert_decimals_in_df(patient_encounters_df) # <--- ADD THIS LINE
+
                     patient_encounter_ids = patient_encounters_df['EncounterId_SH'].tolist()
 
                     if patient_encounter_ids:
@@ -382,19 +397,26 @@ else:
                         if not patient_diagnoses_df.empty:
                             patient_diagnoses_df['EncounterId_SH'] = patient_diagnoses_df['EncounterId_SH'].astype(str)
                             patient_diagnoses_df = patient_diagnoses_df.replace({np.nan: None, pd.NA: None})
+                            # NEW: Convert Decimals in Diagnosis DataFrame for consolidation
+                            patient_diagnoses_df = convert_decimals_in_df(patient_diagnoses_df) # <--- ADD THIS LINE
 
                         medications_query = f"SELECT * FROM Medication_Table WHERE EncounterId_SH IN ('{ids_str}')"
                         patient_medications_df = pd.read_sql_query(medications_query, conn_final_combine)
                         if not patient_medications_df.empty:
                             patient_medications_df['EncounterId_SH'] = patient_medications_df['EncounterId_SH'].astype(str)
                             patient_medications_df = patient_medications_df.replace({np.nan: None, pd.NA: None})
+                            # NEW: Convert Decimals in Medication DataFrame for consolidation
+                            patient_medications_df = convert_decimals_in_df(patient_medications_df) # <--- ADD THIS LINE
 
                         procedures_query = f"SELECT * FROM Procedure_Table WHERE EncounterId_SH IN ('{ids_str}')"
                         patient_procedures_df = pd.read_sql_query(procedures_query, conn_final_combine)
                         if not patient_procedures_df.empty:
                             patient_procedures_df['EncounterId_SH'] = patient_procedures_df['EncounterId_SH'].astype(str)
                             patient_procedures_df = patient_procedures_df.replace({np.nan: None, pd.NA: None})
+                            # NEW: Convert Decimals in Procedure DataFrame for consolidation
+                            patient_procedures_df = convert_decimals_in_df(patient_procedures_df) # <--- ADD THIS LINE
 
+                        # ... (rest of the assembly loop for encounters, diagnoses, medications, procedures) ...
                         for enc_index, encounter_row in patient_encounters_df.iterrows():
                             encounter_id = encounter_row['EncounterId_SH']
                             encounter_details = encounter_row.drop(['PatientEpicId_SH', 'EncounterId_SH']).to_dict()
