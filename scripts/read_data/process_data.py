@@ -39,7 +39,7 @@ def convert_decimals_in_df(df):
     """
     # Use .applymap() to apply the lambda function to every cell
     # If an element is a decimal.Decimal instance, convert it to float, otherwise return it as is.
-    return df.applymap(lambda x: float(x) if isinstance(x, decimal.Decimal) else x)
+    return df.map(lambda x: float(x) if isinstance(x, decimal.Decimal) else x)
 
 # --- Setup Project Configuration ---
 # You'll need to call setup_config with values appropriate for your project.
