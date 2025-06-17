@@ -6,6 +6,7 @@
         "./scripts/make_data",
         "./scripts/calculations",
         "./scripts/llm",
-        "./scripts/analyze_results"
+        "./scripts/analyze_results",
+        "./scripts"
     ]
 }
