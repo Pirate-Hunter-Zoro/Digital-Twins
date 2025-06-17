@@ -5,15 +5,35 @@ import json
 import numpy as np
 import multiprocessing
 import math
+import config
+import parser
+
+# --- Setup Project Configuration ---
+# You'll need to call setup_config with values appropriate for your project.
+# For example, to get num_patients for this specific task:
+# Let's assume you have a way to set these values for config.py.
+# If config.py reads from an external source, you'd run that setup first.
+# For a generic example, we'll set placeholder values for other parameters
+# and assume num_patients from config will be the target.
+config.setup_config(
+    vectorizer_method="dummy_vectorizer", # Placeholder value
+    distance_metric="euclidean", # Placeholder value
+    use_synthetic_data=False, # Assuming real data for this context
+    num_visits=0, # Not directly relevant for this specific task
+    num_patients=5000, # NEW: Set a default target number here for testing, if config doesn't set it dynamically
+    num_neighbors=0 # Not directly relevant for this specific task
+)
+global_config = config.get_global_config()
+TARGET_NUM_PATIENTS = global_config.num_patients
+print(f"Targeting a random subset of {TARGET_NUM_PATIENTS} patients based on config.py.")
 
 # --- Define Paths ---
 base_data_path = "/mnt/dell_storage/studies/ehr_study/data-EHR-prepped/25_04_17-v1/PrepData-2025_04_17/" # Corrected base_data_path
 output_json_dir = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/real_data/" # Your requested output directory
-os.makedirs(output_json_dir, exist_ok=True)
+
+os.makedirs(output_json_dir, exist_ok=True) # Create output directory if it doesn't exist
 
 db_file = os.path.join(output_json_dir, "ehr_data.db")
-
-# Define the log file for processed patient IDs
 PROCESSED_IDS_LOG = os.path.join(output_json_dir, "processed_patient_ids.log")
 
 
@@ -36,8 +56,11 @@ def load_csv_to_sqlite(csv_filepath, table_name, db_connection, chunk_size=10000
         print(f"  Processed {table_name} chunk {chunk_count}")
     print(f"Finished loading {table_name}.")
 
-
 # --- PHASE 1: DATABASE POPULATION (RUN THIS ONCE, THEN COMMENT OUT) ---
+# NOTE: This phase will still load *all* data into the SQLite database.
+# If your disk space issue is due to the SQLite database growing too large,
+# you'll need a more advanced filtering strategy *during* SQLite loading.
+# For now, this samples only the *output* of JSON generation.
 """
 print("\n--- PHASE 1: Populating SQLite Database from CSVs ---")
 conn_populate = sqlite3.connect(db_file)
@@ -85,7 +108,17 @@ print("\nLoading Person_Table into memory...")
 try:
     person_df = pd.read_csv(os.path.join(base_data_path, "Person_Table-25_04_17-v1.csv"), low_memory=False)
     person_df['person_id'] = person_df['person_id'].astype(str)
-    print(f"Loaded Person_Table. Shape: {person_df.shape}")
+    print(f"Loaded original Person_Table. Shape: {person_df.shape}")
+
+    # --- NEW: Sample person_df based on TARGET_NUM_PATIENTS from config ---
+    if TARGET_NUM_PATIENTS < len(person_df):
+        # Using a fixed random_state for reproducibility across runs if you want the same subset
+        person_df = person_df.sample(n=TARGET_NUM_PATIENTS, random_state=42).copy()
+        print(f"Sampled Person_Table down to {len(person_df)} patients.")
+    else:
+        print(f"Target number of patients ({TARGET_NUM_PATIENTS}) is greater than or equal to total patients. Processing all {len(person_df)}.")
+
+
 except Exception as e:
     print(f"Error loading Person_Table: {e}")
     exit()
@@ -125,19 +158,17 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
     # Each process needs its own database connection
     with sqlite3.connect(db_file) as conn_query:
         # Generate a unique filename for this chunk's output
-        # Using PID for uniqueness and a random int to avoid conflicts if PIDs are reused quickly
         chunk_output_file = os.path.join(output_json_dir, f"temp_chunk_part_{os.getpid()}_{np.random.randint(10000)}.json")
 
         with open(chunk_output_file, 'w') as outfile:
             outfile.write('[\n') # Start the JSON array for this chunk
             is_first_patient_in_chunk = True
 
-            for _, person_row in person_df_chunk.iterrows():
+            for index, person_row in person_df_chunk.iterrows():
                 patient_id = person_row['person_id']
 
                 # --- RESUMPTION LOGIC (Check if already processed before doing heavy work) ---
                 if patient_id in initial_processed_ids_set:
-                    # print(f"Process {os.getpid()}: Skipping already processed patient {patient_id}")
                     continue # Skip this patient as it's already processed
 
                 # --- (rest of patient data processing, same as before) ---
@@ -159,7 +190,6 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
                     patient_encounter_ids = patient_encounters_df['EncounterId_SH'].tolist()
 
                     if patient_encounter_ids:
-                        # Protect against SQL IN clause limits if patient_encounter_ids is huge
                         ids_str = "','".join(patient_encounter_ids)
 
                         diagnoses_query = f"SELECT * FROM Diagnosis_Table WHERE EncounterId_SH IN ('{ids_str}')"
@@ -213,53 +243,39 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
                 is_first_patient_in_chunk = False
 
                 processed_count_in_chunk += 1
-                ids_processed_by_this_chunk.append(patient_id) # Add to list of processed IDs for this chunk
+                ids_processed_by_this_chunk.append(patient_id)
                 if processed_count_in_chunk % 1000 == 0:
                     print(f"Process {os.getpid()}: Processed {processed_count_in_chunk} patients in this chunk.")
 
             # End of if not patient_encounters_df.empty
         # End of for person_row loop
 
-        outfile.write('\n]\n') # Close the JSON array for this chunk
+        outfile.write('\n]\n')
     print(f"Process {os.getpid()} completed its chunk, processed {processed_count_in_chunk} patients.")
-    # Return both the chunk file path and the IDs processed by this chunk
     return chunk_output_file, ids_processed_by_this_chunk
 
 
 print("\n--- PHASE 3: Starting patient-centric JSON conversion (optimized with Multi-Processing!)... ---")
 
-# --- RESUMPTION LOGIC FOR MAIN PROCESS ---
 master_processed_ids_set = load_processed_ids(PROCESSED_IDS_LOG)
 print(f"Loaded {len(master_processed_ids_set)} previously processed patient IDs.")
 
-# Determine number of CPU cores to use
 num_processes = multiprocessing.cpu_count()
 print(f"Using {num_processes} CPU cores for parallel processing.")
 
-# Filter person_df to only include unprocessed patients
-# This is crucial for efficient resumption
 unprocessed_person_df = person_df[~person_df['person_id'].isin(master_processed_ids_set)].copy()
 print(f"Remaining patients to process: {len(unprocessed_person_df)} out of {len(person_df)} total.")
 
 if len(unprocessed_person_df) == 0:
     print("All patients have already been processed. Exiting.")
-    # Rebuild the final combined JSON if all processed, just in case
-    # Call the final combination logic (copy-pasted from below or refactored into a function)
-    # to ensure the final all_patients_combined.json is up-to-date and valid.
-    # This might require some careful handling if this exact script is used for that.
-    # For now, just exit.
     exit()
 
-# Split *unprocessed* person_df into chunks for each process
 chunk_size_per_process = math.ceil(len(unprocessed_person_df) / num_processes)
 patient_chunks = [unprocessed_person_df.iloc[i:i + chunk_size_per_process]
                   for i in range(0, len(unprocessed_person_df), chunk_size_per_process)]
 
-# Create a pool of processes
 pool = multiprocessing.Pool(processes=num_processes)
 
-# Map the processing function to each chunk
-# Pass the *initial* master_processed_ids_set to each chunk
 results_tuple_list = pool.starmap(process_patient_chunk,
                                    [(chunk, db_file, output_json_dir, master_processed_ids_set) for chunk in patient_chunks])
 
@@ -268,72 +284,39 @@ pool.join()
 
 print("\nAll parallel processes finished. Combining chunk files and updating master log...")
 
-# --- Process results from parallel chunks ---
 all_chunk_files = [res[0] for res in results_tuple_list]
 all_newly_processed_ids = []
 for res in results_tuple_list:
     all_newly_processed_ids.extend(res[1])
 
-# Append newly processed IDs to the master log file
 print(f"Appending {len(all_newly_processed_ids)} newly processed IDs to log...")
 with open(PROCESSED_IDS_LOG, 'a') as f:
     for patient_id in all_newly_processed_ids:
         f.write(f"{patient_id}\n")
 print("Master processed IDs log updated.")
 
-# --- Rebuild the final combined JSON from all processed IDs ---
-# This step is crucial for resumption:
-# After new chunks are processed, the "all_patients_combined.json" needs to contain
-# ALL patients, both previously processed AND newly processed.
-# The most robust way is to re-stream the JSON from the individual patients' data
-# which implies having their individual JSONs or querying the DB for all.
-# Since we are not saving individual patient JSONs, but are only building temp chunks for the current run,
-# and want one *final* combined.json, the most robust way to ensure the final file
-# is complete and includes ALL patients (previous runs + current run) is:
-# 1. Load ALL patient IDs from the PROCESSED_IDS_LOG.
-# 2. Iterate through person_df, but this time, for *every* patient (not just unprocessed).
-# 3. Query their data from SQLite.
-# 4. Stream *all* patient data to the final combined JSON.
-
-# This implies a secondary, final streaming pass that consolidates everything.
-# Alternatively, if a partial 'all_patients_combined.json' could be appended to, it's very complex.
-# Overwriting the existing 'all_patients_combined.json' is simpler and safer.
-# This means the *entire* person_df will be iterated again, but only querying the DB.
-# This part is still single-threaded, so it will be the bottleneck for combining.
-
-# Let's simplify this final combining step:
-# Since PROCESSED_IDS_LOG now contains ALL processed IDs (current + previous runs),
-# we can reload person_df (or use the one already loaded), filter by these IDs,
-# and then re-generate the entire final combined JSON. This will still be slow
-# for the final consolidation, but ensures correctness.
-
 print("\n--- Consolidating final combined JSON from all processed patients... ---")
 final_combined_json_output_path = os.path.join(output_json_dir, "all_patients_combined.json")
 
-# Load ALL processed IDs again (including those from this current run)
+# Initialize processed_patients_count for this consolidation loop
+processed_patients_count = 0
+
 all_final_processed_ids = load_processed_ids(PROCESSED_IDS_LOG)
-# Filter the original person_df for all processed patients
 final_person_df_for_combine = person_df[person_df['person_id'].isin(all_final_processed_ids)].copy()
 
 if len(final_person_df_for_combine) == 0:
     print("No patients processed yet. Combined JSON will be empty.")
     with open(final_combined_json_output_path, 'w') as final_outfile:
-        final_outfile.write('[]\n') # Write an empty JSON array
+        final_outfile.write('[]\n')
 else:
-    # --- Initialize processed_patients_count here! ---
-    processed_patients_count = 0 # <-- ADD THIS LINE
-
-    # Use a new connection for this final consolidation pass
     with sqlite3.connect(db_file) as conn_final_combine:
         with open(final_combined_json_output_path, 'w') as final_outfile:
             final_outfile.write('[\n')
             is_first_patient_in_final_combine = True
 
-            # Loop through ALL the patients that have *ever* been processed
             for index, person_row in final_person_df_for_combine.iterrows():
                 patient_id = person_row['person_id']
 
-                # (This is a simplified copy of the JSON generation logic from process_patient_chunk)
                 demographics_dict = person_row.drop('person_id').replace({np.nan: None, pd.NA: None}).to_dict()
                 patient_data = {
                     "patient_id": patient_id,
@@ -401,9 +384,8 @@ else:
                 json.dump(patient_data, final_outfile, indent=4)
                 is_first_patient_in_final_combine = False
 
-                processed_patients_count += 1 # This line is fine now
+                processed_patients_count += 1
 
-                # Print consolidation progress
                 if processed_patients_count % 1000 == 0:
                     print(f"Consolidating combined JSON: Processed {processed_patients_count} patients.")
 
