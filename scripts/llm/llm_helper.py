@@ -1,5 +1,4 @@
 from query_llm import query_llm
-import json
 import re
 from config import get_global_config
 from query_and_response import turn_to_sentence

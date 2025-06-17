@@ -132,7 +132,7 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
             outfile.write('[\n') # Start the JSON array for this chunk
             is_first_patient_in_chunk = True
 
-            for index, person_row in person_df_chunk.iterrows():
+            for _, person_row in person_df_chunk.iterrows():
                 patient_id = person_row['person_id']
 
                 # --- RESUMPTION LOGIC (Check if already processed before doing heavy work) ---
@@ -320,6 +320,9 @@ if len(final_person_df_for_combine) == 0:
     with open(final_combined_json_output_path, 'w') as final_outfile:
         final_outfile.write('[]\n') # Write an empty JSON array
 else:
+    # --- Initialize processed_patients_count here! ---
+    processed_patients_count = 0 # <-- ADD THIS LINE
+
     # Use a new connection for this final consolidation pass
     with sqlite3.connect(db_file) as conn_final_combine:
         with open(final_combined_json_output_path, 'w') as final_outfile:
@@ -398,6 +401,9 @@ else:
                 json.dump(patient_data, final_outfile, indent=4)
                 is_first_patient_in_final_combine = False
 
+                processed_patients_count += 1 # This line is fine now
+
+                # Print consolidation progress
                 if processed_patients_count % 1000 == 0:
                     print(f"Consolidating combined JSON: Processed {processed_patients_count} patients.")
 

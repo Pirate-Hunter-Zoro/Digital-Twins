@@ -62,7 +62,6 @@ def get_visit_strings(patient_data: list[dict]) -> dict[str, dict[int, dict[tupl
 ######################################################################
 # Use an sentence transformer to get vectors for each visit sequence
 from sentence_transformers import SentenceTransformer
-from huggingface_hub import login
 import numpy as np
 
 def get_visit_vectors(

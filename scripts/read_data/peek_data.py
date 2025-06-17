@@ -1,8 +1,10 @@
 import ijson
+import json
 import os
 
 # Your combined JSON file path
-combined_json_output_path = "../../real_data/all_patients_combined_streamed.json"
+base_data_path = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/real_data/" # Your requested output directory
+combined_json_output_path = os.path.join(base_data_path, "all_patients_combined_streamed.json")
 
 num_patients_to_read = 5 # How many patient records you want to see
 
