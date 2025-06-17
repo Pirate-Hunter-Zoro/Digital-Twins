@@ -165,9 +165,8 @@ except sqlite3.Error as e:
 finally:
     conn_index.close()
 
+print("\n--- PHASE 3: Starting patient-centric JSON conversion (optimized with Multi-Processing!)... ---")
 
-# --- PHASE 3: JSON CONVERSION (OPTIMIZED WITH MULTI-PROCESSING AND RESUMPTION!) ---
-# This function will be executed by each parallel process
 def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_processed_ids_set):
     """
     Function to be run by each process, processing a chunk of patients.
@@ -175,109 +174,130 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
     Each process writes its results to a temporary JSON part file and returns IDs it successfully processed.
     """
     processed_count_in_chunk = 0
-    ids_processed_by_this_chunk = [] # To return IDs processed by this specific chunk
+    ids_processed_by_this_chunk = []
 
     # Each process needs its own database connection
+    # Note: If the SQLite DB file (ehr_data.db) itself is on NFS, we're still querying NFS.
+    # But writing temp JSON files locally will help isolate the write issue.
     with sqlite3.connect(db_file) as conn_query:
-        # Generate a unique filename for this chunk's output
-        chunk_output_file = os.path.join(output_json_dir, f"temp_chunk_part_{os.getpid()}_{np.random.randint(10000)}.json")
+        
+        # --- NEW: Direct temporary JSON part files to a LOCAL /tmp directory ---
+        # IMPORTANT: Verify that /tmp on compute300 is a local, large-enough partition!
+        local_temp_base_dir = f"/tmp/json_chunks_worker_{os.getpid()}" 
+        os.makedirs(local_temp_base_dir, exist_ok=True) # Create a unique temp directory for this worker
+        
+        chunk_output_file = os.path.join(local_temp_base_dir, f"temp_chunk_part_{np.random.randint(10000)}.json")
+        print(f"Process {os.getpid()}: Writing temp chunk part to: {chunk_output_file}", file=sys.stderr) # Log where it's writing
 
-        with open(chunk_output_file, 'w') as outfile:
+        outfile = None # Initialize outfile outside try block
+        try:
+            outfile = open(chunk_output_file, 'w')
             outfile.write('[\n') # Start the JSON array for this chunk
             is_first_patient_in_chunk = True
 
             for index, person_row in person_df_chunk.iterrows():
                 patient_id = person_row['person_id']
 
-                # --- RESUMPTION LOGIC (Check if already processed before doing heavy work) ---
                 if patient_id in initial_processed_ids_set:
-                    continue # Skip this patient as it's already processed
+                    continue 
 
-                # --- (rest of patient data processing, same as before) ---
-                demographics_dict = person_row.drop('person_id').replace({np.nan: None, pd.NA: None}).to_dict()
+                try: # Inner try-except for patient processing
+                    demographics_dict = person_row.drop('person_id').replace({np.nan: None, pd.NA: None}).to_dict()
 
-                patient_data = {
-                    "patient_id": patient_id,
-                    "demographics": demographics_dict,
-                    "encounters": []
-                }
+                    patient_data = {
+                        "patient_id": patient_id,
+                        "demographics": demographics_dict,
+                        "encounters": []
+                    }
 
-                encounters_query = f"SELECT * FROM Encounter_Table WHERE PatientEpicId_SH = '{patient_id}'"
-                patient_encounters_df = pd.read_sql_query(encounters_query, conn_query)
+                    encounters_query = f"SELECT * FROM Encounter_Table WHERE PatientEpicId_SH = '{patient_id}'"
+                    patient_encounters_df = pd.read_sql_query(encounters_query, conn_query)
 
-                if not patient_encounters_df.empty:
-                    patient_encounters_df['EncounterId_SH'] = patient_encounters_df['EncounterId_SH'].astype(str)
-                    patient_encounters_df = patient_encounters_df.replace({np.nan: None, pd.NA: None})
+                    if not patient_encounters_df.empty:
+                        patient_encounters_df['EncounterId_SH'] = patient_encounters_df['EncounterId_SH'].astype(str)
+                        patient_encounters_df = patient_encounters_df.replace({np.nan: None, pd.NA: None})
 
-                    patient_encounter_ids = patient_encounters_df['EncounterId_SH'].tolist()
+                        patient_encounter_ids = patient_encounters_df['EncounterId_SH'].tolist()
 
-                    if patient_encounter_ids:
-                        ids_str = "','".join(patient_encounter_ids)
+                        if patient_encounter_ids:
+                            ids_str = "','".join(patient_encounter_ids)
 
-                        diagnoses_query = f"SELECT * FROM Diagnosis_Table WHERE EncounterId_SH IN ('{ids_str}')"
-                        patient_diagnoses_df = pd.read_sql_query(diagnoses_query, conn_query)
-                        if not patient_diagnoses_df.empty:
-                            patient_diagnoses_df['EncounterId_SH'] = patient_diagnoses_df['EncounterId_SH'].astype(str)
-                            patient_diagnoses_df = patient_diagnoses_df.replace({np.nan: None, pd.NA: None})
+                            diagnoses_query = f"SELECT * FROM Diagnosis_Table WHERE EncounterId_SH IN ('{ids_str}')"
+                            patient_diagnoses_df = pd.read_sql_query(diagnoses_query, conn_query)
+                            if not patient_diagnoses_df.empty:
+                                patient_diagnoses_df['EncounterId_SH'] = patient_diagnoses_df['EncounterId_SH'].astype(str)
+                                patient_diagnoses_df = patient_diagnoses_df.replace({np.nan: None, pd.NA: None})
 
-                        medications_query = f"SELECT * FROM Medication_Table WHERE EncounterId_SH IN ('{ids_str}')"
-                        patient_medications_df = pd.read_sql_query(medications_query, conn_query)
-                        if not patient_medications_df.empty:
-                            patient_medications_df['EncounterId_SH'] = patient_medications_df['EncounterId_SH'].astype(str)
-                            patient_medications_df = patient_medications_df.replace({np.nan: None, pd.NA: None})
+                            medications_query = f"SELECT * FROM Medication_Table WHERE EncounterId_SH IN ('{ids_str}')"
+                            patient_medications_df = pd.read_sql_query(medications_query, conn_query)
+                            if not patient_medications_df.empty:
+                                patient_medications_df['EncounterId_SH'] = patient_medications_df['EncounterId_SH'].astype(str)
+                                patient_medications_df = patient_medications_df.replace({np.nan: None, pd.NA: None})
 
-                        procedures_query = f"SELECT * FROM Procedure_Table WHERE EncounterId_SH IN ('{ids_str}')"
-                        patient_procedures_df = pd.read_sql_query(procedures_query, conn_query)
-                        if not patient_procedures_df.empty:
-                            patient_procedures_df['EncounterId_SH'] = patient_procedures_df['EncounterId_SH'].astype(str)
-                            patient_procedures_df = patient_procedures_df.replace({np.nan: None, pd.NA: None})
+                            procedures_query = f"SELECT * FROM Procedure_Table WHERE EncounterId_SH IN ('{ids_str}')"
+                            patient_procedures_df = pd.read_sql_query(procedures_query, conn_query)
+                            if not patient_procedures_df.empty:
+                                patient_procedures_df['EncounterId_SH'] = patient_procedures_df['EncounterId_SH'].astype(str)
+                                patient_procedures_df = patient_procedures_df.replace({np.nan: None, pd.NA: None})
 
-                        for enc_index, encounter_row in patient_encounters_df.iterrows():
-                            encounter_id = encounter_row['EncounterId_SH']
-                            encounter_details = encounter_row.drop(['PatientEpicId_SH', 'EncounterId_SH']).to_dict()
+                            for enc_index, encounter_row in patient_encounters_df.iterrows():
+                                encounter_id = encounter_row['EncounterId_SH']
+                                encounter_details = encounter_row.drop(['PatientEpicId_SH', 'EncounterId_SH']).to_dict()
 
-                            current_encounter_data = {
-                                "encounter_id": encounter_id,
-                                "details": encounter_details,
-                                "diagnoses": [],
-                                "medications": [],
-                                "procedures": []
-                            }
+                                current_encounter_data = {
+                                    "encounter_id": encounter_id,
+                                    "details": encounter_details,
+                                    "diagnoses": [],
+                                    "medications": [],
+                                    "procedures": []
+                                }
 
-                            current_encounter_data["diagnoses"] = patient_diagnoses_df[
-                                patient_diagnoses_df['EncounterId_SH'] == encounter_id
-                            ].drop('EncounterId_SH', axis=1).to_dict(orient='records')
+                                current_encounter_data["diagnoses"] = patient_diagnoses_df[
+                                    patient_diagnoses_df['EncounterId_SH'] == encounter_id
+                                ].drop('EncounterId_SH', axis=1).to_dict(orient='records')
 
-                            current_encounter_data["medications"] = patient_medications_df[
-                                patient_medications_df['EncounterId_SH'] == encounter_id
-                            ].drop('EncounterId_SH', axis=1).to_dict(orient='records')
+                                current_encounter_data["medications"] = patient_medications_df[
+                                    patient_medications_df['EncounterId_SH'] == encounter_id
+                                ].drop('EncounterId_SH', axis=1).to_dict(orient='records')
 
-                            current_encounter_data["procedures"] = patient_procedures_df[
-                                patient_procedures_df['EncounterId_SH'] == encounter_id
-                            ].drop('EncounterId_SH', axis=1).to_dict(orient='records')
+                                current_encounter_data["procedures"] = patient_procedures_df[
+                                    patient_procedures_df['EncounterId_SH'] == encounter_id
+                                ].drop('EncounterId_SH', axis=1).to_dict(orient='records')
 
-                            patient_data["encounters"].append(current_encounter_data)
+                                patient_data["encounters"].append(current_encounter_data)
 
-                # --- Write the current patient's JSON to this chunk's temporary file ---
-                if not is_first_patient_in_chunk:
-                    outfile.write(',\n')
-                json.dump(patient_data, outfile, indent=4)
-                is_first_patient_in_chunk = False
+                        if not is_first_patient_in_chunk:
+                            outfile.write(',\n')
+                        json.dump(patient_data, outfile, indent=4)
+                        is_first_patient_in_chunk = False
 
-                processed_count_in_chunk += 1
-                ids_processed_by_this_chunk.append(patient_id)
-                if processed_count_in_chunk % 1000 == 0:
-                    print(f"Process {os.getpid()}: Processed {processed_count_in_chunk} patients in this chunk.")
+                        processed_count_in_chunk += 1
+                        ids_processed_by_this_chunk.append(patient_id)
+                        if processed_count_in_chunk % 1000 == 0:
+                            print(f"Process {os.getpid()}: Processed {processed_count_in_chunk} patients in this chunk.", file=sys.stderr) # Log to stderr
 
-            # End of if not patient_encounters_df.empty
-        # End of for person_row loop
+                except Exception as e:
+                    print(f"Process {os.getpid()}: ERROR processing patient {patient_id}: {e}", file=sys.stderr)
+                    continue
 
-        outfile.write('\n]\n')
-    print(f"Process {os.getpid()} completed its chunk, processed {processed_count_in_chunk} patients.")
+            # End of for loop
+            # --- IMPORTANT CHECK BEFORE FINAL WRITE ---
+            if outfile is not None and not outfile.closed:
+                outfile.write('\n]\n')
+            else:
+                print(f"Process {os.getpid()}: WARNING: Output file was unexpectedly closed before closing bracket could be written for chunk {chunk_output_file}.", file=sys.stderr)
+
+        except Exception as e: # This catches errors related to file opening or the outer structure
+            print(f"Process {os.getpid()}: CRITICAL ERROR in chunk processing (file I/O or outer loop): {e} for chunk {chunk_output_file}", file=sys.stderr)
+            raise # Re-raise to inform main process
+
+        finally: # Ensure outfile is always closed if it was opened
+            if outfile is not None and not outfile.closed:
+                outfile.close()
+            # Else, it was already closed or not opened successfully
+
+    print(f"Process {os.getpid()} completed its chunk, processed {processed_count_in_chunk} patients.", file=sys.stderr)
     return chunk_output_file, ids_processed_by_this_chunk
-
-
-print("\n--- PHASE 3: Starting patient-centric JSON conversion (optimized with Multi-Processing!)... ---")
 
 master_processed_ids_set = load_processed_ids(PROCESSED_IDS_LOG)
 print(f"Loaded {len(master_processed_ids_set)} previously processed patient IDs.")
