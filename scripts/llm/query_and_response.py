@@ -44,14 +44,18 @@ def setup_prompt_generation():
     global patient_data
     global all_response_options
 
-    patient_data = load_patient_data()
-    all_medications = set()
-    all_treatments = set()
-    all_diagnoses = set()
+    patient_data = load_patient_data() # This now loads real data in 'visits' format
+    
+    # Initialize sets to ensure they're clean on setup
+    all_medications.clear()
+    all_treatments.clear()
+    all_diagnoses.clear()
+
     for patient in patient_data:
-        for visit in patient["visits"]:
+        # Loop through 'visits' (which are now the real data encounters)
+        for visit in patient.get("visits", []): # Use .get() for safety
             all_medications.update(visit.get("medications", []))
-            all_treatments.update(visit.get("treatments", []))
+            all_treatments.update(visit.get("treatments", [])) # Assuming 'treatments' key now exists due to load_patient_data mapping
             all_diagnoses.update(visit.get("diagnoses", []))
 
     all_response_options = {
@@ -60,18 +64,18 @@ def setup_prompt_generation():
         "treatments": sorted(all_treatments)
     }
 
+    # all_patient_strings needs to be generated from the new patient_data format
+    # get_visit_strings needs to be adapted for this.
+    # It's in compute_nearest_neighbors.py, so ensure it uses the 'encounter_obj' passed to turn_to_sentence.
+    from scripts.calculations.compute_nearest_neighbors import get_visit_strings
     all_patient_strings = get_visit_strings(patient_data)
-
+    
 def generate_prompt(patient: dict) -> str:
     """
     Generate a prompt to get the patient's (n+1)st visit (of index n).
     """
     global all_patient_strings
-    global all_medications
-    global all_treatments
-    global all_diagnoses
-    global patient_data
-    global all_response_options
+    
     nearest_neighbors = get_neighbors(patient_data)
 
     try:
@@ -81,14 +85,31 @@ def generate_prompt(patient: dict) -> str:
         all_prompts = {}
 
     patient_id = patient["patient_id"]
+    
     window_size_used = get_global_config().num_visits-1  # We use the latest visit *up to* the prediction point
     key = f"{patient_id}_{window_size_used}"
     if key not in all_prompts.keys():
         # Then we need to generate the prompt
 
-        history_section = "\n".join(
-            turn_to_sentence(visit) for visit in patient["visits"][:get_global_config().num_visits-1]
-        )
+        if len(patient["visits"]) < get_global_config().num_visits:
+            # This patient doesn't have enough history visits for prediction based on config.
+            # You might want to skip them or handle this case.
+            # For now, let's assume valid patients have at least num_visits visits.
+            # If it's the last visit being predicted, it's the one at num_visits-1.
+            # If config.num_visits=5, we use visits 0,1,2,3 for history and predict visit 4.
+
+            # Correctly get the history, taking the latest 'num_visits-1' encounters/visits
+            history_visits = patient["visits"][:get_global_config().num_visits-1]
+            
+            # If for some reason history_visits is empty, or too short
+            if not history_visits:
+                history_section = "No historical visits available."
+            else:
+                history_section = "\n".join(turn_to_sentence(visit) for visit in history_visits)
+        else:
+            history_section = "\n".join(
+                turn_to_sentence(visit) for visit in patient["visits"][:get_global_config().num_visits-1]
+            )
 
         relevant_neighbors = nearest_neighbors.get((patient_id, window_size_used), [])
         neighbor_section = "\n".join(
@@ -96,9 +117,24 @@ def generate_prompt(patient: dict) -> str:
             for neighbor_key_score in relevant_neighbors[:min(len(relevant_neighbors), get_global_config().num_neighbors+1)]
         )
 
-        random_diagnoses = ', '.join(random.sample(sorted(all_diagnoses), min(len(all_diagnoses), 3)))
-        random_medications = ', '.join(random.sample(sorted(all_medications), min(len(all_medications), 3)))
-        random_treatments = ', '.join(random.sample(sorted(all_treatments), min(len(all_treatments), 3)))
+        # If config.num_visits=5, we use visits 0,1,2,3 for history and predict visit 4.
+
+        # Correctly get the history, taking the latest 'num_visits-1' encounters/visits
+        history_visits = patient["visits"][:get_global_config().num_visits-1]
+        
+        # If for some reason history_visits is empty, or too short
+        if not history_visits:
+            history_section = "No historical visits available."
+        else:
+            history_section = "\n".join(turn_to_sentence(visit) for visit in history_visits)
+
+        # --- Random options for LLM ---
+        # These sets are populated by setup_prompt_generation globally
+        # If all_diagnoses, all_medications, all_treatments are empty (e.g. no data), random.sample will error.
+        # Add a check for non-empty set before sampling.
+        random_diagnoses = ', '.join(random.sample(sorted(list(all_diagnoses)), min(len(all_diagnoses), 3))) if all_diagnoses else "None"
+        random_medications = ', '.join(random.sample(sorted(list(all_medications)), min(len(all_medications), 3))) if all_medications else "None"
+        random_treatments = ', '.join(random.sample(sorted(list(all_treatments)), min(len(all_treatments), 3))) if all_treatments else "None"
         # Create the prompt
         prompt = textwrap.dedent(f"""
         Here is a list of all the patient's first {get_global_config().num_visits-1} visits:

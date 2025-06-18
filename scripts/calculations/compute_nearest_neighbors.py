@@ -30,17 +30,31 @@ from scripts.config import get_global_config
 #####################################################################
 # Helper functions for turning visit data into strings
 
-def turn_to_sentence(visit: dict) -> str:
+def turn_to_sentence(encounter_obj: dict) -> str:
     """
-    Convert a visit dictionary to a human-readable sentence.
+    Convert an encounter dictionary from real data to a human-readable sentence,
+    mapping 'procedures' to 'treatments' for consistent LLM input.
     """
     sentences = []
-    if visit["diagnoses"]:
-        sentences.append("Diagnoses: " + ", ".join(visit["diagnoses"]))
-    if visit["medications"]:
-        sentences.append("Medications: " + ", ".join(visit["medications"]))
-    if visit["treatments"]:
-        sentences.append("Treatments: " + ", ".join(visit["treatments"]))
+    
+    # Access the lists directly from the encounter_obj dictionary
+    # Use .get() for safety in case a key is missing
+    if encounter_obj.get("diagnoses"):
+        sentences.append("Diagnoses: " + ", ".join(encounter_obj["diagnoses"]))
+    if encounter_obj.get("medications"):
+        sentences.append("Medications: " + ", ".join(encounter_obj["medications"]))
+    
+    # NEW: Map 'procedures' from real data to 'treatments' for the sentence
+    if encounter_obj.get("procedures"):
+        sentences.append("Treatments: " + ", ".join(encounter_obj["procedures"]))
+    elif encounter_obj.get("treatments"): # Fallback for old synthetic data if it was ever mixed
+        sentences.append("Treatments: " + ", ".join(encounter_obj["treatments"]))
+
+    # Include other relevant details from the 'details' section if they exist and are important
+    # For instance, if PatientType or DepartmentName are key to the narrative.
+    # The prompt might already cover what it needs, but useful for richer sentences.
+    # Example: if encounter_obj.get("PatientType"): sentences.append(f"Type: {encounter_obj['PatientType']}")
+
     return "; ".join(sentences)
 
 def get_visit_histories(patient_visits: list[dict]) -> dict[int, dict[int, str]]:
