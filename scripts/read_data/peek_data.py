@@ -1,58 +1,26 @@
-import sys
-import os
+import sqlite3
+import pandas as pd
 
-# --- Dynamic sys.path adjustment for module imports ---
-# Get the absolute path to the directory containing the current script
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Calculate the project root.
-# This assumes your 'config.py' (or other root-level modules like 'main.py')
-# is located two directories up from where this script resides.
-# Example: If this script is in 'project_root/scripts/read_data/your_script.py'
-# then '..' takes you to 'project_root/scripts/'
-# and '..', '..' takes you to 'project_root/'
-project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
-
-# Add the project root to sys.path if it's not already there.
-# Inserting at index 0 makes it the first place Python looks for modules,
-# so 'import config' will find it quickly.
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# --- End of sys.path adjustment ---
-
-import ijson
-import json
-
-# Your combined JSON file path
-base_data_path = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/real_data/" # Your requested output directory
-combined_json_output_path = os.path.join(base_data_path, "all_patients_combined.json")
-
-num_patients_to_read = 5 # How many patient records you want to see
-
-print(f"Attempting to read the first {num_patients_to_read} patients from: {combined_json_output_path}")
+db_file = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/real_data/ehr_data.db"
+patient_id_to_check = "DDEFB0D5C0D98D4D75ACB56315CC7D74" # Use one of the IDs from your JSON
 
 try:
-    with open(combined_json_output_path, 'r') as f:
-        # ijson.items(f, '') means read items from the root of the JSON file.
-        # Since your combined JSON is a list of patient objects, '' targets each item in the root list.
-        # If it were a JSON object with a key like {"patients": [...]}, you'd use 'patients.item'
-        patient_generator = ijson.items(f, '')
+    with sqlite3.connect(db_file) as conn:
+        query = f"SELECT * FROM Encounter_Table WHERE PatientEpicId_SH = '{patient_id_to_check}'"
+        df_check = pd.read_sql_query(query, conn)
 
-        read_count = 0
-        for patient in patient_generator:
-            print(f"\n--- Patient {read_count + 1} ---")
-            # You can print the whole dictionary, or just specific parts
-            print(json.dumps(patient, indent=2)[:1000] + "\n..." if len(json.dumps(patient, indent=2)) > 1000 else json.dumps(patient, indent=2)) # Print snippet for large patient JSONs
+        print(f"Querying for patient: {patient_id_to_check}")
+        print(f"Resulting DataFrame shape: {df_check.shape}")
+        if not df_check.empty:
+            print("Found encounters for this patient!")
+            print(df_check.head())
+        else:
+            print("NO encounters found for this patient in Encounter_Table.")
 
-            read_count += 1
-            if read_count >= num_patients_to_read:
-                break # Stop after reading the desired number of patients
+        # Also, check if PatientEpicId_SH column itself has issues in the table
+        print("\nChecking unique PatientEpicId_SH values in Encounter_Table:")
+        df_unique_ids = pd.read_sql_query("SELECT DISTINCT PatientEpicId_SH FROM Encounter_Table LIMIT 10;", conn)
+        print(df_unique_ids)
 
-    if read_count == 0:
-        print("No patient data found or file is empty after streaming.")
-
-except FileNotFoundError:
-    print(f"Error: The file {combined_json_output_path} was not found.")
 except Exception as e:
-    print(f"An unexpected error occurred while reading the combined JSON: {e}")
+    print(f"An error occurred during direct SQLite query: {e}")
