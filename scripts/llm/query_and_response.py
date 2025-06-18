@@ -27,6 +27,7 @@ from scripts.llm.query_llm import query_llm
 from scripts.read_data.load_patient_data import load_patient_data
 import random
 import textwrap
+import re
 from scripts.config import get_global_config
 
 all_patient_strings = {}
@@ -53,21 +54,42 @@ def setup_prompt_generation():
 
     for patient in patient_data:
         # Loop through 'visits' (which are now the real data encounters)
-        for visit in patient.get("visits", []): # Use .get() for safety
-            all_medications.update(visit.get("medications", []))
-            all_treatments.update(visit.get("treatments", [])) # Assuming 'treatments' key now exists due to load_patient_data mapping
-            all_diagnoses.update(visit.get("diagnoses", []))
+        for visit in patient.get("visits", []): # Use .get() for safety if 'visits' might be missing
+            # --- NEW: Extract specific string fields from the dictionaries ---
+
+            # Diagnoses: Extract Diagnosis_1_Code for the set
+            # The prompt in generate_prompt specifies 'ICD-10 codes'
+            diagnoses_codes = [
+                diag.get("Diagnosis_1_Code") 
+                for diag in visit.get("diagnoses", []) 
+                if diag.get("Diagnosis_1_Code") # Ensure the code is not None or empty
+            ]
+            all_diagnoses.update(diagnoses_codes)
+
+            # Medications: Extract MedName for the set
+            medication_names = [
+                med.get("MedName") 
+                for med in visit.get("medications", []) 
+                if med.get("MedName") # Ensure the name is not None or empty
+            ]
+            all_medications.update(medication_names)
+
+            # Treatments (from Procedures): Extract Procedure_Description for the set
+            # We decided to map procedures to treatments for LLM consistency
+            treatment_descriptions = [
+                proc.get("Procedure_Description") 
+                for proc in visit.get("treatments", []) # Now using 'treatments' key from load_patient_data.py
+                if proc.get("Procedure_Description") # Ensure the description is not None or empty
+            ]
+            all_treatments.update(treatment_descriptions)
+
 
     all_response_options = {
-        "diagnoses": sorted(all_diagnoses),
-        "medications": sorted(all_medications),
-        "treatments": sorted(all_treatments)
+        "diagnoses": sorted(list(all_diagnoses)), # Convert set to list for sorting
+        "medications": sorted(list(all_medications)),
+        "treatments": sorted(list(all_treatments))
     }
-
-    # all_patient_strings needs to be generated from the new patient_data format
-    # get_visit_strings needs to be adapted for this.
-    # It's in compute_nearest_neighbors.py, so ensure it uses the 'encounter_obj' passed to turn_to_sentence.
-    from scripts.calculations.compute_nearest_neighbors import get_visit_strings
+    
     all_patient_strings = get_visit_strings(patient_data)
     
 def generate_prompt(patient: dict) -> str:
