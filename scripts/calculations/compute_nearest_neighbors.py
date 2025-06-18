@@ -8,14 +8,9 @@ current_script_dir = os.path.dirname(os.path.abspath(__file__))
 # Calculate the project root.
 # This assumes your 'config.py' (or other root-level modules like 'main.py')
 # is located two directories up from where this script resides.
-# Example: If this script is in 'project_root/scripts/read_data/your_script.py'
-# then '..' takes you to 'project_root/scripts/'
-# and '..', '..' takes you to 'project_root/'
 project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
 
 # Add the project root to sys.path if it's not already there.
-# Inserting at index 0 makes it the first place Python looks for modules,
-# so 'import config' will find it quickly.
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -25,37 +20,57 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
-from scripts.config import get_global_config
+from scripts.config import get_global_config # Ensure this is correct
 
 #####################################################################
 # Helper functions for turning visit data into strings
 
+# This function is in scripts/calculations/compute_nearest_neighbors.py
 def turn_to_sentence(encounter_obj: dict) -> str:
     """
-    Convert an encounter dictionary from real data to a human-readable sentence,
-    mapping 'procedures' to 'treatments' for consistent LLM input.
+    Convert an encounter dictionary (from real EHR data) into a human-readable sentence,
+    extracting specific string fields from nested dictionaries for diagnoses, medications, and treatments (procedures).
     """
     sentences = []
     
-    # Access the lists directly from the encounter_obj dictionary
-    # Use .get() for safety in case a key is missing
+    # Diagnoses: Extract Diagnosis_1_Code from each diagnosis dictionary
+    # encounter_obj["diagnoses"] is a list of dicts. We need the 'Diagnosis_1_Code' from each dict.
     if encounter_obj.get("diagnoses"):
-        sentences.append("Diagnoses: " + ", ".join(encounter_obj["diagnoses"]))
-    if encounter_obj.get("medications"):
-        sentences.append("Medications: " + ", ".join(encounter_obj["medications"]))
-    
-    # NEW: Map 'procedures' from real data to 'treatments' for the sentence
-    if encounter_obj.get("procedures"):
-        sentences.append("Treatments: " + ", ".join(encounter_obj["procedures"]))
-    elif encounter_obj.get("treatments"): # Fallback for old synthetic data if it was ever mixed
-        sentences.append("Treatments: " + ", ".join(encounter_obj["treatments"]))
+        diagnoses_codes = [
+            diag.get("Diagnosis_1_Code") # Get the code from the dictionary
+            for diag in encounter_obj["diagnoses"] 
+            if diag.get("Diagnosis_1_Code") is not None # Ensure the code exists
+        ]
+        if diagnoses_codes: # Only append if there are actual codes to join
+            sentences.append("Diagnoses: " + ", ".join(diagnoses_codes))
 
-    # Include other relevant details from the 'details' section if they exist and are important
-    # For instance, if PatientType or DepartmentName are key to the narrative.
-    # The prompt might already cover what it needs, but useful for richer sentences.
-    # Example: if encounter_obj.get("PatientType"): sentences.append(f"Type: {encounter_obj['PatientType']}")
+    # Medications: Extract MedName from each medication dictionary
+    # encounter_obj["medications"] is a list of dicts. We need the 'MedName' from each dict.
+    if encounter_obj.get("medications"):
+        medication_names = [
+            med.get("MedName") 
+            for med in encounter_obj["medications"] 
+            if med.get("MedName") is not None
+        ]
+        if medication_names:
+            sentences.append("Medications: " + ", ".join(medication_names))
+    
+    # Treatments: Extract Procedure_Description from each procedure dictionary
+    # encounter_obj["treatments"] (which was mapped from 'procedures' in load_patient_data.py) is a list of dicts.
+    # We need the 'Procedure_Description' from each dict.
+    if encounter_obj.get("treatments"): 
+        treatment_descriptions = [
+            proc.get("Procedure_Description") 
+            for proc in encounter_obj["treatments"] 
+            if proc.get("Procedure_Description") is not None # Ensure description exists
+        ]
+        if treatment_descriptions:
+            sentences.append("Treatments: " + ", ".join(treatment_descriptions))
 
     return "; ".join(sentences)
+
+######################################################################
+# Use an sentence transformer to get vectors for each visit sequence
 
 def get_visit_histories(patient_visits: list[dict]) -> dict[int, dict[int, str]]:
     """
@@ -66,16 +81,87 @@ def get_visit_histories(patient_visits: list[dict]) -> dict[int, dict[int, str]]
     visit_histories = {}
 
     n = len(patient_visits)
-    if n < 1:
-        return visit_histories  # No visits to process
+    # The minimum number of visits for history is num_visits.
+    # So if patient has fewer visits than num_visits, we cannot form a history window of that length.
+    if n < get_global_config().num_visits: # Adjust this check for num_visits from config
+        return visit_histories  # Not enough visits to form a history window
+
+    # The loop should go up to n, so that the last window starts at n - num_visits.
+    # If num_visits is 5, and patient has 5 visits (0-4), start_idx = 0.
+    # end_idx = 0 + 5 - 1 = 4. range(0, 5-5+1 = 1) -> 0. so range(0,1) gives start_idx 0.
+    # This means end_idx is based on the LAST visit in the window,
+    # and the window itself is length 'get_global_config().num_visits'.
+    # This logic assumes num_visits is the full window length, not history length + 1.
+    # Let's adjust based on typical interpretation: num_visits is the history length.
+    # If num_visits is 5, it means last 5 visits form the history.
+    # For predicting visit N, we use visits up to N-1.
+    # The config has num_visits for history.
+    
+    # Let's re-confirm config's num_visits purpose.
+    # In generate_prompt, it uses `patient["visits"][:get_global_config().num_visits-1]`
+    # So num_visits IS the actual length of the history window.
+    # And get_global_config().num_visits-1 is the ENDING index of the history.
+    # This means `num_visits` is the count of visits in history.
+
+    # If get_global_config().num_visits = 5, we want to predict visit 5, using history visits 0-4.
+    # The history should be patient["visits"][:get_global_config().num_visits]
+    # The loop should identify all possible history windows of length num_visits.
+
+    # Re-evaluate get_visit_histories logic with num_visits = history length
+    # A patient needs AT LEAST get_global_config().num_visits + 1 visits to predict one next visit.
+    # If num_visits=5, they need 6 visits to predict the 6th.
+    
+    # Let's assume num_visits is the length of the history window.
+    # The loop should iterate over possible *prediction points*.
+    # If num_visits=5, and patient has 10 visits:
+    # Predict V5: history V0-V4.
+    # Predict V6: history V1-V5.
+    # ...
+    # Predict V9: history V4-V8.
+
+    # This function is used to create *candidate pool* visit strings.
+    # Keys are (patient_id, end_idx) - where end_idx is the *last visit in the history window*.
+
+    # For each visit that could be a 'next visit' to predict (from index `num_visits` onwards)
+    # The history window ending at `end_idx` has length `get_global_config().num_visits`.
+    # So `start_idx` should be `end_idx - get_global_config().num_visits + 1`.
+
+    # Example: num_visits = 5
+    # If patient_visits is [V0, V1, V2, V3, V4, V5, V6, V7] (length 8)
+    # First history window: V0, V1, V2, V3, V4 (length 5). end_idx = 4. start_idx = 0.
+    # Second history window: V1, V2, V3, V4, V5 (length 5). end_idx = 5. start_idx = 1.
+    # Last history window: V3, V4, V5, V6, V7 (length 5). end_idx = 7. start_idx = 3.
+
+    # The loop for `start_idx` needs to range from 0 up to `n - get_global_config().num_visits`.
+    # `end_idx` will be `start_idx + get_global_config().num_visits - 1`.
+    
+    # `n - get_global_config().num_visits + 1` should be the number of possible history windows.
+    # If n=5, num_visits=5, then 5-5+1 = 1 window (0-4). So start_idx = 0. This is fine.
+
+    # The `turn_to_sentence` call will now work with the correct `encounter_obj` format.
+    # The structure of this function seems okay for creating history strings based on `num_visits` window.
+    # It seems to be correct.
 
     visit_histories = {}
-    for start_idx in range(n - get_global_config().num_visits + 1):
-        end_idx = start_idx + get_global_config().num_visits - 1
+    n = len(patient_visits)
+    history_window_length = get_global_config().num_visits
+
+    # Patient needs at least 'history_window_length' visits to form a history.
+    if n < history_window_length:
+        return visit_histories
+
+    # Iterate over possible starting points of the history window
+    # The loop for start_idx needs to go up to (n - history_window_length)
+    # Example: n=5, history_window_length=5. range(0, 5-5+1 = 1). start_idx = 0.
+    # Example: n=8, history_window_length=5. range(0, 8-5+1 = 4). start_idx = 0,1,2,3.
+    # start_idx 0: history V0-V4, end_idx=4
+    # start_idx 3: history V3-V7, end_idx=7
+    for start_idx in range(n - history_window_length + 1):
+        end_idx = start_idx + history_window_length - 1
         history = " | ".join(
             turn_to_sentence(patient_visits[i]) for i in range(start_idx, end_idx + 1)
         )
-        visit_histories[end_idx] = history
+        visit_histories[end_idx] = history # Key is the index of the last visit in this history window
 
     return visit_histories
 
