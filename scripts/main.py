@@ -49,7 +49,6 @@ if __name__ == "__main__":
     setup_config(
         vectorizer_method=args.vectorizer_method,
         distance_metric=args.distance_metric,
-        use_synthetic_data=args.use_synthetic_data,
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,
