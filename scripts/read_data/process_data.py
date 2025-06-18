@@ -297,7 +297,7 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
                                 patient_procedures_df = convert_decimals_in_df(patient_procedures_df)
 
                         # --- Continue to populate encounters (even if sub-DFs are empty) ---
-                        for enc_index, encounter_row in patient_encounters_df.iterrows():
+                        for _, encounter_row in patient_encounters_df.iterrows():
                             encounter_id = encounter_row['EncounterId_SH'] # This will be the cleaned ID or None if filtered
 
                             # Drop columns that shouldn't be in details dict and convert

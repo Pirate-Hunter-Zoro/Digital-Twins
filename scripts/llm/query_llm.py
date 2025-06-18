@@ -23,7 +23,6 @@ if project_root not in sys.path:
 
 import json
 from openai import APIConnectionError, OpenAI
-from scripts.config import get_global_config
 
 # Lazy singleton pattern so we only load the model once
 _llm_client = None
@@ -95,7 +94,7 @@ def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> 
     except APIConnectionError as e:
         response = f"ERROR: API connection failed - {str(e)}"
 
-    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/debug_prompts_and_responses.jsonl", "a") as f:
+    with open(f"real_data/debug_prompts_and_responses.jsonl", "a") as f:
         f.write(json.dumps({"prompt": prompt, "response": response}) + "\n")
     
     return clean_response(response).strip()

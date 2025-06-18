@@ -38,7 +38,6 @@ def parse_data_args() -> list[str]:
     parser.add_argument("--save_every", type=int, default=10, help="Frequency of saving results per patients processed.")
     parser.add_argument("--vectorizer_method", type=str, default="sentence_transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
     parser.add_argument("--distance_metric", type=str, default="euclidean", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
-    parser.add_argument("--use_synthetic_data", type=bool, default=True, help="Use synthetic data for testing purposes.")
     parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
     parser.add_argument("--num_patients", type=int, default=50, help="Number of patients to process (random subset of the real or synthetic population).")
     parser.add_argument("--num_neighbors", type=int, default=5, help="Number of nearest neighbors to consider for each visit.")

@@ -23,8 +23,8 @@ if project_root not in sys.path:
 
 import json
 from scripts.calculations.compute_nearest_neighbors import get_neighbors, get_visit_strings, turn_to_sentence
-from scripts.make_data.generate_patients import load_patient_data
 from scripts.llm.query_llm import query_llm
+from scripts.read_data.load_patient_data import load_patient_data
 import random
 import textwrap
 from scripts.config import get_global_config
@@ -75,7 +75,7 @@ def generate_prompt(patient: dict) -> str:
     nearest_neighbors = get_neighbors(patient_data)
 
     try:
-        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
+        with open(f"real_data/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
             all_prompts = json.load(f)
     except:
         all_prompts = {}
@@ -129,7 +129,7 @@ def generate_prompt(patient: dict) -> str:
 
         # Save the prompt for future use
         all_prompts[key] = prompt
-        with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "w") as f:
+        with open(f"real_data/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "w") as f:
             json.dump(all_prompts, f, indent=4)
             
     return all_prompts[key]

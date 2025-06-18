@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     process_pool = Pool(processes=args.workers)
     pool_results = process_pool.imap_unordered(process_patient, patient_data)
-    output_file = f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
+    output_file = f"real_data/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
 
     try:
         for patient_id, result in pool_results:

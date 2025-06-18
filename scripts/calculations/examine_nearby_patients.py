@@ -23,7 +23,7 @@ if project_root not in sys.path:
 
 import json
 import pickle
-from scripts.make_data.generate_patients import load_patient_data
+from scripts.read_data.load_patient_data import load_patient_data
 from scripts.llm.llm_helper import get_narrative, get_relevance_score
 from scipy.spatial.distance import mahalanobis
 import numpy as np
@@ -32,21 +32,21 @@ from scripts.parser import parse_data_args
 
 def inspect_visit(patient_id: str,k: int = 5) -> None:
     output = []
-    output_path = f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbor_inspection_{patient_id}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.txt"
+    output_path = f"real_data/neighbor_inspection_{patient_id}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.txt"
 
     patients = load_patient_data()
     patient_lookup = {p["patient_id"]: p for p in patients}
 
-    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
+    with open(f"real_data/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
         patient_output_results = json.load(f)
 
-    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
+    with open(f"real_data/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
         all_prompts = json.load(f)
 
-    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
+    with open(f"real_data/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl", "rb") as f:
         nearest_neighbors = pickle.load(f)
 
-    with open(f"{'synthetic_data' if get_global_config().use_synthetic_data else 'real_data'}/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().num_visits}.pkl", "rb") as f:
+    with open(f"real_data/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().num_visits}.pkl", "rb") as f:
         all_vectors = pickle.load(f)
 
     key = (patient_id, get_global_config().num_visits - 1)  # We use the latest visit *up to* the prediction point
@@ -110,7 +110,6 @@ if __name__ == "__main__":
     setup_config(
         vectorizer_method=args.vectorizer_method,
         distance_metric=args.distance_metric,
-        use_synthetic_data=args.use_synthetic_data,
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,
