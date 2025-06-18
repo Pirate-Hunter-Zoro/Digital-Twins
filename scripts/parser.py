@@ -42,4 +42,3 @@ def parse_data_args() -> list[str]:
     parser.add_argument("--num_patients", type=int, default=50, help="Number of patients to process (random subset of the real or synthetic population).")
     parser.add_argument("--num_neighbors", type=int, default=5, help="Number of nearest neighbors to consider for each visit.")
     return parser.parse_args()
-

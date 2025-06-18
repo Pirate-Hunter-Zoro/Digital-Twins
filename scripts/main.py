@@ -27,7 +27,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 from parser import parse_data_args
 import json
 from multiprocessing import Pool
-from scripts.make_data.generate_patients import load_patient_data
+from scripts.read_data.load_patient_data import load_patient_data
 from scripts.calculations.process_patient import process_patient
 from scripts.llm.query_and_response import setup_prompt_generation
 from scripts.config import setup_config, get_global_config
