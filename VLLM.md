@@ -4,7 +4,7 @@ This guide walks you through launching `vllm` on a compute node, using a local C
 
 ---
 
-## 🧪 1. Set up your Conda environment
+## 1. Set up your Conda environment
 
 Use Python 3.10–3.12. Run the following:
 
@@ -25,7 +25,7 @@ openai
 
 ---
 
-## 🚀 2. Launch the vLLM server on a compute node
+## 2. Launch the vLLM server on a compute node
 
 From `submit0`, request a GPU compute node:
 
@@ -57,7 +57,7 @@ INFO:     Application startup complete.
 
 ---
 
-## 🧵 3. From a second terminal, run your query script
+## 3. From a second terminal, run your query script
 
 In a second terminal, SSH to `submit0` and then SSH to the same compute node (do not request a GPU again).
 
@@ -74,7 +74,7 @@ python query_llm.py
 
 ---
 
-## 🧠 `query_llm.py` (example)
+## `query_llm.py` (example)
 
 ```python
 from openai import OpenAI
@@ -95,7 +95,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## ✅ Summary
+## Summary
 
 - Launch `vllm serve` on a compute node.
 - SSH into that exact node from another terminal to make API calls.
