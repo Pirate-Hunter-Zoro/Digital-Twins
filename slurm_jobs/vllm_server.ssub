@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:1                    # REQUEST ONE GPU for the vLLM server
 #SBATCH --output=logs/vllm_server_%j.stdout # Standard output log
 #SBATCH --error=logs/vllm_server_%j.stderr   # Standard error log
-#SBATCH --nodelist=compute300
+#SBATCH --nodelist=compute301
 
 # --- Environment Setup ---
 module load Python/3.11.5-GCCcore-13.2.0 # Use the available Python module
