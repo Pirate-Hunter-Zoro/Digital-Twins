@@ -228,7 +228,7 @@ def process_patient_chunk(person_df_chunk, db_file, output_json_dir, initial_pro
             # Use this flag to control comma placement and final ']'
             patient_data_written_in_chunk = False # NEW: Flag to track if any patient was written in this chunk
 
-            for index, person_row in person_df_chunk.iterrows():
+            for _, person_row in person_df_chunk.iterrows():
                 patient_id = person_row['person_id']
 
                 if patient_id in initial_processed_ids_set:
