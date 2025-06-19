@@ -41,9 +41,6 @@ cleanup() {
   # Use 'kill -TERM' for graceful shutdown, wait a bit, then 'kill -9' if needed
   kill -TERM $VLLM_PID
   wait $VLLM_PID 2>/dev/null # Wait for the background process to terminate
-  if [ -f logs/vllm_server.log ]; then
-      rm -f logs/vllm_server.log # Clean up server log
-  fi
   echo "$(date): vLLM server stopped and log cleaned."
 }
 
@@ -52,12 +49,12 @@ trap cleanup EXIT
 
 # --- Wait for vLLM server to be ready ---
 echo "$(date): Waiting for vLLM server to be ready..."
-MAX_WAIT_TIME=300 # Max 5 minutes (300 seconds)
-WAIT_INTERVAL=5   # Check every 5 seconds
+MAX_WAIT_TIME=1200 # Max 20 minutes (1200 seconds) - Increased for large model startup
+WAIT_INTERVAL=5
 SERVER_READY=0
 for ((i=0; i<MAX_WAIT_TIME/WAIT_INTERVAL; i++)); do
-  # Check vLLM's /v1/health endpoint. -s for silent, -f for fail on error, -o /dev/null to discard output
-  if curl -s -f http://localhost:8000/v1/health >/dev/null; then
+  # NEW: Correct the health check URL to /health
+  if curl -s -f http://localhost:8000/health >/dev/null; then
     echo "$(date): vLLM server is ready!"
     SERVER_READY=1
     break
@@ -68,16 +65,15 @@ done
 
 if [ $SERVER_READY -eq 0 ]; then
   echo "$(date): ERROR: vLLM server did not become ready within the time limit. Exiting."
-  exit 1 # Exit with error status if server not ready
+  exit 1
 fi
 
 # --- Run main Python script ---
 echo "$(date): Starting main Python pipeline..."
-# Adjust num_processes in main.py to share --cpus-per-task=96 with vLLM's 8.
-# E.g., in main.py, set num_processes = min(multiprocessing.cpu_count(), 88)
-python scripts/main.py
+# NEW: Explicitly call the Python executable from the activated environment
+$CONDA_PREFIX/bin/python scripts/main.py
 
 echo "$(date): Main Python pipeline finished."
 
 # Cleanup will be handled by the trap EXIT
-conda deactivate
+conda deactivate # Still good practice, though trap handles most exits
