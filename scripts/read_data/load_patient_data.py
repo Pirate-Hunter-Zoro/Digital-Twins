@@ -18,25 +18,27 @@ if project_root not in sys.path:
 
 # --- End of sys.path adjustment ---
 
+from scripts.config import get_global_config
+
 def load_patient_data() -> list[dict]:
     """
     Loads real patient data from all_patients_combined.json and transforms it
     to match the 'visits' structure expected by downstream scripts.
     """
+    global_config = get_global_config()
 
     # Define the path to your combined real patient data JSON file
     # This path should match output_json_dir from process_data.py
-    # Assuming 'real_data' is within your Digital-Twins root based on our path discussions.
     real_data_combined_json_path = os.path.join(
         project_root, # Use project_root to build path to real_data
-        "real_data", # This is the folder name
+        "real_data", # This is the folder name based on your output_json_dir
         "all_patients_combined.json"
     )
 
     if not os.path.exists(real_data_combined_json_path):
         raise FileNotFoundError(f"Combined patient data not found at: {real_data_combined_json_path}. Please ensure process_data.py has run successfully.")
 
-    print(f"Loading patient data from: {real_data_combined_json_path}") # Debug print
+    print(f"Loading patient data from: {real_data_combined_json_path}")
     with open(real_data_combined_json_path, 'r') as f:
         raw_patients_data = json.load(f)
 
@@ -47,11 +49,13 @@ def load_patient_data() -> list[dict]:
 
         # Transform 'encounters' into 'visits'
         visits = []
-        for encounter in patient.get("encounters", []): # Use .get for safety if 'encounters' might be missing
+        for encounter in patient.get("encounters", []):
+            # Each encounter dictionary becomes a visit dictionary
             # Start with details flattened into the visit object
-            visit = encounter.get("details", {}) # Flatten 'details' into the visit object
+            visit = encounter.get("details", {})
             
             # Add diagnoses, medications, and map procedures to treatments
+            # These are already lists of dicts from process_data.py output
             visit["diagnoses"] = encounter.get("diagnoses", [])
             visit["medications"] = encounter.get("medications", [])
             visit["treatments"] = encounter.get("procedures", []) # Map 'procedures' from real data to 'treatments'
@@ -59,10 +63,9 @@ def load_patient_data() -> list[dict]:
             visits.append(visit)
         
         # Sort visits by 'StartVisit' date for chronological history
-        # It's crucial for history to be correctly ordered for LLM prompts.
         try:
             # pd.to_datetime will convert string dates to datetime objects.
-            # errors='coerce' will turn unparseable dates into NaT (Not a Time), which are sorted as lowest.
+            # errors='coerce' will turn unparseable dates into NaT (Not a Time).
             visits.sort(key=lambda v: pd.to_datetime(v.get("StartVisit"), errors='coerce'))
             
             # Re-assign sequential visit_idx after sorting

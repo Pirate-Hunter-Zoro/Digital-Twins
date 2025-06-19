@@ -1,11 +1,11 @@
 #!/bin/bash
 
 #SBATCH --job-name=vLLM_MedGemma_Server # A descriptive name for your LLM server job
-#SBATCH --partition=c3                  # Specify the partition (e.g., c3 for general use)
+#SBATCH --partition=c3_short            # Specify the partition
 #SBATCH --ntasks=1                      # Request 1 task (the server itself)
-#SBATCH --cpus-per-task=8               # vLLM can use some CPU cores; adjust based on model size/usage
+#SBATCH --cpus-per-task=4               # vLLM can use some CPU cores; adjust based on model size/usage
 #SBATCH --mem=32G                       # Allocate enough RAM for vLLM (model, KV cache, etc.)
-#SBATCH --time=24:00:00                 # Set a long wall-time for the server (e.g., 24 hours)
+#SBATCH --time=09:00:00                 # Set a long wall-time for the server (e.g., 9 hours)
 #SBATCH --gres=gpu:1                    # REQUEST ONE GPU for the vLLM server
 #SBATCH --output=logs/vllm_server_%j.stdout # Standard output log
 #SBATCH --error=logs/vllm_server_%j.stderr   # Standard error log

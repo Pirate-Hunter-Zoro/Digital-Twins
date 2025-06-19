@@ -416,7 +416,7 @@ if __name__ == "__main__":
     print(f"Loaded {len(master_processed_ids_set)} previously processed patient IDs.")
 
     # Determine number of CPU cores to use
-    num_processes = multiprocessing.cpu_count()
+    num_processes = min(multiprocessing.cpu_count(), 32)
     print(f"Using {num_processes} CPU cores for parallel processing.")
 
     # Filter person_df to only include unprocessed patients

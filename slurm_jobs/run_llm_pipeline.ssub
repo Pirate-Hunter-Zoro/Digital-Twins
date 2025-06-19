@@ -1,11 +1,11 @@
 #!/bin/bash
 
 #SBATCH --job-name=LIBR_Main_Pipeline # A descriptive name for your main pipeline job
-#SBATCH --partition=c3                # Specify the partition
+#SBATCH --partition=c3_short          # Specify the partition
 #SBATCH --ntasks=1                    # Request 1 task (your main Python script)
-#SBATCH --cpus-per-task=96            # Request enough CPU cores for your multiprocessing in main.py
+#SBATCH --cpus-per-task=32            # Request enough CPU cores for your multiprocessing in main.py
 #SBATCH --mem=128G                    # Request RAM for main.py (patient data, processing)
-#SBATCH --time=24:00:00               # Max wall-time for your pipeline (e.g., 24 hours)
+#SBATCH --time=09:00:00               # Max wall-time for your pipeline (e.g., 9 hours)
 #SBATCH --output=logs/LIBR_Main_Pipeline_%j.stdout # Standard output log
 #SBATCH --error=logs/LIBR_Main_Pipeline_%j.stderr   # Standard error log file
 #SBATCH --nodelist=compute301
