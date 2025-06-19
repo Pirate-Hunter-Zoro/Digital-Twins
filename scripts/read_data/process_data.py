@@ -127,7 +127,6 @@ def load_csv_to_sqlite(csv_filepath, table_name, db_connection, chunk_size=10000
 # If your disk space issue is due to the SQLite database growing too large,
 # you'll need a more advanced filtering strategy *during* SQLite loading.
 # For now, this samples only the *output* of JSON generation.
-"""
 print("\n--- PHASE 1: Populating SQLite Database from CSVs ---")
 conn_populate = sqlite3.connect(db_file)
 print(f"Connected to SQLite database for population: {db_file}")
@@ -165,7 +164,6 @@ for table_name, filename in csv_files_to_load.items():
 
 conn_populate.close()
 print("PHASE 1: SQLite database population complete. Connection closed.")
-"""
 
 
 # --- PHASE 2: INDEXING (RUN THIS AFTER POPULATION, THEN COMMENT OUT) ---
