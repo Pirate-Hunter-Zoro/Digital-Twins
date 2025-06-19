@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH --job-name=LIBR_Data_Prep
+#SBATCH --partition=c3_short # Or c3_short if its time limit suits process_data
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=64 # Process_data.py uses many CPUs for Pandas
+#SBATCH --mem=160G # Process_data.py can use a lot of RAM
+#SBATCH --time=04:00:00 # Adjust based on expected data prep time
+#SBATCH --output=logs/data_prep_%j.stdout
+#SBATCH --error=logs/data_prep_%j.stderr
+
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
+
+# --- Run process_data.py for JSON generation ---
+# Ensure process_data.py has PHASE 3 uncommented, and PHASE 1/2 uncommented if needed
+echo "$(date): Starting process_data.py for JSON generation..."
+# NEW: Corrected path to process_data.py
+$CONDA_PREFIX/bin/python scripts/read_data/process_data.py || { echo "$(date): ERROR: process_data.py failed. Exiting." >&2; exit 1; }
+echo "$(date): process_data.py finished."
+conda deactivate

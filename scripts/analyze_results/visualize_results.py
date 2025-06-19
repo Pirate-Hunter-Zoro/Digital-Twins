@@ -69,8 +69,7 @@ def visualize_results():
 
             # To plot as "scores over time", the 'result' object in main.py's 'all_results' should contain
             # a list of these 'result' dicts, one for each visit_idx predicted for that patient.
-            # This is a key divergence between previous synthetic data (5 fixed visits) and real data (variable visits).
-
+        
             # For a quick fix, let's create a dummy DataFrame that will allow the plot code to run.
             # But the plot itself won't be "over time" for individual patients based on current main.py output.
 
@@ -100,7 +99,6 @@ if __name__ == "__main__":
     setup_config(
         vectorizer_method=args.vectorizer_method,
         distance_metric=args.distance_metric,
-        use_synthetic_data=False, # Ensure real data path for visualization
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,

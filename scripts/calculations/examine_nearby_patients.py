@@ -24,6 +24,7 @@ from scipy.spatial.distance import mahalanobis
 import numpy as np
 from scripts.config import setup_config, get_global_config
 from scripts.parser import parse_data_args
+import pandas as pd
 
 # --- NEW: Global list to collect correlation data ---
 # This will collect results for all patients inspected when the script is run.
@@ -100,7 +101,7 @@ def inspect_visit(patient_id: str, k: int = 5) -> None:
                 
                 output.append("Closest Sequence of Visits from Other Patients (later is closer):")
                 for i in range(k - 1, -1, -1): # Iterate from closest to slightly less close (k closest)
-                    (neighbor_pid, neighbor_vidx), similarity, neighbor_vector = neighbors[i]
+                    (neighbor_pid, neighbor_vidx), similarity, _ = neighbors[i]
                     
                     # Ensure neighbor_pid and neighbor_vidx are valid keys
                     neighbor_key = (neighbor_pid, neighbor_vidx)
@@ -123,8 +124,8 @@ def inspect_visit(patient_id: str, k: int = 5) -> None:
                 # Farthest neighbors (same logic)
                 output.append("Farthest Sequence of Visits from Other Patients (later is farther):")
                 for i in range(n - k, n):
-                    (neighbor_pid, neighbor_vidx), similarity, neighbor_vector = neighbors[i]
-                    
+                    (neighbor_pid, neighbor_vidx), similarity, _ = neighbors[i]
+
                     # Ensure neighbor_pid and neighbor_vidx are valid keys
                     neighbor_key = (neighbor_pid, neighbor_vidx)
                     if neighbor_key not in all_vectors or neighbor_pid not in patient_lookup:
@@ -201,7 +202,6 @@ if __name__ == "__main__":
     setup_config(
         vectorizer_method=args.vectorizer_method,
         distance_metric=args.distance_metric,
-        use_synthetic_data=False, # Ensure real data path for inspection
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,

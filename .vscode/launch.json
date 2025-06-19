@@ -10,7 +10,6 @@
             "request": "launch",
             "program": "examine_nearby_patients.py",
             "console": "integratedTerminal",
-            "args": ["--use_synthetic_data=True"],
             // --- ADD THIS SECTION ---
             "python": "/home/librad.laureateinstitute.org/mferguson/.conda/envs/vllm_env/bin/python"
             // OR (if you created it with `venv`):

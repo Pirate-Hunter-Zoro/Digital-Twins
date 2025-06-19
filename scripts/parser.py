@@ -26,8 +26,7 @@ from argparse import ArgumentParser
 def parse_data_args() -> list[str]:
     """Returns the parsed command line arguments.
     This function sets up the argument parser with various options for processing patient data,
-    including the number of workers, saving frequency, vectorization method, distance metric,
-    whether to use synthetic data, number of visits, number of patients, and number of neighbors.
+    including the number of workers, saving frequency, vectorization method, distance metric, number of visits, number of patients, and number of neighbors.
     It returns the parsed arguments as a list of strings.
 
     Returns:
@@ -39,6 +38,6 @@ def parse_data_args() -> list[str]:
     parser.add_argument("--vectorizer_method", type=str, default="sentence_transformer", help="Method for vectorization (e.g., 'sentence_transformer', 'tfidf').")
     parser.add_argument("--distance_metric", type=str, default="euclidean", help="Distance metric to use for nearest neighbors (e.g., 'cosine', 'euclidean').")
     parser.add_argument("--num_visits", type=int, default=5, help="Number of visits to consider for each patient.")
-    parser.add_argument("--num_patients", type=int, default=50, help="Number of patients to process (random subset of the real or synthetic population).")
+    parser.add_argument("--num_patients", type=int, default=50, help="Number of patients to process (random subset of the population).")
     parser.add_argument("--num_neighbors", type=int, default=5, help="Number of nearest neighbors to consider for each visit.")
     return parser.parse_args()

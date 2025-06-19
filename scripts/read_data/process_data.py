@@ -81,7 +81,6 @@ def convert_decimals_in_df(df):
 config.setup_config(
     vectorizer_method="dummy_vectorizer", # Placeholder value
     distance_metric="euclidean", # Placeholder value
-    use_synthetic_data=False, # Assuming real data for this context
     num_visits=0, # Not directly relevant for this specific task
     num_patients=5000, # Set a default target number here for testing
     num_neighbors=0 # Not directly relevant for this specific task
