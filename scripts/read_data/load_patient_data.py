@@ -36,8 +36,19 @@ def load_patient_data() -> list[dict]:
     )
 
     if not os.path.exists(real_data_combined_json_path):
-        raise FileNotFoundError(f"Combined patient data not found at: {real_data_combined_json_path}. Please ensure process_data.py has run successfully.")
-
+        # Then run scripts/process_data.py to generate it
+        import subprocess
+        print(f"File {real_data_combined_json_path} not found. Running process_data.py to generate it...")
+        conda_sh_path = "/opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh"
+        env_name = "vllm_env"
+        script_to_run = os.path.join(project_root, "scripts", "process_data.py")
+        command_to_execute = (
+            f"source {conda_sh_path} && "  # Source conda.sh to enable conda command
+            f"conda activate {env_name} && "  # Activate your specific environment
+            f"python {script_to_run}"  # Run the target Python script with 'python' from the activated env
+        )
+        subprocess.run(command_to_execute, shell=True, check=True, capture_output=True, text=True)
+        
     print(f"Loading patient data from: {real_data_combined_json_path}")
     with open(real_data_combined_json_path, 'r') as f:
         raw_patients_data = json.load(f)
