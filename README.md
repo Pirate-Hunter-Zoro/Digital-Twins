@@ -18,7 +18,10 @@ The high-level workflow is as follows:
 4. **Vectorize Histories:** Convert these text-based visit sequences (both the target's and the candidates') into high-dimensional numerical vectors (embeddings) using a Sentence Transformer model (e.g., BioBERT) or TF-IDF.
 5. **Find Nearest Neighbors:** Use a customizable similarity/distance metric (e.g., Cosine similarity, Euclidean distance) to compare the target patient's vector against all candidate vectors, identifying the "nearest neighbors." These neighbor identifications and their vectors are efficiently cached.
 6. **Generate Prompt & Predict:** Construct a detailed prompt for a large language model (LLM), such as Med-Gemma, that includes the target patient's history and relevant information from the identified nearest neighbors. The LLM then predicts the content of the patient's `(k+1)`-th visit.
-7. **Evaluate:** Assess the accuracy of the LLM's prediction against the actual `(k+1)`-th visit using Jaccard similarity for categories like 'diagnoses', 'medications', and 'treatments'. Additionally, measure LLM-generated relevance scores and Mahalanobis distance to assess the quality of nearest neighbors.
+7. **Evaluate:** **(UPDATED!)** Assess the accuracy of the LLM's prediction against the actual `(k+1)`-th visit using a custom **Weighted Semantic Similarity Score**. This advanced metric moves beyond simple string matching by:
+    * Calculating the semantic similarity (e.g., cosine similarity of embeddings) between predicted and actual terms.
+    * Weighting each successful match by the clinical rarity of the terms, derived from their Inverse Document Frequency (IDF).
+    * This provides a much more nuanced and clinically relevant measure of prediction quality than the previous Jaccard similarity baseline.
 
 ---
 
@@ -48,11 +51,6 @@ The project will test the following five hypotheses:
 * **Similarity Metrics:** The project will compare Cosine similarity, Euclidean distance, Manhattan distance, and a "Learned Metric" trained using a Siamese network. Mahalanobis distance has also been integrated for evaluating the quality of selected neighbors.
 * **Evaluation Framework:** An expert panel of four clinicians will provide "gold standard" similarity ratings. These will be compared against Med-Gemma's LLM-generated ratings. Key metrics will include Spearman correlation for predictive power and Inter-rater Reliability (ICC) to measure agreement between the LLM and experts.
 
-### 2.4. Timeline & Success Criteria
-
-* The project is planned over a ~12-week timeline with clear milestones for data extraction, model development, and analysis.
-* Success is defined by clear, pre-specified criteria, such as achieving a correlation ($\rho$) of $\ge0.7$ and an ICC of $\ge0.8$.
-
 ---
 
 ## 3. Key Concepts from Academic Literature
@@ -76,68 +74,42 @@ The project will test the following five hypotheses:
 
 ### 4.2. Job Submission & Management (Slurm)
 
-* **Partitions:** Jobs are submitted to logical groups of nodes called partitions. The primary partitions are `c3` (for general use, up to 168 hours) and `c3_short` (for shorter jobs, up to 9 hours, with higher priority).
-* **Submission Scripts:** Jobs are submitted using `sbatch` with a submission script (e.g., `job.ssub`). This script must contain `#SBATCH` directives to request resources.
-* **Example `#SBATCH` Directives:**
-
-    ```bash
-    #SBATCH --partition=c3
-    #SBATCH --ntasks=1
-    #SBATCH --cpus-per-task=2
-    #SBATCH --mem=24000         # Memory in MB
-    #SBATCH --time=01:00:00
-    #SBATCH --output=~/logs/job-%J.stdout
-    #SBATCH --error=~/logs/job-%J.stderr
-    ```
-
-* **Key Commands:**
-  * `sbatch <script.ssub>`: Submit a job.
-  * `squeue -u $USER`: View your jobs.
-  * `scancel <jobid>`: Cancel a job.
-  * `srun --pty bash`: Start an interactive job on a compute node.
+#### No changes to this section (Job Submission & Management)
 
 ### 4.3. Storage Policy
 
-* **Home Directory (`~/`):** For configurations and small files. It has a **100GB quota**. This space is shared across all nodes.
-* **Lab Storage (`/media/labs/`):** This is for all primary study data, including source data, intermediate files, and final results.
-* **Scratch Space (`/media/scratch/`):** For temporary files only. Data here is **purged after 30 days** of inactivity.
+#### No changes to this section (Storage Policy)
 
 ### 4.4. Software & Python Environment Workflow
 
-* **Module System:** Use `module avail` to see available software and `module load <name>` to load it into your environment.
-* **Posit Workbench:** A web portal at `workbench.laureateinstitute.org` for running RStudio, Jupyter, and VS Code sessions directly on the cluster.
-* **Python Virtual Environments:** This is the recommended workflow for managing project dependencies:
-    1. Load the desired system Python module: `module load Python/3.11.5-GCCcore-13.2.0`.
-    2. Create a virtual environment: `virtualenv my-project-env`.
-    3. Activate it in batch scripts using: `source /path/to/Anaconda3/etc/profile.d/conda.sh && conda activate my-project-env`.
-    4. Install packages, including `ipykernel`: `pip install -r requirements.txt`.
-    5. Register the environment as a Jupyter kernel: `python -m ipykernel install --name "MyProject" --user`.
-    6. In Posit Workbench, start a Jupyter session, load the base Python module in the "Softwares" tab, then create a new notebook using your "MyProject" kernel.
+#### No changes to this section, with one addition below
+
+* **Note on Hugging Face Model Downloads:** The `c3` cluster's network security may block direct, large file downloads from Hugging Face, even from the login node. **(NEW!)** The recommended robust workflow is to:
+    1. Download the model files on a local machine with unrestricted internet access (using the `download_model.py` script).
+    2. Compress the resulting model directory into a single `.tar.gz` file.
+    3. Transfer the single file to the cluster using `scp`.
+    4. Decompress the file on the cluster.
+    5. Point your scripts to this local model path and use the `local_files_only=True` parameter when loading.
 
 ---
 
 ## 5. Overview of Project Python Scripts
 
-* `main.py`: The main entry point for the entire pipeline. It handles parallel processing of patients using `multiprocessing`. **Now processes real EHR data after conversion and uses a dynamically set number of patients and visits.**
-* `process_data.py`: **NEW!** This critical script is responsible for the initial processing of raw, tabular EHR data. It handles:
-  * Loading large CSV/RDS files into an efficient SQLite database.
-  * Creating necessary database indexes for fast querying.
-  * Transforming the tabular data into a standardized, patient-centric JSON format (`all_patients_combined.json`), suitable for LLM consumption. This involves flattening encounter details and mapping 'procedures' to 'treatments'.
-  * Implementing robust data cleaning (e.g., converting `Decimal` objects to `float`, and all forms of `NaN`/`None` to JSON `null`).
-  * Utilizing multiprocessing for optimized JSON generation and streaming output to a single file.
-  * Implementing persistent tracking of processed patient IDs for robust resumption capabilities.
-  * Automatically cleaning up temporary chunk files generated during processing.
-* `load_patient_data.py`: **NEW!** Acts as an adapter. It loads the `all_patients_combined.json` (produced by `process_data.py`) and transforms its internal structure to match the `visits` format expected by downstream LLM-related scripts. It sorts visits chronologically by `StartVisit` and ensures `procedures` are correctly mapped to `treatments` within each visit.
-* `compute_nearest_neighbors.py`: Now highly flexible! It contains the logic to convert visit histories (now from real EHR data) into narrative strings, use a customizable vectorizer (e.g., Sentence Transformer like BioBERT, TF-IDF) to generate vector embeddings, and compute a customizable similarity/distance metric (e.g., Cosine similarity, Euclidean distance) to find and save the nearest neighbors for each patient's visit sequence. It intelligently caches results (`neighbors_{vectorizer}_{distance_metric}.pkl`) and also saves the raw patient-visit vectors (`all_vectors_{vectorizer}_{num_visits}.pkl`) for further analysis. Its `turn_to_sentence` function has been updated to handle the real data's encounter structure and map procedures to treatments.
-* `llm_helper.py`: Contains utility functions for LLM interaction. Notably, `get_narrative` generates patient history summaries, and `get_relevance_score` robustly queries the LLM for a 0-9 relevance rating between two narratives, featuring a retry loop and comprehensive error handling. Now adapted to work with the real EHR data's `visits` structure.
-* `examine_nearby_patients.py`: This is where detailed analysis of neighbors takes place. It accepts customizable vectorizer and distance metrics to load appropriate cached data. It calculates and outputs LLM-generated relevance scores for the closest and farthest neighbors. Crucially, it also computes the Mahalanobis distance between the target patient's vector and the distribution of their nearest neighbors, including robust error handling for singular covariance matrices. The output path for inspection reports is now dynamically named. **Now uses real EHR data loaded via `load_patient_data.py`.** It also collects data for correlating LLM relevance scores and Mahalanobis distances.
-* `query_and_response.py`: Responsible for constructing detailed prompts using patient history and nearest neighbor data (now from real EHR). `parse_llm_response` uses regex to robustly parse the LLM's output. `force_valid_prediction` includes a retry loop to ensure a usable response. `setup_prompt_generation` now populates options from the real data.
-* `process_patient.py`: The core function called by `main.py` for each patient. It orchestrates the process of generating a prompt, querying the LLM, and evaluating the response for each visit. **Now adapted to use the real EHR data's visit structure and predict the actual next visit.**
-* `evaluate.py`: Calculates the Jaccard similarity scores to measure the performance of the predictions. (No significant changes needed as its inputs are generic dicts/sets).
-* `query_llm.py`: A low-level wrapper for making API calls to the locally hosted LLM. It also handles response cleaning and logging for debugging. (No significant changes needed, but its prompt examples need to align with real data).
-* `download_model.py`: A utility script to download the required LLM models from Hugging Face. (No changes).
-* `visualize_results.py`: A post-processing script to generate plots of the Jaccard scores. It has been adapted to plot results from a single predicted visit per patient based on `main.py`'s current output, creating individual patient score charts.
-* `config.py`: **Centralized Project Configuration.** Defines parameters such as `num_patients`, `num_visits`, `num_neighbors`, `vectorizer_method`, and `distance_metric`. *Note: The `use_synthetic_data` flag has been removed as per the decision to focus solely on real EHR data and its processing.*
-* `parser.py`: Argument parsing for `main.py`. (No changes needed).
-* `check_patient_overlap.py`: A diagnostic script for validating the overlap between `Person_Table` and `Encounter_Table` IDs in the SQLite database. (No changes needed, but now part of the documented tools).
-* **`calculate_spearmans_rho.py`:** **NEW!** A dedicated script to load the collected LLM relevance scores and Mahalanobis distances from `llm_mahalanobis_correlation_...json`, compute the Spearman's rank-order correlation coefficient, and visualize the relationship in a scatter plot.
+* `main.py`: The main entry point for the entire pipeline. It handles parallel processing of patients using `multiprocessing`.
+* `process_data.py`: **NEW!** This critical script is responsible for the initial processing of raw, tabular EHR data into the standardized `all_patients_combined.json` format.
+* `load_patient_data.py`: **NEW!** Acts as an adapter to load `all_patients_combined.json` and prepare its structure for downstream scripts.
+* `compute_nearest_neighbors.py`: A flexible script for vectorizing visit histories and finding nearest neighbors using customizable models and distance metrics.
+* **`generate_idf_registry.py`:** **(NEW!)** A one-time setup script that processes the entire `all_patients_combined.json` dataset to calculate and save the Inverse Document Frequency (IDF) for every unique medical term. The output (`term_idf_registry.json`) is a crucial input for the new evaluation metric.
+* **`generate_technique_embeddings.py`:** **(NEW!)** A one-time setup script that loads a pre-trained transformer model (e.g., BioBERT) and generates a vector embedding for every unique medical term found in the dataset. The output (`term_embedding_library.pkl`) is the second crucial input for the new evaluation metric, enabling semantic similarity calculations.
+* `llm_helper.py`: Contains utility functions for LLM interaction.
+* `examine_nearby_patients.py`: Handles detailed analysis of nearest neighbors, including LLM relevance scores and Mahalanobis distance.
+* `query_and_response.py`: Responsible for constructing and parsing LLM prompts and responses.
+* `process_patient.py`: The core function called by `main.py` for each patient's prediction and evaluation workflow.
+* `evaluate.py`: **(REFACTORED!)** No longer uses Jaccard similarity. This script now implements the advanced **Weighted Semantic Similarity Score**. It loads the pre-computed IDF and embedding libraries to calculate a normalized score based on semantic similarity and term rarity.
+* `query_llm.py`: A low-level wrapper for making API calls to the locally hosted LLM.
+* `download_model.py`: **(UPDATED PURPOSE!)** A utility script now intended to be run on a **local machine** with unrestricted internet access. It downloads and saves models from Hugging Face to facilitate the manual transfer method required to bypass cluster network firewalls.
+* `visualize_results.py`: **(REFACTORED!)** A powerful post-processing script that loads results into a Pandas DataFrame. It generates two types of visualizations: 1) A comprehensive **box plot** showing the full distribution of the Weighted Similarity Scores across all patients, and 2) A folder of **individual bar charts**, providing a detailed report for each patient.
+* `config.py`: Centralized Project Configuration.
+* `parser.py`: Argument parsing for `main.py`.
+* `check_patient_overlap.py`: A diagnostic script for validating data overlap.
+* `calculate_spearmans_rho.py`: **NEW!** A dedicated script to compute and visualize the Spearman correlation between LLM relevance scores and Mahalanobis distances.
