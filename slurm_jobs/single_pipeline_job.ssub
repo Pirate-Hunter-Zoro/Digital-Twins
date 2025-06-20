@@ -1,11 +1,11 @@
 #!/bin/bash
 
 #SBATCH --job-name=LIBR_Combined_Pipeline # A descriptive name for your single combined job
-#SBATCH --partition=c3_short                  # Use 'c3' if you need >9 hours, otherwise 'c3_short' (adjust --time accordingly)
+#SBATCH --partition=c3                  # Use 'c3' if you need >9 hours, otherwise 'c3_short' (adjust --time accordingly)
 #SBATCH --ntasks=1                      # Request 1 task for this combined job script
 #SBATCH --cpus-per-task=64              # Total CPU cores for both vLLM AND main.py. Node has 96.
 #SBATCH --mem=160G                      # Sum of vLLM MEM (32G) + main.py MEM (128G). Compute nodes have 1TB, so this is fine.
-#SBATCH --time=9:00:00                 # Total max wall-time for both parts (e.g., 24 hours). Adjust as needed.
+#SBATCH --time=24:00:00                 # Total max wall-time for both parts (e.g., 24 hours). Adjust as needed.
 #SBATCH --gres=gpu:1                    # REQUEST ONE GPU (for vLLM server part)
 #SBATCH --output=logs/combined_pipeline_%j.stdout # Standard output log
 #SBATCH --error=logs/combined_pipeline_%j.stderr   # Standard error log
