@@ -10,6 +10,23 @@
 #SBATCH --output=logs/combined_pipeline_%j.stdout # Standard output log
 #SBATCH --error=logs/combined_pipeline_%j.stderr   # Standard error log
 
+# --- INSCRIBE THE RITUAL PARAMETERS HERE ---
+# This makes it easy to change the conditions of our experiment in one place!
+NUM_PATIENTS=50
+NUM_VISITS=6
+VECTORIZER="sentence_transformer" # "sentence_transformer" or "tfidf"
+DISTANCE_METRIC="cosine"          # "cosine" or "euclidean"
+NUM_NEIGHBORS=10
+
+echo "--- Ritual Parameters ---"
+echo "Patients: $NUM_PATIENTS"
+echo "Visits: $NUM_VISITS"
+echo "Vectorizer: $VECTORIZER"
+echo "Distance Metric: $DISTANCE_METRIC"
+echo "Neighbors: $NUM_NEIGHBORS"
+echo "-------------------------"
+
+
 # --- Environment Setup ---
 # Load your Python module (verify exact name with 'module avail Python')
 module load Python/3.11.5-GCCcore-13.2.0
@@ -23,37 +40,32 @@ cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-
 
 # --- Start vLLM server in background ---
 echo "$(date): Starting vLLM server in background..."
-# The 'vllm serve' command needs to be in a subshell or have its output redirected
-# to prevent it from blocking the main script or interfering with Slurm's stdout.
-# We redirect stdout/stderr to a temporary log file and run in background (&).
 vllm serve unsloth/medgemma-27b-text-it-bnb-4bit \
   --dtype float16 \
   --served-model-name medgemma \
   --gpu-memory-utilization 0.5 \
   --host 0.0.0.0 \
   --max-model-len 5000 > logs/vllm_server.log 2>&1 & 
-VLLM_PID=$! # Capture the Process ID of the background vLLM server
+VLLM_PID=$!
 echo "$(date): vLLM server started with PID: $VLLM_PID"
 
 # --- Define cleanup function to kill vLLM server on script exit ---
 cleanup() {
   echo "$(date): Cleaning up vLLM server (PID: $VLLM_PID)..."
-  # Use 'kill -TERM' for graceful shutdown, wait a bit, then 'kill -9' if needed
   kill -TERM $VLLM_PID
-  wait $VLLM_PID 2>/dev/null # Wait for the background process to terminate
+  wait $VLLM_PID 2>/dev/null
   echo "$(date): vLLM server stopped and log cleaned."
 }
 
-# Trap signals to ensure cleanup function runs on script exit (even if it crashes)
+# Trap signals to ensure cleanup function runs on script exit
 trap cleanup EXIT
 
 # --- Wait for vLLM server to be ready ---
 echo "$(date): Waiting for vLLM server to be ready..."
-MAX_WAIT_TIME=1200 # Max 20 minutes (1200 seconds) - Increased for large model startup
+MAX_WAIT_TIME=1200
 WAIT_INTERVAL=5
 SERVER_READY=0
 for ((i=0; i<MAX_WAIT_TIME/WAIT_INTERVAL; i++)); do
-  # NEW: Correct the health check URL to /health
   if curl -s -f http://localhost:8000/health >/dev/null; then
     echo "$(date): vLLM server is ready!"
     SERVER_READY=1
@@ -68,12 +80,32 @@ if [ $SERVER_READY -eq 0 ]; then
   exit 1
 fi
 
-# --- Run main Python script ---
+# --- PHASE 1: Run Main Python Pipeline ---
 echo "$(date): Starting main Python pipeline..."
-# NEW: Explicitly call the Python executable from the activated environment
-$CONDA_PREFIX/bin/python scripts/main.py
+# We now pass our parameters to the main script
+$CONDA_PREFIX/bin/python scripts/main.py \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS
 
 echo "$(date): Main Python pipeline finished."
 
-# Cleanup will be handled by the trap EXIT
-conda deactivate # Still good practice, though trap handles most exits
+
+# --- PHASE 2: Run Visualization Script ---
+echo "$(date): Starting visualization script..."
+# We use the EXACT SAME parameters to ensure we visualize the correct results file.
+$CONDA_PREFIX/bin/python scripts/visualize_results.py \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS
+
+echo "$(date): Visualization script finished."
+
+
+# Cleanup will be handled automatically by the trap EXIT
+conda deactivate
+echo "$(date): Ritual complete."

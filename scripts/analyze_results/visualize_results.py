@@ -1,33 +1,131 @@
 import sys
 import os
-
-# --- Dynamic sys.path adjustment for module imports ---
-# Get the absolute path to the directory containing the current script
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Calculate the project root.
-# This assumes your 'config.py' (or other root-level modules like 'main.py')
-# is located two directories up from where this script resides.
-project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
-
-# Add the project root to sys.path if it's not already there.
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# --- End of sys.path adjustment ---
-
 import json
 import pandas as pd
 from matplotlib import pyplot as plt
-import seaborn as sns # For enhanced plotting
-import numpy as np # For np.mean
-from scripts.config import setup_config, get_global_config
+import seaborn
+
+# --- Dynamic sys.path adjustment ---
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+# --- End of sys.path adjustment ---
+
+from scripts.config import get_global_config, setup_config
 from scripts.parser import parse_data_args
 
 
-def visualize_results():
-    args = parse_data_args() # Parse arguments for config setup
+def load_results_to_dataframe(results_path: str) -> pd.DataFrame:
+    """
+    A technique to summon our raw JSON data into a powerful
+    Pandas DataFrame Cursed Tool for easier manipulation.
+    """
+    print(f"Loading patient results from: {results_path}")
+    with open(results_path, 'r') as file:
+        data = json.load(file)
+
+    if not data:
+        print("No patient results found in the file.")
+        return pd.DataFrame()
+
+    # Transform the nested dictionary into a flat list for the DataFrame
+    records = []
+    for patient_id, result_dict in data.items():
+        scores = result_dict.get('scores', {})
+        record = {
+            'patient_id': patient_id,
+            'visit_idx': result_dict.get('visit_idx'),
+            'diagnoses': scores.get('diagnoses', 0.0),
+            'medications': scores.get('medications', 0.0),
+            'treatments': scores.get('treatments', 0.0),
+            'overall': scores.get('overall', 0.0)
+        }
+        records.append(record)
     
+    return pd.DataFrame(records)
+
+
+def plot_score_distribution(df: pd.DataFrame, output_dir: str, config_str: str):
+    """
+    Technique 1: The Six Eyes Analysis.
+    Instead of a simple average, we perceive the full distribution of scores
+    using a box plot to see median, spread, and outliers.
+    """
+    if df.empty:
+        return
+
+    print("--- Generating Overall Score Distribution Plot (Box Plot) ---")
+    
+    # Melt the DataFrame from wide to long format for Seaborn
+    df_melted = df.melt(id_vars=['patient_id'], value_vars=['diagnoses', 'medications', 'treatments', 'overall'],
+                        var_name='category', value_name='score')
+
+    plt.figure(figsize=(12, 8))
+    sns.boxplot(x='category', y='score', data=df_melted, palette='viridis')
+    sns.stripplot(x='category', y='score', data=df_melted, color=".25", size=4, jitter=True, alpha=0.6)
+
+    plt.ylabel('Weighted Similarity Score')
+    plt.xlabel('Prediction Category')
+    plt.title(f'Distribution of Prediction Scores by Category\n({len(df)} Patients, {config_str})')
+    # IMPORTANT: We removed the y-axis limit. Our new score is so powerful,
+    # it is not capped! This allows us to see its true power level.
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+
+    # The file is no longer named "jaccard"
+    plot_filename = f"overall_score_distribution_{config_str}.png"
+    plot_full_path = os.path.join(output_dir, plot_filename)
+
+    plt.savefig(plot_full_path)
+    plt.close()
+    print(f"Overall distribution plot saved to: {plot_full_path}")
+
+
+def plot_individual_reports(df: pd.DataFrame, output_dir: str, config_str: str):
+    """
+    Technique 2: Individual Case File Creation.
+    We create a separate scroll (plot) for each exorcism (patient prediction)
+    for granular analysis.
+    """
+    if df.empty:
+        return
+
+    # Create a dedicated vault for the individual reports
+    reports_vault_path = os.path.join(output_dir, f"individual_reports_{config_str}")
+    os.makedirs(reports_vault_path, exist_ok=True)
+    
+    print(f"\n--- Generating Individual Patient Reports in: {reports_vault_path} ---")
+
+    for index, row in df.iterrows():
+        patient_id = row['patient_id']
+        scores_df = pd.DataFrame({
+            'Category': ['Diagnoses', 'Medications', 'Treatments', 'Overall'],
+            'Score': [row['diagnoses'], row['medications'], row['treatments'], row['overall']]
+        })
+
+        plt.figure(figsize=(8, 5))
+        sns.barplot(x='Category', y='Score', data=scores_df, palette='plasma')
+        
+        plt.ylabel('Weighted Similarity Score')
+        plt.title(f'Prediction Scores for Patient: {patient_id}')
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+
+        report_filename = f"report_{patient_id}.png"
+        report_full_path = os.path.join(reports_vault_path, report_filename)
+        plt.savefig(report_full_path)
+        plt.close()
+
+    print(f"Saved {len(df)} individual patient reports.")
+
+
+def visualize_results():
+    """
+    The main Domain Expansion controller. It summons the data,
+    then unleashes multiple analysis and visualization techniques.
+    """
+    args = parse_data_args()
     setup_config(
         vectorizer_method=args.vectorizer_method,
         distance_metric=args.distance_metric,
@@ -37,76 +135,31 @@ def visualize_results():
     )
     global_config = get_global_config()
 
-    # Define the path to the patient results file
-    results_file_path = f"real_data/patient_results_{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
+    config_str = f"{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}"
+    results_file_path = f"real_data/patient_results_{config_str}.json"
     results_full_path = os.path.join(project_root, results_file_path)
 
-    if not os.path.exists(results_full_path):
-        raise FileNotFoundError(f"Patient results file not found at: {results_full_path}. Please ensure main.py has run successfully.")
+    try:
+        df = load_results_to_dataframe(results_full_path)
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"{e}. Please ensure main.py has run successfully.") from e
 
-    print(f"Loading patient results from: {results_full_path}")
-    with open(results_full_path, 'r') as file:
-        data = json.load(file) # 'data' will be a dictionary: {patient_id: {result_dict}}
-
-    if not data:
-        print("No patient results found in the file. Cannot generate visualization.")
+    if df.empty:
+        print("No data to visualize.")
         return
 
-    # --- Collect all Jaccard scores by category ---
-    diagnoses_scores = []
-    medications_scores = []
-    treatments_scores = []
-    overall_scores = []
-    
-    # We'll also try to get the visit_idx if it's consistent across all patients
-    # (It should be, as it's num_visits-1 from config)
-    representative_visit_idx = None
+    # Define the main output directory, now with a generic name
+    plot_output_dir = os.path.join(project_root, "real_data", "prediction_score_plots")
+    os.makedirs(plot_output_dir, exist_ok=True)
 
-    for patient_id, result_dict in data.items():
-        scores = result_dict.get('scores', {}) # Get scores, default to empty dict if missing
-        
-        diagnoses_scores.append(scores.get('diagnoses', 0.0))
-        medications_scores.append(scores.get('medications', 0.0))
-        treatments_scores.append(scores.get('treatments', 0.0))
-        overall_scores.append(scores.get('overall', 0.0))
+    # Unleash our techniques!
+    plot_score_distribution(df, plot_output_dir, config_str)
+    plot_individual_reports(df, plot_output_dir, config_str)
 
-        if representative_visit_idx is None:
-            representative_visit_idx = result_dict.get('visit_idx', 'N/A')
-
-    # --- Calculate average Jaccard score for each category ---
-    avg_diagnoses = np.mean(diagnoses_scores) if diagnoses_scores else 0.0
-    avg_medications = np.mean(medications_scores) if medications_scores else 0.0
-    avg_treatments = np.mean(treatments_scores) if treatments_scores else 0.0
-    avg_overall = np.mean(overall_scores) if overall_scores else 0.0
-
-    # Prepare data for the bar chart
-    categories = ['Diagnoses', 'Medications', 'Treatments', 'Overall']
-    average_scores = [avg_diagnoses, avg_medications, avg_treatments, avg_overall]
-
-    # --- Generate and Save the Bar Chart ---
-    print("\n--- Generating Average Jaccard Scores Bar Chart ---")
-
-    plt.figure(figsize=(10, 6)) # Create a new figure
-    sns.barplot(x=categories, y=average_scores, palette='viridis') # Use seaborn for nice bar plot
-
-    plt.ylabel('Average Jaccard Score')
-    plt.title(f'Average Prediction Scores by Category\n(for Visit Index {representative_visit_idx}, {len(data)} Patients)')
-    plt.ylim(0, 1) # Jaccard scores are between 0 and 1
-    plt.grid(axis='y', linestyle='--', alpha=0.7) # Add horizontal grid lines
-    plt.tight_layout() # Adjust layout to prevent labels from overlapping
-
-    # Define the output directory for plots
-    plot_output_dir = os.path.join(project_root, "real_data", "jaccard_score_plots")
-    os.makedirs(plot_output_dir, exist_ok=True) # Ensure directory exists
-
-    plot_filename = f"avg_jaccard_scores_{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}.png"
-    plot_full_path = os.path.join(plot_output_dir, plot_filename)
-
-    plt.savefig(plot_full_path)
-    plt.close() # Close the plot to free memory
-
-    print(f"Average Jaccard Scores plot saved to: {plot_full_path}")
+    print("\n----------------------------------------")
+    print("Visualization Domain Expansion complete!")
     print("----------------------------------------")
+
 
 if __name__ == "__main__":
     visualize_results()
