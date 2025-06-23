@@ -25,36 +25,26 @@ from scripts.analyze_results.evaluate import evaluate_prediction_by_category
 from scripts.llm.query_and_response import force_valid_prediction, generate_prompt
 from scripts.config import get_global_config
 
-def process_patient(patient: dict) -> tuple[str, dict]:
+def process_patient(patient: dict, idf_registry: dict, embedding_library: dict) -> tuple[str, dict]:
     try:
-        # generate_prompt expects patient in the new 'visits' format
         prompt = generate_prompt(patient) 
         predicted_next_visit = force_valid_prediction(prompt)
 
-        # NEW: Get the actual next visit from the real EHR data.
-        # If get_global_config().num_visits refers to the number of history visits,
-        # then the 'next' visit is at that index.
-        # Example: if num_visits=5, history is [0,1,2,3], actual_next_visit is [4].
-        
-        # Ensure patient has enough visits to extract the actual_next_visit
         if len(patient["visits"]) < get_global_config().num_visits:
-            # This patient doesn't have an actual next visit based on the configured history length.
-            # You might want to return an error, skip, or log a warning.
             return patient["patient_id"], {"error": f"Not enough visits ({len(patient['visits'])}) for prediction with num_visits={get_global_config().num_visits}"}
 
-        actual_next_visit = patient["visits"][get_global_config().num_visits - 1] # Access the correct visit by index
+        actual_next_visit = patient["visits"][get_global_config().num_visits - 1]
 
-        # actual should extract diagnoses, medications, treatments (procedures) from the actual_next_visit (encounter)
         actual = {
             "diagnoses": set(actual_next_visit.get("diagnoses", [])),
             "medications": set(actual_next_visit.get("medications", [])),
-            "treatments": set(actual_next_visit.get("treatments", [])) # NEW: Map 'procedures' to 'treatments' for evaluation
+            "treatments": set(actual_next_visit.get("treatments", []))
         }
         
-        # evaluate_prediction_by_category expects sets, which is fine here.
-        scores = evaluate_prediction_by_category(predicted_next_visit, actual)
+        scores = evaluate_prediction_by_category(predicted_next_visit, actual, idf_registry, embedding_library)
+
         result = {
-                "visit_idx": get_global_config().num_visits - 1, # Index of the predicted visit
+                "visit_idx": get_global_config().num_visits - 1,
                 "predicted": predicted_next_visit,
                 "actual": actual,
                 "scores": scores

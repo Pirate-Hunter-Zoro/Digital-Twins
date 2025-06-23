@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=LIBR_Combined_Pipeline # A descriptive name for your single combined job
-#SBATCH --partition=c3_short              # Use 'c3' if you need >9 hours, otherwise 'c3_short' (adjust --time accordingly)
+#SBATCH --partition=c3_short            
 #SBATCH --ntasks=1                      # Request 1 task for this combined job script
 #SBATCH --cpus-per-task=64              # Total CPU cores for both vLLM AND main.py. Node has 96.
 #SBATCH --mem=160G                      # Sum of vLLM MEM (32G) + main.py MEM (128G). Compute nodes have 1TB, so this is fine.
@@ -11,12 +11,12 @@
 #SBATCH --error=logs/combined_pipeline_%j.stderr   # Standard error log
 
 # --- INSCRIBE THE RITUAL PARAMETERS HERE ---
-# This makes it easy to change the conditions of our experiment in one place!
 NUM_PATIENTS=50
 NUM_VISITS=6
-VECTORIZER="sentence_transformer" # "sentence_transformer" or "tfidf"
-DISTANCE_METRIC="euclidean"          # "cosine" or "euclidean"
+VECTORIZER="sentence_transformer" 
+DISTANCE_METRIC="euclidean"          
 NUM_NEIGHBORS=10
+NUM_WORKERS=60
 
 echo "--- Ritual Parameters ---"
 echo "Patients: $NUM_PATIENTS"
@@ -24,6 +24,7 @@ echo "Visits: $NUM_VISITS"
 echo "Vectorizer: $VECTORIZER"
 echo "Distance Metric: $DISTANCE_METRIC"
 echo "Neighbors: $NUM_NEIGHBORS"
+echo "Workers: $NUM_WORKERS"
 echo "-------------------------"
 
 
@@ -88,7 +89,8 @@ $CONDA_PREFIX/bin/python scripts/main.py \
   --num_visits $NUM_VISITS \
   --vectorizer_method $VECTORIZER \
   --distance_metric $DISTANCE_METRIC \
-  --num_neighbors $NUM_NEIGHBORS
+  --num_neighbors $NUM_NEIGHBORS \
+  --workers $NUM_WORKERS 
 
 echo "$(date): Main Python pipeline finished."
 
@@ -96,7 +98,7 @@ echo "$(date): Main Python pipeline finished."
 # --- PHASE 2: Run Visualization Script ---
 echo "$(date): Starting visualization script..."
 # We use the EXACT SAME parameters to ensure we visualize the correct results file.
-$CONDA_PREFIX/bin/python scripts/visualize_results.py \
+$CONDA_PREFIX/bin/python scripts/analyze_results/visualize_results.py \
   --num_patients $NUM_PATIENTS \
   --num_visits $NUM_VISITS \
   --vectorizer_method $VECTORIZER \

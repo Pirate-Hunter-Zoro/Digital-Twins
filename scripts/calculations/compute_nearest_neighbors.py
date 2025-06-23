@@ -72,96 +72,30 @@ def turn_to_sentence(encounter_obj: dict) -> str:
 ######################################################################
 # Use an sentence transformer to get vectors for each visit sequence
 
-def get_visit_histories(patient_visits: list[dict]) -> dict[int, dict[int, str]]:
+def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
     """
-    For ONE patient, returns a dictionary:
-      Key = ending visit index (inclusive)
-      Value = string representation of that window's visit history for the global config's window length.
+    For ONE patient, returns a dictionary containing ONLY the MOST RECENT
+    visit history window of length from the global config.
     """
-    visit_histories = {}
-
-    n = len(patient_visits)
-    # The minimum number of visits for history is num_visits.
-    # So if patient has fewer visits than num_visits, we cannot form a history window of that length.
-    if n < get_global_config().num_visits: # Adjust this check for num_visits from config
-        return visit_histories  # Not enough visits to form a history window
-
-    # The loop should go up to n, so that the last window starts at n - num_visits.
-    # If num_visits is 5, and patient has 5 visits (0-4), start_idx = 0.
-    # end_idx = 0 + 5 - 1 = 4. range(0, 5-5+1 = 1) -> 0. so range(0,1) gives start_idx 0.
-    # This means end_idx is based on the LAST visit in the window,
-    # and the window itself is length 'get_global_config().num_visits'.
-    # This logic assumes num_visits is the full window length, not history length + 1.
-    # Let's adjust based on typical interpretation: num_visits is the history length.
-    # If num_visits is 5, it means last 5 visits form the history.
-    # For predicting visit N, we use visits up to N-1.
-    # The config has num_visits for history.
-    
-    # Let's re-confirm config's num_visits purpose.
-    # In generate_prompt, it uses `patient["visits"][:get_global_config().num_visits-1]`
-    # So num_visits IS the actual length of the history window.
-    # And get_global_config().num_visits-1 is the ENDING index of the history.
-    # This means `num_visits` is the count of visits in history.
-
-    # If get_global_config().num_visits = 5, we want to predict visit 5, using history visits 0-4.
-    # The history should be patient["visits"][:get_global_config().num_visits]
-    # The loop should identify all possible history windows of length num_visits.
-
-    # Re-evaluate get_visit_histories logic with num_visits = history length
-    # A patient needs AT LEAST get_global_config().num_visits + 1 visits to predict one next visit.
-    # If num_visits=5, they need 6 visits to predict the 6th.
-    
-    # Let's assume num_visits is the length of the history window.
-    # The loop should iterate over possible *prediction points*.
-    # If num_visits=5, and patient has 10 visits:
-    # Predict V5: history V0-V4.
-    # Predict V6: history V1-V5.
-    # ...
-    # Predict V9: history V4-V8.
-
-    # This function is used to create *candidate pool* visit strings.
-    # Keys are (patient_id, end_idx) - where end_idx is the *last visit in the history window*.
-
-    # For each visit that could be a 'next visit' to predict (from index `num_visits` onwards)
-    # The history window ending at `end_idx` has length `get_global_config().num_visits`.
-    # So `start_idx` should be `end_idx - get_global_config().num_visits + 1`.
-
-    # Example: num_visits = 5
-    # If patient_visits is [V0, V1, V2, V3, V4, V5, V6, V7] (length 8)
-    # First history window: V0, V1, V2, V3, V4 (length 5). end_idx = 4. start_idx = 0.
-    # Second history window: V1, V2, V3, V4, V5 (length 5). end_idx = 5. start_idx = 1.
-    # Last history window: V3, V4, V5, V6, V7 (length 5). end_idx = 7. start_idx = 3.
-
-    # The loop for `start_idx` needs to range from 0 up to `n - get_global_config().num_visits`.
-    # `end_idx` will be `start_idx + get_global_config().num_visits - 1`.
-    
-    # `n - get_global_config().num_visits + 1` should be the number of possible history windows.
-    # If n=5, num_visits=5, then 5-5+1 = 1 window (0-4). So start_idx = 0. This is fine.
-
-    # The `turn_to_sentence` call will now work with the correct `encounter_obj` format.
-    # The structure of this function seems okay for creating history strings based on `num_visits` window.
-    # It seems to be correct.
-
     visit_histories = {}
     n = len(patient_visits)
     history_window_length = get_global_config().num_visits
 
-    # Patient needs at least 'history_window_length' visits to form a history.
+    # Patient needs at least 'history_window_length' visits to form one history.
     if n < history_window_length:
-        return visit_histories
+        return visit_histories # Not enough visits, return empty.
+    
+    # The single most recent window starts at the end.
+    start_idx = n - history_window_length
+    end_idx = n - 1 # The last visit in the list
 
-    # Iterate over possible starting points of the history window
-    # The loop for start_idx needs to go up to (n - history_window_length)
-    # Example: n=5, history_window_length=5. range(0, 5-5+1 = 1). start_idx = 0.
-    # Example: n=8, history_window_length=5. range(0, 8-5+1 = 4). start_idx = 0,1,2,3.
-    # start_idx 0: history V0-V4, end_idx=4
-    # start_idx 3: history V3-V7, end_idx=7
-    for start_idx in range(n - history_window_length + 1):
-        end_idx = start_idx + history_window_length - 1
-        history = " | ".join(
-            turn_to_sentence(patient_visits[i]) for i in range(start_idx, end_idx + 1)
-        )
-        visit_histories[end_idx] = history # Key is the index of the last visit in this history window
+    # Generate the single history string for this one window.
+    history = " | ".join(
+        turn_to_sentence(patient_visits[i]) for i in range(start_idx, end_idx + 1)
+    )
+    
+    # The key is the index of the last visit in this history window.
+    visit_histories[end_idx] = history
 
     return visit_histories
 

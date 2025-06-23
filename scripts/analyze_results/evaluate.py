@@ -13,36 +13,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 # --- End of sys.path adjustment ---
 
-# --- Global cache for our Cursed Tools to avoid reloading them constantly ---
-_idf_registry = None
-_embedding_library = None
-
 # A configurable threshold for how similar two terms must be to be considered a "match"
 SIMILARITY_THRESHOLD = 0.7 
-
-def load_cursed_tools():
-    """
-    Summons our Cursed Tools into memory. It uses a global cache
-    so we only have to perform this expensive summoning ritual once.
-    """
-    global _idf_registry, _embedding_library
-    if _idf_registry and _embedding_library:
-        return _idf_registry, _embedding_library
-
-    print("Summoning the Cursed Tools (IDF Registry & Embedding Library)...")
-    data_folder = project_root / "real_data"
-    
-    idf_path = data_folder / "term_idf_registry.json"
-    with open(idf_path, 'r', encoding='utf-8') as f:
-        _idf_registry = json.load(f)
-
-    embedding_path = data_folder / "term_embedding_library.pkl"
-    with open(embedding_path, 'rb') as f:
-        _embedding_library = pickle.load(f)
-    
-    print("Cursed Tools are active.")
-    return _idf_registry, _embedding_library
-
 
 def calculate_weighted_score(predicted_terms: list, actual_terms: list, idf_registry: dict, embedding_library: dict) -> float:
     """
@@ -99,14 +71,11 @@ def calculate_weighted_score(predicted_terms: list, actual_terms: list, idf_regi
     return raw_score / max_possible_score
 
 
-def evaluate_prediction_by_category(predicted: dict, actual: dict) -> dict[str, float]:
+def evaluate_prediction_by_category(predicted: dict, actual: dict, idf_registry: dict, embedding_library: dict) -> dict[str, float]:
     """
     The main evaluation function. Replaces the old Jaccard score with our
-    new Weighted Semantic Jujutsu.
+    new Weighted Semantic Jujutsu. Now receives data directly instead of loading it.
     """
-    # Make sure our Cursed Tools are loaded and ready
-    idf_registry, embedding_library = load_cursed_tools()
-
     scores = {}
     all_keys = ["diagnoses", "medications", "treatments"]
     
@@ -114,7 +83,8 @@ def evaluate_prediction_by_category(predicted: dict, actual: dict) -> dict[str, 
         pred_set = set(predicted.get(key, []))
         actual_set = set(actual.get(key, []))
         
-        # Unleash our core technique on this category
+        # This part works perfectly now, because it uses the data
+        # we passed in as arguments!
         scores[key] = calculate_weighted_score(
             list(pred_set), 
             list(actual_set), 
