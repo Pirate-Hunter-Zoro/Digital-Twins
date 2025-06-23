@@ -60,19 +60,13 @@ if __name__ == "__main__":
     all_results = {}
     patients_processed = 0
     
-    # ==========================================================
-    # --- ENTRAPTA'S UPGRADE, PART 1: LOAD SHARED DATA HERE ---
-    # ==========================================================
-    # Load the big data files ONCE, right here.
     print("Loading shared data libraries once...")
-    # NOTE: You might need to adjust the file paths if they aren't in the root!
-    # The README mentions a `term_idf_registry.json` and `term_embedding_library.pkl`
-    with open('term_idf_registry.json', 'r') as f:
+    # Add "real_data/" to the file paths!
+    with open('real_data/term_idf_registry.json', 'r') as f:
         idf_registry = json.load(f)
-    with open('term_embedding_library.pkl', 'rb') as f:
+    with open('real_data/term_embedding_library.pkl', 'rb') as f:
         embedding_library = pickle.load(f)
     print("...Shared data loaded and ready!")
-    # ==========================================================
 
     setup_prompt_generation()
 
