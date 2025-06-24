@@ -1,24 +1,12 @@
+# --- config.py ---
 import sys
 import os
 
-# --- Dynamic sys.path adjustment for module imports ---
-# Get the absolute path to the directory containing the current script
+# --- Dynamic sys.path adjustment ---
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Calculate the project root.
-# This assumes your 'config.py' (or other root-level modules like 'main.py')
-# is located two directories up from where this script resides.
-# Example: If this script is in 'project_root/scripts/read_data/your_script.py'
-# then '..' takes you to 'project_root/scripts/'
-# and '..', '..' takes you to 'project_root/'
 project_root = os.path.abspath(os.path.join(current_script_dir, '..'))
-
-# Add the project root to sys.path if it's not already there.
-# Inserting at index 0 makes it the first place Python looks for modules,
-# so 'import config' will find it quickly.
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-
 # --- End of sys.path adjustment ---
 
 class ProjectConfig:
@@ -27,12 +15,14 @@ class ProjectConfig:
                  num_visits: int,
                  num_neighbors: int,
                  vectorizer_method: str,
-                 distance_metric: str):
+                 distance_metric: str,
+                 representation_method: str): # <-- New parameter!
         self.num_patients = num_patients
         self.num_visits = num_visits
         self.num_neighbors = num_neighbors
         self.vectorizer_method = vectorizer_method
         self.distance_metric = distance_metric
+        self.representation_method = representation_method # <-- Stored here!
 
 __global_config = None
 
@@ -42,6 +32,7 @@ def setup_config(
         num_visits: int,
         num_patients: int,
         num_neighbors: int,
+        representation_method: str # <-- New parameter!
     ):
     global __global_config
     __global_config = ProjectConfig(
@@ -49,7 +40,8 @@ def setup_config(
         distance_metric=distance_metric,
         num_visits=num_visits,
         num_patients=num_patients,
-        num_neighbors=num_neighbors
+        num_neighbors=num_neighbors,
+        representation_method=representation_method # <-- Passed here!
     )
 
 def get_global_config():

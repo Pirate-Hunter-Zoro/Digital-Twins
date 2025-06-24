@@ -1,17 +1,16 @@
+# --- main.py ---
 import sys
 import os
 from functools import partial
 import pickle
 
-# --- Dynamic sys.path adjustment for module imports ---
-# Get the absolute path to the directory containing the current script
+# --- Dynamic sys.path adjustment ---
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_script_dir, '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 # --- End of sys.path adjustment ---
 
-import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from scripts.parser import parse_data_args
@@ -23,10 +22,6 @@ from scripts.llm.query_and_response import setup_prompt_generation
 from scripts.config import setup_config, get_global_config
 
 def convert_sets_to_lists(obj):
-    """
-    Recursively converts any sets found in a nested data structure to lists,
-    making the object JSON-serializable.
-    """
     if isinstance(obj, dict):
         return {k: convert_sets_to_lists(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -39,13 +34,17 @@ def convert_sets_to_lists(obj):
 if __name__ == "__main__":
     args = parse_data_args()
 
+    # --- FIX APPLIED: Connecting the new representation_method wire! ---
     setup_config(
+        representation_method=args.representation_method,
         vectorizer_method=args.vectorizer_method,
         distance_metric=args.distance_metric,
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,
     )
+    # --- End of Fix ---
+    
     global_config = get_global_config()
 
     print("--- Loading and Filtering Patient Data ---")
@@ -75,8 +74,6 @@ if __name__ == "__main__":
         print("Please ensure you have run 'generate_idf_registry.py' and 'generate_term_embeddings.py' first.", file=sys.stderr)
         sys.exit(1)
 
-    # This setup now uses the filtered data implicitly through its own data loading.
-    # For a future optimization, we could pass the filtered data directly into this function.
     setup_prompt_generation()
 
     worker_with_data = partial(process_patient, 
@@ -86,10 +83,10 @@ if __name__ == "__main__":
     print(f"\n--- Starting Prediction Pool with {args.workers} Workers ---")
     process_pool = Pool(processes=args.workers)
     
-    # Use the filtered list of patients for processing
     pool_results = process_pool.imap_unordered(worker_with_data, patient_data_filtered)
     
-    output_file = f"real_data/patient_results_{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
+    # Filename now includes representation_method for perfect separation of experiment results!
+    output_file = f"real_data/patient_results_{global_config.num_patients}_{global_config.num_visits}_{global_config.representation_method}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
 
     try:
         for patient_id, result in pool_results:
@@ -102,7 +99,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"An error occurred during multiprocessing: {e}", file=sys.stderr)
     finally:
-        # Final save
         with open(output_file, "w") as f:
             json.dump(all_results, f, indent=4)
         print(f"\nFinished processing {patients_processed} patients. Final results saved to {output_file}.")

@@ -1,0 +1,86 @@
+#!/bin/bash
+#SBATCH --job-name=exp_A_visit_sentence
+#SBATCH --output=logs/exp_A_visit_sentence_%j.out
+#SBATCH --error=logs/exp_A_visit_sentence_%j.err
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=160G
+#SBATCH --gres=gpu:1
+#SBATCH --time=9:00:00
+
+# --- RITUAL PARAMETERS ---
+NUM_PATIENTS=5000
+NUM_VISITS=6
+REPRESENTATION="visit_sentence"
+VECTORIZER="sentence_transformer" 
+DISTANCE_METRIC="cosine"          
+NUM_NEIGHBORS=10
+NUM_WORKERS=60
+
+echo "--- Ritual Parameters ---"
+echo "Representation: $REPRESENTATION"
+echo "Patients: $NUM_PATIENTS"
+echo "Visits: $NUM_VISITS"
+echo "Vectorizer: $VECTORIZER"
+echo "Distance Metric: $DISTANCE_METRIC"
+echo "Neighbors: $NUM_NEIGHBORS"
+echo "Workers: $NUM_WORKERS"
+echo "-------------------------"
+
+# --- Environment Setup ---
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+# --- Navigate to project directory ---
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
+
+# --- Start vLLM server in background ---
+echo "$(date): Starting vLLM server in background..."
+vllm serve unsloth/medgemma-27b-text-it-bnb-4bit \
+  --dtype float16 \
+  --served-model-name medgemma \
+  --gpu-memory-utilization 0.5 \
+  --host 0.0.0.0 \
+  --max-model-len 5000 > logs/vllm_server.log 2>&1 & 
+VLLM_PID=$!
+echo "$(date): vLLM server started with PID: $VLLM_PID"
+
+# --- Define cleanup function ---
+cleanup() {
+  echo "$(date): Cleaning up vLLM server (PID: $VLLM_PID)..."
+  kill -TERM $VLLM_PID
+  wait $VLLM_PID 2>/dev/null
+  echo "$(date): vLLM server stopped."
+}
+trap cleanup EXIT
+
+# --- Wait for vLLM server to be ready ---
+echo "$(date): Waiting for vLLM server to be ready..."
+MAX_WAIT_TIME=1200
+WAIT_INTERVAL=5
+for ((i=0; i<MAX_WAIT_TIME/WAIT_INTERVAL; i++)); do
+  if curl -s -f http://localhost:8000/health >/dev/null; then
+    echo "$(date): vLLM server is ready!"
+    break
+  fi
+  sleep $WAIT_INTERVAL
+done
+
+# --- Run Main Python Pipeline ---
+echo "$(date): Starting main Python pipeline..."
+$CONDA_PREFIX/bin/python scripts/main.py \
+  --representation_method $REPRESENTATION \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS \
+  --workers $NUM_WORKERS 
+
+echo "$(date): Main Python pipeline finished."
+
+conda deactivate
+echo "$(date): Ritual complete."
