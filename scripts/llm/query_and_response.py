@@ -1,239 +1,200 @@
 import sys
 import os
-
-# --- Dynamic sys.path adjustment for module imports ---
-# Get the absolute path to the directory containing the current script
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Calculate the project root.
-# This assumes your 'config.py' (or other root-level modules like 'main.py')
-# is located two directories up from where this script resides.
-# Example: If this script is in 'project_root/scripts/read_data/your_script.py'
-# then '..' takes you to 'project_root/scripts/'
-# and '..', '..' takes you to 'project_root/'
-project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
-
-# Add the project root to sys.path if it's not already there.
-# Inserting at index 0 makes it the first place Python looks for modules,
-# so 'import config' will find it quickly.
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# --- End of sys.path adjustment ---
-
 import json
-from scripts.calculations.compute_nearest_neighbors import get_neighbors, get_visit_strings, turn_to_sentence
-from scripts.llm.query_llm import query_llm
-from scripts.read_data.load_patient_data import load_patient_data
 import random
 import textwrap
 import re
+
+# --- Dynamic sys.path adjustment for module imports ---
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+# --- End of sys.path adjustment ---
+
+from scripts.calculations.compute_nearest_neighbors import get_neighbors, get_visit_strings, turn_to_sentence
+from scripts.llm.query_llm import query_llm
+from scripts.read_data.load_patient_data import load_patient_data
 from scripts.config import get_global_config
 
+# --- Global Variables ---
+# These are initialized by setup_prompt_generation()
 all_patient_strings = {}
 all_medications = set()
 all_treatments = set()
 all_diagnoses = set()
 patient_data = None
 all_response_options = None
+nearest_neighbors_data = None
+
 
 def setup_prompt_generation():
-    global all_patient_strings
-    global all_medications
-    global all_treatments
-    global all_diagnoses
-    global patient_data
-    global all_response_options
+    """
+    Initializes all necessary global data structures for generating prompts.
+    This should be called once before starting the main processing loop.
+    """
+    global patient_data, all_diagnoses, all_medications, all_treatments
+    global all_response_options, nearest_neighbors_data
 
-    patient_data = load_patient_data() # This now loads real data in 'visits' format
+    print("--- Setting up prompt generation environment ---")
+    patient_data = load_patient_data()
     
-    # Initialize sets to ensure they're clean on setup
+    all_diagnoses.clear()
     all_medications.clear()
     all_treatments.clear()
-    all_diagnoses.clear()
 
+    print("Extracting all unique terms for prompt options...")
     for patient in patient_data:
-        # Loop through 'visits' (which are now the real data encounters)
-        for visit in patient.get("visits", []): # Use .get() for safety if 'visits' might be missing
-            # --- NEW: Extract specific string fields from the dictionaries ---
-
-            # Diagnoses: Extract Diagnosis_1_Code for the set
-            # The prompt in generate_prompt specifies 'ICD-10 codes'
-            diagnoses_codes = [
-                diag.get("Diagnosis_1_Code") 
-                for diag in visit.get("diagnoses", []) 
-                if diag.get("Diagnosis_1_Code") # Ensure the code is not None or empty
-            ]
+        for visit in patient.get("visits", []):
+            diagnoses_codes = [d.get("Diagnosis_Name") for d in visit.get("diagnoses", []) if d.get("Diagnosis_Name")]
             all_diagnoses.update(diagnoses_codes)
-
-            # Medications: Extract MedName for the set
-            medication_names = [
-                med.get("MedName") 
-                for med in visit.get("medications", []) 
-                if med.get("MedName") # Ensure the name is not None or empty
-            ]
+            
+            medication_names = [m.get("MedSimpleGenericName") for m in visit.get("medications", []) if m.get("MedSimpleGenericName")]
             all_medications.update(medication_names)
-
-            # Treatments (from Procedures): Extract Procedure_Description for the set
-            # We decided to map procedures to treatments for LLM consistency
-            treatment_descriptions = [
-                proc.get("Procedure_Description") 
-                for proc in visit.get("treatments", []) # Now using 'treatments' key from load_patient_data.py
-                if proc.get("Procedure_Description") # Ensure the description is not None or empty
-            ]
+            
+            treatment_descriptions = [p.get("CPT_Procedure_Description") for p in visit.get("treatments", []) if p.get("CPT_Procedure_Description")]
             all_treatments.update(treatment_descriptions)
-
-
+    
     all_response_options = {
-        "diagnoses": sorted(list(all_diagnoses)), # Convert set to list for sorting
+        "diagnoses": sorted(list(all_diagnoses)),
         "medications": sorted(list(all_medications)),
         "treatments": sorted(list(all_treatments))
     }
     
-    all_patient_strings = get_visit_strings(patient_data)
+    print("Pre-computing nearest neighbors for all patients...")
+    nearest_neighbors_data = get_neighbors(patient_data)
+    print("--- Prompt generation setup complete! ---")
+
+
+def summarize_neighbor_narratives(neighbor_narratives: list[str]) -> str:
+    """
+    NEW FUNCTION: Uses the LLM to create a concise summary of neighbor data,
+    preventing the main prompt from becoming too long.
+    """
+    if not neighbor_narratives:
+        return "No similar patient cases were found."
+
+    combined_narratives = "\n\n---\n\n".join(neighbor_narratives)
     
+    summary_prompt = textwrap.dedent(f"""
+    You are a medical data analyst. The following are several patient case summaries who are similar to a target patient.
+    Summarize the key recurring patterns, common diagnoses, and frequent treatments from these cases in 2-3 sentences.
+    Focus on what might be most relevant for predicting the next step for a similar patient.
+
+    CASES:
+    {combined_narratives}
+
+    SUMMARY OF KEY PATTERNS:
+    """)
+
+    # We use a shorter max_tokens for the summary to keep it concise.
+    return query_llm(summary_prompt, max_tokens=512)
+
+
 def generate_prompt(patient: dict) -> str:
     """
-    Generate a prompt to get the patient's (n+1)st visit (of index n).
+    Generate a prompt to predict the patient's (n+1)st visit.
+    This version now summarizes neighbor data to prevent excessive prompt length.
     """
-    global all_patient_strings
-    
-    nearest_neighbors = get_neighbors(patient_data)
-
-    try:
-        with open(f"real_data/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "r") as f:
-            all_prompts = json.load(f)
-    except:
-        all_prompts = {}
+    global nearest_neighbors_data, all_response_options
 
     patient_id = patient["patient_id"]
+    num_visits_for_history = get_global_config().num_visits - 1
     
-    window_size_used = get_global_config().num_visits-1  # We use the latest visit *up to* the prediction point
-    key = f"{patient_id}_{window_size_used}"
-    if key not in all_prompts.keys():
-        # Then we need to generate the prompt
+    # Define the key for this specific patient and visit index
+    patient_key = (patient_id, num_visits_for_history)
 
-        if len(patient["visits"]) < get_global_config().num_visits:
-            # This patient doesn't have enough history visits for prediction based on config.
-            # You might want to skip them or handle this case.
-            # For now, let's assume valid patients have at least num_visits visits.
-            # If it's the last visit being predicted, it's the one at num_visits-1.
-            # If config.num_visits=5, we use visits 0,1,2,3 for history and predict visit 4.
+    # --- Generate Patient History Section ---
+    history_visits = patient["visits"][:num_visits_for_history]
+    if not history_visits:
+        history_section = "No historical visits available."
+    else:
+        history_section = "\n".join(f"Visit {i}: {turn_to_sentence(visit)}" for i, visit in enumerate(history_visits))
 
-            # Correctly get the history, taking the latest 'num_visits-1' encounters/visits
-            history_visits = patient["visits"][:get_global_config().num_visits-1]
-            
-            # If for some reason history_visits is empty, or too short
-            if not history_visits:
-                history_section = "No historical visits available."
-            else:
-                history_section = "\n".join(turn_to_sentence(visit) for visit in history_visits)
-        else:
-            history_section = "\n".join(
-                turn_to_sentence(visit) for visit in patient["visits"][:get_global_config().num_visits-1]
-            )
+    # --- Generate Neighbor Summary Section ---
+    relevant_neighbors = nearest_neighbors_data.get(patient_key, [])
+    neighbor_narratives = [
+        get_narrative(patient_data_lookup[neighbor_id]["visits"][:neighbor_vidx + 1])
+        for (neighbor_id, neighbor_vidx), _, _ in relevant_neighbors[:get_global_config().num_neighbors]
+        if (patient_data_lookup := {p['patient_id']: p for p in patient_data}).get(neighbor_id)
+    ]
+    
+    # Use our new summarization function!
+    neighbor_summary_section = summarize_neighbor_narratives(neighbor_narratives)
 
-        relevant_neighbors = nearest_neighbors.get((patient_id, window_size_used), [])
-        neighbor_section = "\n".join(
-            all_patient_strings[neighbor_key_score[0]]
-            for neighbor_key_score in relevant_neighbors[:min(len(relevant_neighbors), get_global_config().num_neighbors+1)]
-        )
+    # --- Random Options for LLM (to guide the output format) ---
+    random_diagnoses = ', '.join(random.sample(all_response_options["diagnoses"], min(len(all_response_options["diagnoses"]), 3)))
+    random_medications = ', '.join(random.sample(all_response_options["medications"], min(len(all_response_options["medications"]), 3)))
+    random_treatments = ', '.join(random.sample(all_response_options["treatments"], min(len(all_response_options["treatments"]), 3)))
 
-        # If config.num_visits=5, we use visits 0,1,2,3 for history and predict visit 4.
+    # --- Assemble the Final Prompt ---
+    prompt = textwrap.dedent(f"""
+    Based on the patient's history and a summary of similar cases, predict the diagnoses, medications, and treatments for the patient's next visit.
 
-        # Correctly get the history, taking the latest 'num_visits-1' encounters/visits
-        history_visits = patient["visits"][:get_global_config().num_visits-1]
-        
-        # If for some reason history_visits is empty, or too short
-        if not history_visits:
-            history_section = "No historical visits available."
-        else:
-            history_section = "\n".join(turn_to_sentence(visit) for visit in history_visits)
+    PATIENT HISTORY:
+    {history_section}
 
-        # --- Random options for LLM ---
-        # These sets are populated by setup_prompt_generation globally
-        # If all_diagnoses, all_medications, all_treatments are empty (e.g. no data), random.sample will error.
-        # Add a check for non-empty set before sampling.
-        random_diagnoses = ', '.join(random.sample(sorted(list(all_diagnoses)), min(len(all_diagnoses), 3))) if all_diagnoses else "None"
-        random_medications = ', '.join(random.sample(sorted(list(all_medications)), min(len(all_medications), 3))) if all_medications else "None"
-        random_treatments = ', '.join(random.sample(sorted(list(all_treatments)), min(len(all_treatments), 3))) if all_treatments else "None"
-        # Create the prompt
-        prompt = textwrap.dedent(f"""
-        Here is a list of all the patient's first {get_global_config().num_visits-1} visits:
+    SUMMARY OF SIMILAR CASES:
+    {neighbor_summary_section}
 
-        {history_section}
+    You MUST choose from the following valid options. Diagnoses are ICD-10 codes.
 
-        Here are the most similar visit sequences of the same length from other patients, in descending order of closeness:
+    Diagnoses Options: {random_diagnoses}
+    Medications Options: {random_medications}
+    Treatments Options: {random_treatments}
 
-        {neighbor_section}
+    Respond with ONLY the following format and no additional text or explanation:
+    Diagnoses: <comma-separated list>; Medications: <comma-separated list>; Treatments: <comma-separated list>
 
-        Based on the similar patients and this patient's history, predict the patient's next visit.
+    Example:
+    Diagnoses: E11.9, I10, Z79.4; Medications: Metformin, Lisinopril; Treatments: Physical therapy referral
+    
+    ### BEGIN RESPONSE
+    """)
+    
+    return prompt
 
-        You MUST choose from the following valid options only (note that Diagnoses are ICD-10 codes):
-
-        Diagnoses: {random_diagnoses}
-        Medications: {random_medications}
-        Treatments: {random_treatments}
-
-        Respond with ONLY the following format and no additional text or explanation:
-        Diagnoses: <comma-separated ICD codes>; Medications: <comma-separated medication names>; Treatments: <comma-separated treatment descriptions>
-
-        Example:
-        Diagnoses: E11, F33.1, J45.909; Medications: Metformin, Insulin, Lisinopril; Treatments: Referral to endocrinology, Sleep hygiene education, Physical therapy referral
-
-        You are a medical assistant. Do not explain your reasoning. Output only the response in the specified format. Do not include any additional text.
-        ### BEGIN RESPONSE\n
-        """)
-
-        # Save the prompt for future use
-        all_prompts[key] = prompt
-        with open(f"real_data/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json", "w") as f:
-            json.dump(all_prompts, f, indent=4)
-            
-    return all_prompts[key]
-
-import re
 
 def parse_llm_response(response: str) -> dict[str, set[str]]:
     """
-    Parses LLM output that may include messy formatting or merged sections.
-    Extracts diagnoses, medications, and treatments from a string.
+    Parses the structured LLM output to extract diagnoses, medications, and treatments.
     """
     next_visit = {"diagnoses": set(), "medications": set(), "treatments": set()}
-
-    # Normalize formatting: remove excess whitespace and collapse to one line
     response = " ".join(response.strip().split())
 
-    # Use regex to extract each labeled section
     match = re.search(
-        r"Diagnoses:\s*(.*?);?\s*Medications:\s*(.*?);?\s*Treatments:\s*(.*)",
+        r"Diagnoses:\s*(.*?)(?:;|$)\s*Medications:\s*(.*?)(?:;|$)\s*Treatments:\s*(.*)",
         response,
-        re.IGNORECASE
+        re.IGNORECASE | re.DOTALL
     )
 
     if match:
         diag_str, med_str, treat_str = match.groups()
-
         for key, raw_str in zip(["diagnoses", "medications", "treatments"], [diag_str, med_str, treat_str]):
-            canonical_map = {val.lower(): val for val in all_response_options[key]}
-            items = [
-                canonical_map[x.strip().lower()]
-                for x in raw_str.split(",")
-                if x.strip().lower() in canonical_map
-            ]
-            next_visit[key].update(items)
+            if raw_str and raw_str.strip().lower() not in ['none', 'n/a', '']:
+                # Split and clean up each item
+                items = {item.strip() for item in raw_str.split(',') if item.strip()}
+                next_visit[key].update(items)
 
     return next_visit
 
+
 def force_valid_prediction(prompt: str, max_retries: int = 5) -> dict[str, set[str]]:
     """
-    Force the LLM to return a valid prediction by appending a specific instruction.
+    Queries the LLM and retries if the response is empty, ensuring a validly structured
+    prediction is returned.
     """
-    predicted = parse_llm_response(query_llm(prompt))
-    for _ in range(max_retries):
-        if not any(len(predicted[k]) for k in ["diagnoses", "medications", "treatments"]):
-            predicted = parse_llm_response(query_llm(prompt))
-        else:
-            break
+    for i in range(max_retries):
+        raw_response = query_llm(prompt)
+        predicted = parse_llm_response(raw_response)
+        
+        # Check if we got any valid data in any category
+        if any(predicted.values()):
+            return predicted
+        
+        print(f"Warning: Empty or invalid response from LLM on try {i+1}. Retrying...")
+    
+    # If all retries fail, return an empty structure
+    print(f"Error: Could not get a valid prediction after {max_retries} retries.", file=sys.stderr)
+    return {"diagnoses": set(), "medications": set(), "treatments": set()}
 
-    return predicted

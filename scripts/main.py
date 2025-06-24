@@ -6,27 +6,15 @@ import pickle
 # --- Dynamic sys.path adjustment for module imports ---
 # Get the absolute path to the directory containing the current script
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Calculate the project root.
-# This assumes your 'config.py' (or other root-level modules like 'main.py')
-# is located two directories up from where this script resides.
-# Example: If this script is in 'project_root/scripts/read_data/your_script.py'
-# then '..' takes you to 'project_root/scripts/'
-# and '..', '..' takes you to 'project_root/'
 project_root = os.path.abspath(os.path.join(current_script_dir, '..'))
-
-# Add the project root to sys.path if it's not already there.
-# Inserting at index 0 makes it the first place Python looks for modules,
-# so 'import config' will find it quickly.
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-
 # --- End of sys.path adjustment ---
 
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-from parser import parse_data_args
+from scripts.parser import parse_data_args
 import json
 from multiprocessing import Pool
 from scripts.read_data.load_patient_data import load_patient_data
@@ -35,6 +23,10 @@ from scripts.llm.query_and_response import setup_prompt_generation
 from scripts.config import setup_config, get_global_config
 
 def convert_sets_to_lists(obj):
+    """
+    Recursively converts any sets found in a nested data structure to lists,
+    making the object JSON-serializable.
+    """
     if isinstance(obj, dict):
         return {k: convert_sets_to_lists(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -45,7 +37,6 @@ def convert_sets_to_lists(obj):
         return obj
 
 if __name__ == "__main__":
-
     args = parse_data_args()
 
     setup_config(
@@ -55,34 +46,50 @@ if __name__ == "__main__":
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,
     )
+    global_config = get_global_config()
 
-    patient_data = load_patient_data()
+    print("--- Loading and Filtering Patient Data ---")
+    patient_data_raw = load_patient_data()
+    print(f"Loaded {len(patient_data_raw)} total patients.")
+
+    required_visits = global_config.num_visits
+    patient_data_filtered = [
+        p for p in patient_data_raw if len(p.get("visits", [])) >= required_visits
+    ]
+    print(f"Filtered down to {len(patient_data_filtered)} patients with at least {required_visits} visits.")
+    if len(patient_data_raw) > len(patient_data_filtered):
+        print(f"Discarded {len(patient_data_raw) - len(patient_data_filtered)} patients due to insufficient visit history.")
+
     all_results = {}
     patients_processed = 0
     
-    print("Loading shared data libraries once...")
-    # Add "real_data/" to the file paths!
-    with open('real_data/term_idf_registry.json', 'r') as f:
-        idf_registry = json.load(f)
-    with open('real_data/term_embedding_library.pkl', 'rb') as f:
-        embedding_library = pickle.load(f)
-    print("...Shared data loaded and ready!")
+    print("\n--- Loading Shared Data Libraries ---")
+    try:
+        with open('real_data/term_idf_registry.json', 'r') as f:
+            idf_registry = json.load(f)
+        with open('real_data/term_embedding_library.pkl', 'rb') as f:
+            embedding_library = pickle.load(f)
+        print("...Shared data loaded and ready!")
+    except FileNotFoundError as e:
+        print(f"ERROR: Could not load required data libraries: {e}", file=sys.stderr)
+        print("Please ensure you have run 'generate_idf_registry.py' and 'generate_term_embeddings.py' first.", file=sys.stderr)
+        sys.exit(1)
 
+    # This setup now uses the filtered data implicitly through its own data loading.
+    # For a future optimization, we could pass the filtered data directly into this function.
     setup_prompt_generation()
 
-    # Use `partial` to create a new version of your worker function
-    # that has the shared data "baked in" as arguments.
     worker_with_data = partial(process_patient, 
                                idf_registry=idf_registry, 
                                embedding_library=embedding_library)
-    # ===================================================================
-
+    
+    print(f"\n--- Starting Prediction Pool with {args.workers} Workers ---")
     process_pool = Pool(processes=args.workers)
     
-    pool_results = process_pool.imap_unordered(worker_with_data, patient_data)
-    # =====================================================================
-
-    output_file = f"real_data/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
+    # Use the filtered list of patients for processing
+    pool_results = process_pool.imap_unordered(worker_with_data, patient_data_filtered)
+    
+    output_file = f"real_data/patient_results_{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
 
     try:
         for patient_id, result in pool_results:
@@ -93,12 +100,13 @@ if __name__ == "__main__":
                     json.dump(all_results, f, indent=4)
                 print(f"Saved results after processing {patients_processed} patients.")
     except Exception as e:
-        print(f"Error during multiprocessing: {e}")
+        print(f"An error occurred during multiprocessing: {e}", file=sys.stderr)
+    finally:
+        # Final save
+        with open(output_file, "w") as f:
+            json.dump(all_results, f, indent=4)
+        print(f"\nFinished processing {patients_processed} patients. Final results saved to {output_file}.")
 
-    # Final save
-    with open(output_file, "w") as f:
-        json.dump(all_results, f, indent=4)
-    print(f"Finished processing {patients_processed} patients. Results saved to {output_file}.")
-
-    process_pool.close()
-    process_pool.join()
+        process_pool.close()
+        process_pool.join()
+        print("--- All processes complete! ---")
