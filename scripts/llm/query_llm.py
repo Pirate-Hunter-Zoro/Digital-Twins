@@ -78,7 +78,7 @@ def clean_response(raw_response: str) -> str:
     clean = re.sub(r"\s*\[.*?\]\s*", " ", no_thought)
     return re.sub(r"\s+", " ", clean).strip()
 
-def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> str:
+def query_llm(prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
     llm_client = get_llm_client()
     try:
         output = llm_client.chat.completions.create(
@@ -87,7 +87,7 @@ def query_llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> 
                 {"role": "system", "content": "You are a helpful medical assistant. Only return structured responses."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=max_tokens,
+            max_tokens=max_tokens, # This will now use our new, smaller value!
             temperature=temperature,
         )
         response = output.choices[0].message.content

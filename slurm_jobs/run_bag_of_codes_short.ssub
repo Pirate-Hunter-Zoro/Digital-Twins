@@ -15,8 +15,8 @@ NUM_PATIENTS=5000
 NUM_VISITS=6
 REPRESENTATION="bag_of_codes"
 VECTORIZER="sentence_transformer" 
-DISTANCE_METRIC="cosine"          
-NUM_NEIGHBORS=10
+DISTANCE_METRIC="euclidean"          
+NUM_NEIGHBORS=5
 NUM_WORKERS=60
 
 echo "--- Ritual Parameters ---"

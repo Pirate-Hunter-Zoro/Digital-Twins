@@ -101,6 +101,12 @@ def generate_prompt(patient: dict) -> str:
 
     history_section = "\n".join(f"Visit {i}: {turn_to_sentence(visit)}" for i, visit in enumerate(patient["visits"][:num_visits_for_history]))
 
+    # A rough estimate: 1 token ~ 4 chars. Let's cap the history at around 1500 tokens.
+    max_history_chars = 1500 * 4 
+    if len(history_section) > max_history_chars:
+        # Trim from the beginning of the string to keep the most recent data!
+        history_section = history_section[-max_history_chars:]
+    
     relevant_neighbors = nearest_neighbors_data.get(patient_key, [])
     neighbor_narratives = [
         get_narrative(patient_data_lookup[neighbor_id]["visits"][:neighbor_vidx + 1])
