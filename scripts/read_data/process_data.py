@@ -92,7 +92,7 @@ print(f"Targeting a random subset of {TARGET_NUM_PATIENTS} patients based on con
 
 # --- Define Paths ---
 base_data_path = "/mnt/dell_storage/studies/ehr_study/data-EHR-prepped/25_04_17-v1/PrepData-2025_04_17/" # Corrected base_data_path
-output_json_dir = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/real_data/" # Your requested output directory
+output_json_dir = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/data/" # Your requested output directory
 
 os.makedirs(output_json_dir, exist_ok=True) # Create output directory if it doesn't exist
 

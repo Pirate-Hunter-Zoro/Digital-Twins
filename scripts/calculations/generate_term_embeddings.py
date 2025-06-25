@@ -13,7 +13,7 @@ def forge_innate_technique_library():
     # --- Spatial awareness to find our input/output files ---
     script_path = Path(__file__).resolve()
     project_root = script_path.parent.parent.parent
-    data_folder = project_root / "real_data"
+    data_folder = project_root / "data"
     
     input_registry_path = data_folder / "term_idf_registry.json"
     output_library_path = data_folder / "term_embedding_library.pkl"

@@ -32,13 +32,13 @@ correlation_data_collector = []
 
 def inspect_visit(patient_id: str, k: int = 5) -> None:
     output = [] # This is for the human-readable report
-    output_path = f"real_data/neighbor_inspection_{patient_id}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.txt"
+    output_path = f"data/neighbor_inspection_{patient_id}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.txt"
 
     patients = load_patient_data()
     patient_lookup = {p["patient_id"]: p for p in patients}
 
     # Load previously generated results
-    patient_results_file = f"real_data/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
+    patient_results_file = f"data/patient_results_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
     if not os.path.exists(patient_results_file):
         output.append(f"Error: Patient results file not found at {patient_results_file}. Cannot inspect.\n")
         with open(output_path, "w") as f: f.write("\n".join(output))
@@ -48,7 +48,7 @@ def inspect_visit(patient_id: str, k: int = 5) -> None:
         patient_output_results = json.load(f)
 
     # Load all_prompts (optional, if you want to inspect them)
-    all_prompts_file = f"real_data/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
+    all_prompts_file = f"data/all_prompts_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
     if not os.path.exists(all_prompts_file):
         output.append(f"Warning: All prompts file not found at {all_prompts_file}.\n")
         all_prompts = {}
@@ -58,7 +58,7 @@ def inspect_visit(patient_id: str, k: int = 5) -> None:
 
 
     # Load nearest neighbors (these should be from the pre-computed pipeline run)
-    neighbors_file = f"real_data/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl"
+    neighbors_file = f"data/neighbors_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.pkl"
     if not os.path.exists(neighbors_file):
         output.append(f"Error: Nearest neighbors file not found at {neighbors_file}. Cannot inspect.\n")
         with open(output_path, "w") as f: f.write("\n".join(output))
@@ -68,7 +68,7 @@ def inspect_visit(patient_id: str, k: int = 5) -> None:
         nearest_neighbors = pickle.load(f)
 
     # Load all_vectors (from compute_nearest_neighbors.py)
-    all_vectors_file = f"real_data/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().num_visits}.pkl"
+    all_vectors_file = f"data/all_vectors_{get_global_config().vectorizer_method}_{get_global_config().num_visits}.pkl"
     if not os.path.exists(all_vectors_file):
         output.append(f"Error: All vectors file not found at {all_vectors_file}. Cannot inspect.\n")
         with open(output_path, "w") as f: f.write("\n".join(output))
@@ -237,7 +237,7 @@ if __name__ == "__main__":
             inspect_visit(patient_id=patient_to_inspect['patient_id'])
 
         # --- Save the collected correlation data to a JSON file ---
-        correlation_output_file = f"real_data/llm_mahalanobis_correlation_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
+        correlation_output_file = f"data/llm_mahalanobis_correlation_{get_global_config().num_patients}_{get_global_config().num_visits}_{get_global_config().vectorizer_method}_{get_global_config().distance_metric}.json"
         
         try:
             with open(correlation_output_file, "w") as f:

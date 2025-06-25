@@ -64,9 +64,9 @@ if __name__ == "__main__":
     
     print("\n--- Loading Shared Data Libraries ---")
     try:
-        with open('real_data/term_idf_registry.json', 'r') as f:
+        with open('data/term_idf_registry.json', 'r') as f:
             idf_registry = json.load(f)
-        with open('real_data/term_embedding_library.pkl', 'rb') as f:
+        with open('data/term_embedding_library.pkl', 'rb') as f:
             embedding_library = pickle.load(f)
         print("...Shared data loaded and ready!")
     except FileNotFoundError as e:
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     pool_results = process_pool.imap_unordered(worker_with_data, patient_data_filtered)
     
     # Filename now includes representation_method for perfect separation of experiment results!
-    output_file = f"real_data/patient_results_{global_config.num_patients}_{global_config.num_visits}_{global_config.representation_method}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
+    output_file = f"data/patient_results_{global_config.num_patients}_{global_config.num_visits}_{global_config.representation_method}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
 
     try:
         for patient_id, result in pool_results:

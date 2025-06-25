@@ -1,7 +1,7 @@
 import sqlite3
 import pandas as pd
 
-db_file = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/real_data/ehr_data.db"
+db_file = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/data/ehr_data.db"
 patient_id_to_check = "6F5BA6D7889E3FB8CA01C3216F5EED43" # Use one of the IDs from your JSON
 
 try:

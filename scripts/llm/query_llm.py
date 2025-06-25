@@ -94,7 +94,7 @@ def query_llm(prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> s
     except APIConnectionError as e:
         response = f"ERROR: API connection failed - {str(e)}"
 
-    with open(f"real_data/debug_prompts_and_responses.jsonl", "a") as f:
+    with open(f"data/debug_prompts_and_responses.jsonl", "a") as f:
         f.write(json.dumps({"prompt": prompt, "response": response}) + "\n")
     
     return clean_response(response).strip()

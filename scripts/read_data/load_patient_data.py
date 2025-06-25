@@ -29,18 +29,18 @@ def load_patient_data() -> list[dict]:
 
     # Define the path to your combined real patient data JSON file
     # This path should match output_json_dir from process_data.py
-    real_data_combined_json_path = os.path.join(
-        project_root, # Use project_root to build path to real_data
-        "real_data", # This is the folder name based on your output_json_dir
+    data_combined_json_path = os.path.join(
+        project_root, # Use project_root to build path to data
+        "data", # This is the folder name based on your output_json_dir
         "all_patients_combined.json"
     )
 
-    if not os.path.exists(real_data_combined_json_path):
+    if not os.path.exists(data_combined_json_path):
         # Then run scripts/process_data.py to generate it
-        raise FileNotFoundError(f"Combined patient data not found at: {real_data_combined_json_path}. Please ensure process_data.py has run successfully.")
+        raise FileNotFoundError(f"Combined patient data not found at: {data_combined_json_path}. Please ensure process_data.py has run successfully.")
 
-    print(f"Loading patient data from: {real_data_combined_json_path}")
-    with open(real_data_combined_json_path, 'r') as f:
+    print(f"Loading patient data from: {data_combined_json_path}")
+    with open(data_combined_json_path, 'r') as f:
         raw_patients_data = json.load(f)
 
     processed_patients = []

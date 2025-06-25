@@ -4,7 +4,7 @@ import os
 
 # --- Re-use your path definitions ---
 base_data_path = "/mnt/dell_storage/studies/ehr_study/data-EHR-prepped/25_04_17-v1/PrepData-2025_04_17/"
-output_json_dir = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/real_data/" # Your requested output directory
+output_json_dir = "/home/librad.laureateinstitute.org/mferguson/Digital-Twins/data/" # Your requested output directory
 db_file = os.path.join(output_json_dir, "ehr_data.db")
 
 # --- Re-load your sampled person_df (if running this as a separate script) ---data-EHR-prepped/25_04_17-v1/PrepData-2025_04_17/"

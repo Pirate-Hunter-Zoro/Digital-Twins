@@ -98,7 +98,7 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
     """
     config = get_global_config()
     # Updated to include representation method in filename!
-    neighbors_file_path = f"real_data/neighbors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.pkl"
+    neighbors_file_path = f"data/neighbors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.pkl"
     
     try:
         with open(neighbors_file_path, "rb") as f:
@@ -108,7 +108,7 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
         print("Pre-computed neighbors not found. Calculating from scratch...")
         vectors_dict = get_visit_vectors(patient_data)
         
-        all_vectors_path = f"real_data/all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl"
+        all_vectors_path = f"data/all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl"
         with open(all_vectors_path, "wb") as f:
             pickle.dump(vectors_dict, f)
         print(f"Saved all visit vectors to {all_vectors_path}")

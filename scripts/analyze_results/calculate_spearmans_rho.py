@@ -40,7 +40,7 @@ def calculate_and_print_spearmans_rho():
     global_config = get_global_config()
 
     # Define the path to the correlation data file
-    correlation_data_file = f"real_data/llm_mahalanobis_correlation_{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
+    correlation_data_file = f"data/llm_mahalanobis_correlation_{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
 
     # Ensure the output directory is correct relative to the project_root
     correlation_data_path = os.path.join(project_root, correlation_data_file)
@@ -110,7 +110,7 @@ def calculate_and_print_spearmans_rho():
     plt.tight_layout() # Adjust layout to prevent labels from overlapping
 
     # Define the output path for the plot
-    plot_output_dir = os.path.join(project_root, "real_data", "correlation_plots")
+    plot_output_dir = os.path.join(project_root, "data", "correlation_plots")
     os.makedirs(plot_output_dir, exist_ok=True) # Ensure directory exists
 
     plot_filename = f"llm_mahalanobis_correlation_plot_{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}.png"

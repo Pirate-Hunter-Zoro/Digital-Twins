@@ -136,7 +136,7 @@ def visualize_results():
     global_config = get_global_config()
 
     config_str = f"{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}"
-    results_file_path = f"real_data/patient_results_{config_str}.json"
+    results_file_path = f"data/patient_results_{config_str}.json"
     results_full_path = os.path.join(project_root, results_file_path)
 
     try:
@@ -149,7 +149,7 @@ def visualize_results():
         return
 
     # Define the main output directory, now with a generic name
-    plot_output_dir = os.path.join(project_root, "real_data", "prediction_score_plots")
+    plot_output_dir = os.path.join(project_root, "data", "prediction_score_plots")
     os.makedirs(plot_output_dir, exist_ok=True)
 
     # Unleash our techniques!

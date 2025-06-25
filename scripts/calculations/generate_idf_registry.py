@@ -17,8 +17,8 @@ def forge_cursed_energy_registry():
     # Then, it navigates up to the project's main folder (from 'scripts/calculations/').
     project_root = script_path.parent.parent.parent
     
-    # Now, it can accurately target the 'real_data' folder from the project root.
-    data_folder = project_root / "real_data"
+    # Now, it can accurately target the 'data' folder from the project root.
+    data_folder = project_root / "data"
     input_data_path = data_folder / "all_patients_combined.json"
     output_registry_path = data_folder / "term_idf_registry.json"
 
@@ -27,7 +27,7 @@ def forge_cursed_energy_registry():
     print(f"Targeting Cursed Object at: {input_data_path}")
 
     if not input_data_path.exists():
-        print(f"ERROR: The Cursed Object is not in its vault! Make sure '{input_data_path.name}' exists in the 'real_data' folder.")
+        print(f"ERROR: The Cursed Object is not in its vault! Make sure '{input_data_path.name}' exists in the 'data' folder.")
         return
         
     # Ensure the containment vault exists. This is unchanged but now uses the correct path.
