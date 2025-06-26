@@ -1,72 +1,47 @@
+
 import json
 import pickle
 from pathlib import Path
-import torch
-from transformers import AutoTokenizer, AutoModel
+from sentence_transformers import SentenceTransformer
 
 def forge_innate_technique_library():
     """
-    Uses a pre-existing, locally stored BioBERT model to generate vector
-    embeddings for each unique medical term. This version points directly
-    to a known model path on the cluster.
+    Uses the all-mpnet-base-v2 model to generate sentence-level embeddings
+    for each unique medical term in the IDF registry.
     """
-    # --- Spatial awareness to find our input/output files ---
+    # --- Locate project paths ---
     script_path = Path(__file__).resolve()
     project_root = script_path.parent.parent.parent
     data_folder = project_root / "data"
-    
+
     input_registry_path = data_folder / "term_idf_registry.json"
-    output_library_path = data_folder / "term_embedding_library.pkl"
+    output_library_path = data_folder / "term_embedding_library_mpnet.pkl"
 
-    print("Beginning the final forging of the Innate Technique Library...")
-    
-    # --- Summoning the LOCAL Cursed Tool ---
-    # This is the absolute, hardcoded path to YOUR existing BioBERT model.
-    # No more complex pathfinding needed for the model itself!
-    local_model_path = "/home/librad.laureateinstitute.org/mferguson/models/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
+    print("🧬 Beginning the final forging of the Innate Technique Library (MPNet Edition)...")
 
-    print(f"Loading the pre-existing BioBERT model from: {local_model_path}")
+    # --- Load local SentenceTransformer model from cache ---
+    local_model_path = "/home/librad.laureateinstitute.org/mferguson/models/all-mpnet-base-v2"
+    print(f"🧠 Loading model from: {local_model_path}")
+    model = SentenceTransformer(local_model_path)
 
-    # The all-important binding vow: local_files_only=True
-    # This forbids the script from trying to access the internet.
-    tokenizer = AutoTokenizer.from_pretrained(local_model_path, local_files_only=True)
-    model = AutoModel.from_pretrained(local_model_path, local_files_only=True)
-    
-    print("BioBERT model is active and ready.")
-
-    # --- Load the list of all unique terms (our targets) ---
-    print(f"Loading all unique terms from {input_registry_path.name}...")
+    # --- Load the list of unique terms to embed ---
+    print(f"📚 Reading terms from: {input_registry_path.name}")
     with open(input_registry_path, 'r', encoding='utf-8') as f:
         idf_scores = json.load(f)
     terms_to_process = list(idf_scores.keys())
-    print(f"Found {len(terms_to_process)} unique terms to analyze.")
+    print(f"🔢 Total terms to embed: {len(terms_to_process)}")
 
-    # --- Channeling Cursed Energy to define each Innate Technique ---
-    print("Beginning vectorization process...")
-    embedding_library = {}
-    total_terms = len(terms_to_process)
+    # --- Generate embeddings ---
+    print("💥 Vectorizing terms...")
+    embeddings = model.encode(terms_to_process, batch_size=64, show_progress_bar=True)
 
-    for i, term in enumerate(terms_to_process):
-        inputs = tokenizer(term, return_tensors="pt", padding=True, truncation=True, max_length=512)
-
-        with torch.no_grad():
-            outputs = model(**inputs)
-
-        embedding = outputs.last_hidden_state.mean(dim=1).squeeze()
-        embedding_library[term] = embedding.cpu().numpy()
-
-        if (i + 1) % 100 == 0:
-            print(f"  ...processed {i + 1} / {total_terms} terms...")
-
-    print("All Innate Techniques have been defined.")
-
-    # --- Sealing the library into a powerful pickle file ---
-    print(f"Sealing the Technique Library into: {output_library_path}")
+    # --- Save the final library ---
+    print(f"💾 Saving new embedding library to: {output_library_path.name}")
+    embedding_library = {term: vec for term, vec in zip(terms_to_process, embeddings)}
     with open(output_library_path, 'wb') as f:
         pickle.dump(embedding_library, f)
 
-    print("\nRitual complete! The Innate Technique Library has been successfully forged!")
-
+    print("✅ Library generation complete! MPNet powers activated!")
 
 if __name__ == "__main__":
     forge_innate_technique_library()
