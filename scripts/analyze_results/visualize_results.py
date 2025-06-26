@@ -3,7 +3,7 @@ import os
 import json
 import pandas as pd
 from matplotlib import pyplot as plt
-import seaborn
+import seaborn as sns
 
 # --- Dynamic sys.path adjustment ---
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -105,7 +105,7 @@ def plot_individual_reports(df: pd.DataFrame, output_dir: str, config_str: str):
         })
 
         plt.figure(figsize=(8, 5))
-        sns.barplot(x='Category', y='Score', data=scores_df, palette='plasma')
+        sns.barplot(x='Category', y='Score', data=scores_df, palette='plasma', hue='Category', legend=False)
         
         plt.ylabel('Weighted Similarity Score')
         plt.title(f'Prediction Scores for Patient: {patient_id}')
@@ -132,10 +132,11 @@ def visualize_results():
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,
+        representation_method=args.representation_method,
     )
     global_config = get_global_config()
 
-    config_str = f"{global_config.num_patients}_{global_config.num_visits}_{global_config.vectorizer_method}_{global_config.distance_metric}"
+    config_str = f"{global_config.num_patients}_{global_config.num_visits}_{global_config.representation_method}_{global_config.vectorizer_method}_{global_config.distance_metric}"
     results_file_path = f"data/patient_results_{config_str}.json"
     results_full_path = os.path.join(project_root, results_file_path)
 
