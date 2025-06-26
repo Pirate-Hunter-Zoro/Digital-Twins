@@ -1,4 +1,13 @@
-# TODO List for Digital Twins Project
+# 🔄 Update: June 26, 2025 — Term Embedding Pipeline
+
+- The `data/combined_terms_for_embedding.json` file has been confirmed reusable across any sentence-transformer model.
+- Today's run used the fallback model: `BioBERT-mnli-mednli-stsb` (path: `../models/biobert-mnli-mednli`) to generate `term_embedding_library_mpnet_combined.pkl`.
+- Attempts to use more domain-specific models (e.g. `S-PubMedBert-MS-MARCO`) failed due to model compatibility or network issues.
+- The script [`generate_term_embeddings.py`](scripts/calculations/generate_term_embeddings_mpnet.py) loads the terms and model path dynamically and handles batched embedding.
+
+---
+
+## TODO List for Digital Twins Project
 
 ---
 

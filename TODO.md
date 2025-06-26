@@ -1,4 +1,10 @@
-# Project Gemini: TODO & Lab Notebook
+# June 26, 2025
+
+- [x] **Integrated Full Evaluation Pipeline**: The three key scripts now work together reliably (`prepare_combined_embedding_terms.py`, `generate_combined_term_embeddings_mpnet.py`, and `run_debug_eval.py`).
+- [x] **Defaulted to Working Embedder**: Due to multiple incompatibilities (HuggingFace SSL errors, `model_type` issues, numpy/tensor compatibility), we defaulted to `biobert-mnli-mednli` for now.
+- [ ] **Flagged Future Cleanup**: Legacy or unused scripts will be identified and removed after confirming that all new components are stable and modularized.
+
+## Project Gemini: TODO & Lab Notebook
 
 **Last Updated:** June 24, 2025
 **Current Phase:** Experimentation - Phase A (Representation Methods)

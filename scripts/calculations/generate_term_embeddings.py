@@ -1,47 +1,45 @@
-
 import json
 import pickle
-from pathlib import Path
+import os
+from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 
-def forge_innate_technique_library():
-    """
-    Uses the all-mpnet-base-v2 model to generate sentence-level embeddings
-    for each unique medical term in the IDF registry.
-    """
-    # --- Locate project paths ---
-    script_path = Path(__file__).resolve()
-    project_root = script_path.parent.parent.parent
-    data_folder = project_root / "data"
+# 🔧 Paths
+TERM_JSON_PATH = "data/combined_terms_for_embedding.json"
+OUTPUT_PATH = "data/term_embedding_library_mpnet_combined.pkl"
+MODEL_PATH = "/home/librad.laureateinstitute.org/mferguson/models/biobert-mnli-mednli"
 
-    input_registry_path = data_folder / "term_idf_registry.json"
-    output_library_path = data_folder / "term_embedding_library_mpnet.pkl"
+import re
 
-    print("🧬 Beginning the final forging of the Innate Technique Library (MPNet Edition)...")
+def clean_term(term: str) -> str:
+    term = term.lower().strip()
+    term = re.sub(r"\s*\([^)]*hcc[^)]*\)", "", term)
+    term = re.sub(r"\b\d{3}\.\d{1,2}\b", "", term)
+    blacklist = ["initial encounter", "unspecified", "nos", "nec", "<none>", "<None>", ";", ":"]
+    for noise in blacklist:
+        term = term.replace(noise, "")
+    term = re.sub(r"\s+", " ", term)
+    return term.strip()
 
-    # --- Load local SentenceTransformer model from cache ---
-    local_model_path = "/home/librad.laureateinstitute.org/mferguson/models/all-mpnet-base-v2"
-    print(f"🧠 Loading model from: {local_model_path}")
-    model = SentenceTransformer(local_model_path)
+print("🧬 MPNet Term Embedding — Enhanced Twin Edition")
+print(f"📥 Loading terms from: {TERM_JSON_PATH}")
 
-    # --- Load the list of unique terms to embed ---
-    print(f"📚 Reading terms from: {input_registry_path.name}")
-    with open(input_registry_path, 'r', encoding='utf-8') as f:
-        idf_scores = json.load(f)
-    terms_to_process = list(idf_scores.keys())
-    print(f"🔢 Total terms to embed: {len(terms_to_process)}")
+with open(TERM_JSON_PATH, "r") as f:
+    all_terms = json.load(f)
 
-    # --- Generate embeddings ---
-    print("💥 Vectorizing terms...")
-    embeddings = model.encode(terms_to_process, batch_size=64, show_progress_bar=True)
+terms_to_embed = sorted(set(clean_term(term) for term in all_terms if term and term.strip()))
 
-    # --- Save the final library ---
-    print(f"💾 Saving new embedding library to: {output_library_path.name}")
-    embedding_library = {term: vec for term, vec in zip(terms_to_process, embeddings)}
-    with open(output_library_path, 'wb') as f:
-        pickle.dump(embedding_library, f)
+print(f"🔢 Total terms to embed: {len(terms_to_embed)}")
+print(f"🧠 Loading MPNet model from: {MODEL_PATH}")
+model = SentenceTransformer(MODEL_PATH)
 
-    print("✅ Library generation complete! MPNet powers activated!")
+print("💥 Embedding in progress...")
+embeddings = model.encode(terms_to_embed, batch_size=64, show_progress_bar=True)
 
-if __name__ == "__main__":
-    forge_innate_technique_library()
+term_embeddings = {term: vector for term, vector in zip(terms_to_embed, embeddings)}
+
+print(f"💾 Saving to: {OUTPUT_PATH}")
+with open(OUTPUT_PATH, "wb") as f:
+    pickle.dump(term_embeddings, f)
+
+print("✅ Embedding complete! No term shall be left behind!")
