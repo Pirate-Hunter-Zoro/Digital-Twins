@@ -1,54 +1,72 @@
-# 🔄 Update: June 26, 2025 — Term Embedding Pipeline
+# Digital Twins: Predictive Patient Modeling
 
-- The `data/combined_terms_for_embedding.json` file has been confirmed reusable across any sentence-transformer model.
-- Today's run used the fallback model: `BioBERT-mnli-mednli-stsb` (path: `../models/biobert-mnli-mednli`) to generate `term_embedding_library_mpnet_combined.pkl`.
-- Attempts to use more domain-specific models (e.g. `S-PubMedBert-MS-MARCO`) failed due to model compatibility or network issues.
-- The script [`generate_term_embeddings.py`](scripts/calculations/generate_term_embeddings_mpnet.py) loads the terms and model path dynamically and handles batched embedding.
+## Project Phase: Experiment A – Representation Method Evaluation
 
 ---
 
-## TODO List for Digital Twins Project
+### ✅ Completed Milestones
+
+- **Integrated Full Evaluation Pipeline**  
+  (`prepare_combined_embedding_terms.py`, `generate_combined_term_embeddings_mpnet.py`, and `run_debug_eval.py` now work end-to-end.)
+- **Defaulted to Robust Embedder**  
+  Due to incompatibilities with other models, `biobert-mnli-mednli` is now the default transformer.
+- **Centralized Utilities and Config**  
+  Pathing, config, and embedding logic now modularized for consistent experiment replication.
 
 ---
 
-## PHASE 3: Agentic Workflow Redesign (Inspired by otto-SR)
+## 📍 Current Objectives: Experiment A
 
-This is the next major evolution of our project. Instead of a single, monolithic prompt-building process, we will re-architect the system into a pipeline of specialized agents.
+### 🎯 Immediate Goals
 
-- **[ ] Upgrade Module 1: Build the "Neighbor-Selection Protocol" (Screener Agent)**
-  - [ ] Define a detailed schema for inclusion/exclusion criteria for what constitutes a "good" neighbor patient. This goes beyond simple vector similarity.
-  - [ ] Implement a "Screener Agent" that takes a target patient and the protocol, and searches the entire patient database to return a high-quality list of neighbor IDs.
-
-- **[ ] Upgrade Module 2: Build the "Data-Extraction Engine" (Extractor Agent)**
-  - [ ] Create a dedicated "Extractor Agent" that can process a patient's full visit history.
-  - [ ] Instead of creating a long narrative string, this agent's job is to pull out specific, structured key-value pairs (e.g., `diagnosis: "Hypertension"`, `medication: "Lisinopril"`).
-  - [ ] The goal is to create a concise, data-rich, and token-efficient representation of the patient's history.
-
-- **[ ] The Grand Redesign: Implement the "Agentic Assembly Line"**
-  - [ ] **Agent 1 (Screener):** Takes target patient -> outputs perfect neighbor list.
-  - [ ] **Agent 2 (Extractor):** Takes target + neighbors -> outputs structured, token-efficient data for all of them.
-  - [ ] **Agent 3 (Synthesizer):** Takes the structured data from the Extractor -> builds the final, optimized prompt for the prediction model.
-  - [ ] Refactor `main.py` and `process_patient.py` to orchestrate this new three-agent pipeline.
+- [ ] **Monitor Slurm Jobs** (`run_visit_sentence.ssub`, `run_bag_of_codes.ssub`) and ensure they complete without failure.
+- [ ] **Run `visualize_results.py`** to evaluate:
+  - Visit-sentence-based representation
+  - Bag-of-codes-based representation
+- [ ] **Compare Score Distributions** to test Hypothesis H3.
 
 ---
 
-## PHASE 2: Performance & Evaluation
+## 🔭 Future Campaign: Embedding Evaluation, Metrics, Cleanup
 
-- **[ ] Analyze results from the "token fix" experiments.**
-  - [ ] Did reducing `max_tokens` in `query_llm.py` solve the issue?
-  - [ ] Did truncating the `history_section` in `query_and_response.py` prevent overloads for patients with long histories?
-  - [ ] How did reducing `--num_neighbors` affect performance and accuracy?
-- **[x] Visualize Results:** Enhance the `visualize_results.py` script to generate more insightful plots.
-  - [x] Box plots for score distributions.
-  - [x] Individual report plots for each patient.
-- **[x] Calculate Spearman's Rho:** Create a script to measure the correlation between LLM relevance scores and Mahalanobis distance to see if they align.
+### 🧪 Representation Variants
+
+- [ ] **[R4] Temporal Embedding**: Add positional encodings to encode visit order.
+- [ ] **[R5] Auto-summary Input**: Use LLM to summarize visit history pre-vectorization.
+
+### 🚫 (Deprecate TF-IDF Option)
+>
+> All embeddings should use sentence transformer models going forward.
+
+- [x] Remove TF-IDF logic from config and embedding flow.
+- [x] Update validation to expect e.g. `'biobert-mnli-mednli'`, not `"tfidf"`.
 
 ---
 
-## PHASE 1: Initial Implementation & Data Processing
+## ✨ NEW: Digital Twin Ground Truth Refactors
 
-- **[x] Fix Token Overload Errors:** Investigate and resolve the `BadRequestError` related to exceeding the model's maximum context length.
-- **[x] Implement Weighted Scoring:** Replace the Jaccard similarity score with a more sophisticated weighted score using IDF and semantic similarity (cosine similarity on embeddings).
-- **[x] Compute Nearest Neighbors:** Develop a script to find the nearest neighbors for each patient's visit sequence.
-- **[x] Generate Term Embeddings & IDF:** Create scripts to pre-calculate and save term embeddings (using BioBERT) and IDF scores for all medical terms in the dataset.
-- **[x] Process Raw Data:** Convert the raw CSV/SQLite data into a structured JSON format that's easier to work with.
+- [ ] **Refactor Output Flow**  
+  Ensure that:
+  - `main.py` saves the *raw LLM predictions* only (no similarity scores).
+  - Downstream evaluation (e.g., scoring, neighbor correlation) happens post-hoc via dedicated analysis scripts.
+- [ ] **Decouple Evaluation**  
+  Create explicit pipeline separation:
+  
+```text
+Step 1: run main.py → produces raw predictions JSON
+Step 2: run scoring scripts → attach scores + generate analysis
+Step 3: run spearman analysis, semantic match audits, etc.
+```
+
+---
+
+## 📎 Notes
+
+- Config now stores `representation_method`, `vectorizer_method`, and `distance_metric` independently for full reproducibility.
+- Embedded terms must be grouped by category (`diagnoses`, `medications`, `treatments`) before vectorization.
+- Scoring scripts use cosine similarity + IDF greedy matching to assess LLM output vs ground truth.
+
+---
+
+Updated: June 27, 2025  
+Maintainer: Mikey Ferguson 💡

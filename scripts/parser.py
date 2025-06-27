@@ -18,7 +18,7 @@ def parse_data_args():
     # --- NEW UPGRADE SLOT! ---
     parser.add_argument("--representation_method", type=str, default="visit_sentence", choices=["visit_sentence", "bag_of_codes"], help="Method for representing patient history.")
 
-    parser.add_argument("--vectorizer_method", type=str, default="sentence_transformer", choices=["sentence_transformer", "tfidf"], help="Method for vectorization.")
+    parser.add_argument("--vectorizer_method", type=str, default="biobert-mnli-medlini", choices=["biobert-mnli-medlini", "BioBERT-mnli-snli-scinli-scitail-mednli-stsb"], help="Method for vectorization.")
     parser.add_argument("--distance_metric", type=str, default="euclidean", choices=["cosine", "euclidean"], help="Distance metric for nearest neighbors.")
     parser.add_argument("--num_visits", type=int, default=6, help="Number of visits to consider for each patient history.")
     parser.add_argument("--num_patients", type=int, default=5000, help="Number of patients to process (random subset of the population).")
