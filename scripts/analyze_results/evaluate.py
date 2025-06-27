@@ -20,7 +20,7 @@ def cosine_similarity_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     b_norm = b / (np.linalg.norm(b, axis=1, keepdims=True) + 1e-8)
     return np.dot(a_norm, b_norm.T)
 
-def evaluate_prediction_by_category(predicted, actual, term_embeddings, similarity_threshold=0.4):
+def evaluate_prediction_by_category(predicted, actual, idf_registry, embedding_library):
     categories = ["diagnoses", "medications", "treatments"]
     results = {}
     
@@ -28,16 +28,13 @@ def evaluate_prediction_by_category(predicted, actual, term_embeddings, similari
         pred_terms = predicted.get(category, [])
         actual_terms = actual.get(category, [])
         
-        pred_vecs = [term_embeddings[clean_term(t)] for t in pred_terms if clean_term(t) in term_embeddings]
-        actual_vecs = [term_embeddings[clean_term(t)] for t in actual_terms if clean_term(t) in term_embeddings]
+        pred_vecs = [embedding_library[clean_term(t)] for t in pred_terms if clean_term(t) in embedding_library]
+        actual_vecs = [embedding_library[clean_term(t)] for t in actual_terms if clean_term(t) in embedding_library]
         
-        if not pred_vecs or not actual_vecs:
-            results[category] = 0.0
-            continue
-
-        sim_matrix = cosine_similarity_matrix(np.array(pred_vecs), np.array(actual_vecs))
-        matches = (sim_matrix.max(axis=1) >= similarity_threshold).sum()
-        score = matches / len(pred_terms)
+        score = 0.0
+        
+        
+        
         results[category] = score
 
     results["overall"] = np.mean(list(results.values()))
