@@ -36,6 +36,7 @@ def calculate_and_print_spearmans_rho():
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,
+        representation_method=args.representation_method,
     )
     global_config = get_global_config()
 

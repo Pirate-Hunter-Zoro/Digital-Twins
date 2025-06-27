@@ -205,6 +205,7 @@ if __name__ == "__main__":
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,
+        representation_method=args.representation_method,
     )
     
     # --- Collect patients to inspect ---
