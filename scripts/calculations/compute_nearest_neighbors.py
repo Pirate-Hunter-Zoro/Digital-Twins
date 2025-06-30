@@ -13,6 +13,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 # --- End of sys.path adjustment ---
 
+data_dir = os.path.join(project_root, "data")
+
 from scripts.config import get_global_config
 from scripts.common.utils import turn_to_sentence
 
@@ -74,10 +76,7 @@ def get_visit_vectors(
             all_keys.append((patient_id, end_idx))
             all_visit_strings.append(visit_string)
 
-    if get_global_config().vectorizer_method != "sentence_transformer":
-         raise ValueError("Experiment A requires 'sentence_transformer' as the vectorizer method.")
-
-    vectorizer_instance = SentenceTransformer("/home/librad.laureateinstitute.org/mferguson/models/BioBERT-mnli-snli-scinli-scitail-mednli-stsb", local_files_only=True)
+    vectorizer_instance = SentenceTransformer(f"/home/librad.laureateinstitute.org/mferguson/models/{get_global_config().vectorizer_method}", local_files_only=True)
     
     batch_size = 32
     print(f"Encoding visit strings with batch size: {batch_size}")
@@ -98,7 +97,10 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
     """
     config = get_global_config()
     # Updated to include representation method in filename!
-    neighbors_file_path = f"data/neighbors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.pkl"
+    neighbors_file_path = os.path.join(
+        data_dir,
+        f"neighbors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.pkl"
+    )
     
     try:
         with open(neighbors_file_path, "rb") as f:
@@ -108,7 +110,10 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
         print("Pre-computed neighbors not found. Calculating from scratch...")
         vectors_dict = get_visit_vectors(patient_data)
         
-        all_vectors_path = f"data/all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl"
+        all_vectors_path = os.path.join(
+            data_dir,
+            f"all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl"
+        )
         with open(all_vectors_path, "wb") as f:
             pickle.dump(vectors_dict, f)
         print(f"Saved all visit vectors to {all_vectors_path}")

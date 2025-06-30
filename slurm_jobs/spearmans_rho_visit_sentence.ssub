@@ -1,0 +1,38 @@
+#!/bin/bash
+#SBATCH --job-name=eval_visit_sentence
+#SBATCH --output=logs/eval_visit_sentence_%j_out.txt
+#SBATCH --error=logs/eval_visit_sentence_%j_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=64G
+#SBATCH --time=2:00:00
+
+NUM_PATIENTS=5000
+NUM_VISITS=6
+REPRESENTATION="visit_sentence"
+VECTORIZER="biobert-mnli-mednli"
+DISTANCE_METRIC="euclidean"
+NUM_NEIGHBORS=5
+
+echo "--- Evaluation Parameters ---"
+echo "Representation: $REPRESENTATION"
+echo "Vectorizer: $VECTORIZER"
+echo "Distance Metric: $DISTANCE_METRIC"
+
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
+
+$CONDA_PREFIX/bin/python scripts/evaluate.py \
+  --representation_method $REPRESENTATION \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS
+
+conda deactivate

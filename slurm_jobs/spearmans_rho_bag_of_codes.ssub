@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH --job-name=spearman_rho
+#SBATCH --output=logs/spearman_rho_%j_out.txt
+#SBATCH --error=logs/spearman_rho_%j_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --time=2:00:00
+
+# 🧾 Config
+NUM_PATIENTS=5000
+NUM_VISITS=6
+REPRESENTATION="bag_of_codes"
+VECTORIZER="biobert-mnli-mednli"
+DISTANCE_METRIC="euclidean"
+NUM_NEIGHBORS=5
+
+# 🧪 Logging
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+mkdir -p logs data
+
+# ⚙️ Environment
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
+
+log "Running calculate_spearmans_rho.py..."
+$CONDA_PREFIX/bin/python scripts/analyze_results/calculate_spearmans_rho.py \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --representation_method $REPRESENTATION \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS
+
+log "📊 Spearman correlation analysis complete!"

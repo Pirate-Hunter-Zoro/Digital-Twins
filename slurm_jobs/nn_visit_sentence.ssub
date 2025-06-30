@@ -1,24 +1,24 @@
 #!/bin/bash
-#SBATCH --job-name=exp_A_visit_sentence
-#SBATCH --output=logs/exp_A_visit_sentence_%j_out.txt
-#SBATCH --error=logs/exp_A_visit_sentence_%j_err.txt
+#SBATCH --job-name=nn_calc_visit_sentence
+#SBATCH --output=logs/nn_calc_visit_sentence_%j_out.txt
+#SBATCH --error=logs/nn_calc_visit_sentence_%j_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=160G
 #SBATCH --gres=gpu:1
-#SBATCH --time=9:00:00
+#SBATCH --time=3:00:00
 
 NUM_PATIENTS=5000
 NUM_VISITS=6
 REPRESENTATION="visit_sentence"
 VECTORIZER="biobert-mnli-mednli"
 DISTANCE_METRIC="euclidean"
-NUM_NEIGHBORS=5
+NUM_NEIGHBORS=10
 NUM_WORKERS=60
 
-echo "--- LLM Digital Twin Parameters ---"
+echo "--- Nearest Neighbor Parameters ---"
 echo "Representation: $REPRESENTATION"
 echo "Vectorizer: $VECTORIZER"
 echo "Distance Metric: $DISTANCE_METRIC"
@@ -29,30 +29,14 @@ conda activate vllm_env
 
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
 
-echo "$(date): Starting vLLM server in background..."
-vllm serve unsloth/medgemma-27b-text-it-bnb-4bit \
-  --dtype float16 \
-  --served-model-name medgemma \
-  --gpu-memory-utilization 0.5 \
-  --host 0.0.0.0 \
-  --max-model-len 5000 > logs/vllm_server.log 2>&1 &
-VLLM_PID=$!
-
-trap "kill -TERM $VLLM_PID && wait $VLLM_PID 2>/dev/null" EXIT
-
-echo "$(date): Waiting for vLLM server to be ready..."
-for i in {1..240}; do
-  curl -s http://localhost:8000/health && break
-  sleep 5
-done
-
-$CONDA_PREFIX/bin/python scripts/main.py \
+echo "$(date): Running nearest neighbor computation..."
+$CONDA_PREFIX/bin/python scripts/calculations/compute_nearest_neighbors.py \
   --representation_method $REPRESENTATION \
   --num_patients $NUM_PATIENTS \
   --num_visits $NUM_VISITS \
   --vectorizer_method $VECTORIZER \
   --distance_metric $DISTANCE_METRIC \
-  --num_neighbors $NUM_NEIGHBORS \
-  --workers $NUM_WORKERS
+  --num_neighbors $NUM_NEIGHBORS
+echo "$(date): Neighbor computation complete."
 
 conda deactivate
