@@ -1,80 +1,37 @@
-import sys
-import os
-
-# --- Dynamic sys.path adjustment for module imports ---
-# Get the absolute path to the directory containing the current script
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Calculate the project root.
-project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
-
-# Add the project root to sys.path if it's not already there.
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-# --- End of sys.path adjustment ---
-
-from scripts.analyze_results.evaluate import evaluate_prediction_by_category
-from scripts.llm.query_and_response import force_valid_prediction, generate_prompt
+import json
+from pathlib import Path
 from scripts.config import get_global_config
 
-def process_patient(patient: dict, idf_registry: dict, embedding_library: dict) -> tuple[str, dict]:
-    """
-    Processes a single patient's data to generate a prediction for their next visit,
-    evaluate it against the actual visit, and return the results.
-
-    Args:
-        patient (dict): A dictionary containing the patient's data, including their ID and a list of visits.
-        idf_registry (dict): A dictionary mapping medical terms to their IDF scores.
-        embedding_library (dict): A dictionary mapping medical terms to their vector embeddings.
-
-    Returns:
-        tuple[str, dict]: A tuple containing the patient's ID and a dictionary with either the
-                          prediction results or an error message.
-    """
-    try:
-        # Check if the patient has enough visits before generating a prompt
-        if len(patient["visits"]) < get_global_config().num_visits:
-            return patient["patient_id"], {"error": f"Not enough visits ({len(patient['visits'])}) for prediction with num_visits={get_global_config().num_visits}"}
-
-        # Generate the prompt and get a prediction from the LLM
-        prompt = generate_prompt(patient)
-        predicted_next_visit = force_valid_prediction(prompt)
-
-        # --- FIX APPLIED ---
-        # 1. Define the actual_next_visit using the correct index from the config
-        actual_next_visit = patient["visits"][get_global_config().num_visits - 1]
-
-        # 2. Extract the specific string values from the lists of dictionaries
-        actual_dx_list = [
-            d.get("Diagnosis_Name") for d in actual_next_visit.get("diagnoses", []) if d.get("Diagnosis_Name")
-        ]
-        actual_med_list = [
-            m.get("MedSimpleGenericName") for m in actual_next_visit.get("medications", []) if m.get("MedSimpleGenericName")
-        ]
-        actual_proc_list = [
-            p.get("CPT_Procedure_Description") for p in actual_next_visit.get("treatments", []) if p.get("CPT_Procedure_Description")
-        ]
-
-        # 3. Create the 'actual' dictionary from the clean lists of strings, now ready for set conversion
-        actual = {
-            "diagnoses": set(actual_dx_list),
-            "medications": set(actual_med_list),
-            "treatments": set(actual_proc_list)
+def process_patient_records(raw_data):
+    processed = {}
+    for patient_id, entry in raw_data.items():
+        processed[patient_id] = {
+            "visit_idx": entry.get("visit_idx", -1),
+            "predicted": entry.get("predicted", {}),
+            "actual": entry.get("actual", {})
         }
-        
-        # Evaluate the prediction against the actual data
-        scores = evaluate_prediction_by_category(predicted_next_visit, actual, idf_registry, embedding_library)
+    return processed
 
-        # Compile the final result object
-        result = {
-                "visit_idx": get_global_config().num_visits - 1,
-                "predicted": predicted_next_visit,
-                "actual": actual,
-                "scores": scores
-            }
-        return patient["patient_id"], result
-    except Exception as e:
-        # Catch any other unexpected errors during processing
-        print(f"Error processing patient {patient.get('patient_id', 'unknown')}: {e}", file=sys.stderr)
-        return patient.get("patient_id", "unknown"), {"error": str(e)}
+def main():
+    config = get_global_config()
+    ROOT_DIR = Path(__file__).resolve().parents[2]
+    
+    input_path = ROOT_DIR / "data" / "raw_predictions.json"  # adjust if needed
+    output_filename = f"patient_results_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.json"
+    output_path = ROOT_DIR / "data" / output_filename
 
+    print(f"📂 Loading raw data from: {input_path}")
+    with open(input_path, "r") as f:
+        raw_data = json.load(f)
+
+    print("🔍 Processing patient records...")
+    cleaned_data = process_patient_records(raw_data)
+
+    print(f"💾 Saving cleaned patient predictions (NO SCORES) to: {output_path}")
+    with open(output_path, "w") as f:
+        json.dump(cleaned_data, f, indent=2)
+
+    print("✅ Done! Your patient records are clean and evaluation-free.")
+
+if __name__ == "__main__":
+    main()
