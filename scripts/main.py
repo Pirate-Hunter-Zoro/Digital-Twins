@@ -66,7 +66,7 @@ if __name__ == "__main__":
     try:
         with open('data/term_idf_registry.json', 'r') as f:
             idf_registry = json.load(f)
-        with open('data/term_embedding_library.pkl', 'rb') as f:
+        with open("data/term_embedding_library_by_category.pkl", "rb") as f:
             embedding_library = pickle.load(f)
         print("...Shared data loaded and ready!")
     except FileNotFoundError as e:
