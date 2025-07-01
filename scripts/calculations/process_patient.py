@@ -10,10 +10,18 @@ if project_root not in sys.path:
 
 from scripts.llm.query_and_response import generate_prompt, force_valid_prediction
 
+setup_done = False
+
 def process_patient(patient_dict):
     """
     Given a patient dict, generate a prompt and return LLM predictions.
     """
+    global setup_done
+    if not setup_done:
+        from scripts.llm.query_and_response import setup_prompt_generation
+        setup_prompt_generation()
+        setup_done = True
+    
     prompt = generate_prompt(patient_dict)
     prediction = force_valid_prediction(prompt)
-    return prediction
+    return patient_dict['patient_id'], prediction

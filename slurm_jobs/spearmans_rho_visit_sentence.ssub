@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=eval_visit_sentence
-#SBATCH --output=logs/eval_visit_sentence_%j_out.txt
-#SBATCH --error=logs/eval_visit_sentence_%j_err.txt
+#SBATCH --output=logs/spearman_rho_%j_visit_sentence_out.txt
+#SBATCH --error=logs/spearman_rho_%j_visit_sentence_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -21,13 +21,27 @@ echo "Representation: $REPRESENTATION"
 echo "Vectorizer: $VECTORIZER"
 echo "Distance Metric: $DISTANCE_METRIC"
 
+# --- Environment Setup ---
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate vllm_env
 
+# --- Navigate to Project Directory ---
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
 
-$CONDA_PREFIX/bin/python scripts/evaluate.py \
+# --- 👁️ Examine Nearest Neighbor Relationships First ---
+echo "$(date): Running neighbor inspection (examine_nearby_patients.py)..."
+$CONDA_PREFIX/bin/python scripts/calculations/examine_nearby_patients.py \
+  --representation_method $REPRESENTATION \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS
+
+# --- 🧠 Run Evaluation Script ---
+echo "$(date): Running evaluation..."
+$CONDA_PREFIX/bin/python scripts/analyze_results/evaluate.py \
   --representation_method $REPRESENTATION \
   --num_patients $NUM_PATIENTS \
   --num_visits $NUM_VISITS \

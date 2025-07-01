@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=spearman_rho
-#SBATCH --output=logs/spearman_rho_%j_out.txt
-#SBATCH --error=logs/spearman_rho_%j_err.txt
+#SBATCH --output=logs/spearman_rho_%j_bag_of_codes_out.txt
+#SBATCH --error=logs/spearman_rho_%j_bag_of_codes_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -27,6 +27,15 @@ source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate vllm_env
 
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
+
+echo "$(date): Running neighbor inspection (examine_nearby_patients.py)..."
+$CONDA_PREFIX/bin/python scripts/calculations/examine_nearby_patients.py \
+  --representation_method $REPRESENTATION \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS
 
 log "Running calculate_spearmans_rho.py..."
 $CONDA_PREFIX/bin/python scripts/analyze_results/calculate_spearmans_rho.py \

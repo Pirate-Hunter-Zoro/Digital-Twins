@@ -25,8 +25,7 @@ def load_patient_data() -> list[dict]:
     Loads real patient data from all_patients_combined.json and transforms it
     to match the 'visits' structure expected by downstream scripts.
     """
-    global_config = get_global_config()
-
+    
     # Define the path to your combined real patient data JSON file
     # This path should match output_json_dir from process_data.py
     data_combined_json_path = os.path.join(

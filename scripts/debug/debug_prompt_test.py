@@ -12,7 +12,6 @@ if project_root not in sys.path:
 # --- Imports ---
 from scripts.read_data.load_patient_data import load_patient_data
 from scripts.calculations.process_patient import (
-    setup_prompt_generation,
     generate_prompt,
     force_valid_prediction
 )
@@ -21,7 +20,6 @@ from scripts.calculations.process_patient import (
 def main():
     print("🧪 Debugging prompt generation + LLM prediction pipeline...")
 
-    setup_prompt_generation()
     patients = load_patient_data()
 
     # Choose the first valid patient with enough visits

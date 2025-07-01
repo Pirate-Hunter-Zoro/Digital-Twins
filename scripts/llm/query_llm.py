@@ -24,19 +24,18 @@ if project_root not in sys.path:
 import json
 from openai import APIConnectionError, OpenAI
 
-# Lazy singleton pattern so we only load the model once
-_llm_client = None
+import contextvars
+_llm_client_var = contextvars.ContextVar("llm_client", default=None)
 
 def get_llm_client():
-    global _llm_client
-    if _llm_client is None:
-            _llm_client = OpenAI(
-                base_url="http://localhost:8000/v1",
-                api_key="not-needed-for-localhost",
-            )
-    return _llm_client
-
-import re
+    client = _llm_client_var.get()
+    if client is None:
+        client = OpenAI(
+            base_url="http://localhost:8000/v1",
+            api_key="not-needed-for-localhost",
+        )
+        _llm_client_var.set(client)
+    return client
 
 import re
 import json
@@ -93,6 +92,8 @@ def query_llm(prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> s
         response = output.choices[0].message.content
     except APIConnectionError as e:
         response = f"ERROR: API connection failed - {str(e)}"
+    except Exception as e:
+        response = f"ERROR: Unexpected LLM error - {str(e)}"
 
     with open(f"data/debug_prompts_and_responses.jsonl", "a") as f:
         f.write(json.dumps({"prompt": prompt, "response": response}) + "\n")

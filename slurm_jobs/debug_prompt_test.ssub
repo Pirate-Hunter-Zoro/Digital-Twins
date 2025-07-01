@@ -16,7 +16,6 @@ MODEL_PATH="unsloth/medgemma-27b-text-it-bnb-4bit"
 # === 🧬 Environment Setup ===
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
-conda activate vllm_env
 
 # === 🧭 Navigate to Project Root ===
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
@@ -45,6 +44,6 @@ done
 
 # === 🧠 Run Debug Prompt Script ===
 echo "$(date): Running prompt test..."
-python scripts/debug/debug_prompt_test.py
+conda run -n vllm_env python scripts/debug/debug_prompt_test.py
 
 echo "$(date): Debug prompt test complete!"

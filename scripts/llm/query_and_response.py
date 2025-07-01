@@ -189,20 +189,18 @@ def parse_llm_response(response: str) -> dict[str, set[str]]:
 
 
 def force_valid_prediction(prompt: str, max_retries: int = 5) -> dict[str, set[str]]:
-    """
-    Queries the LLM and retries if the response is empty.
-    """
     for i in range(max_retries):
-        print(f"\n--- QUERY ATTEMPT {i+1} ---")
-        print("📤 PROMPT SENT TO LLM:\n", prompt[:1000], "...\n")  # Truncate if needed
-        raw_response = query_llm(prompt)
-        print("📥 RAW RESPONSE:\n", raw_response)
+        try:
+            raw_response = query_llm(prompt)
+        except Exception as e:
+            print(f"Error during LLM query on attempt {i+1}: {e}")
+            continue
 
         predicted = parse_llm_response(raw_response)
         if any(predicted.values()):
             return predicted
 
-        print(f"Warning: Empty or invalid response from LLM on try {i+1}. Retrying...\n")
+        print(f"Warning: Empty or invalid response from LLM on try {i+1}. Retrying...")
 
-    print(f"❌ Error: Could not get a valid prediction after {max_retries} retries.", file=sys.stderr)
+    print(f"Error: Could not get a valid prediction after {max_retries} retries.", file=sys.stderr)
     return {"diagnoses": set(), "medications": set(), "treatments": set()}
