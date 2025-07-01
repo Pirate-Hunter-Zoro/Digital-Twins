@@ -95,27 +95,45 @@ def generate_prompt(patient: dict) -> str:
     global nearest_neighbors_data, all_response_options, patient_data_lookup
 
     patient_id = patient["patient_id"]
-    num_visits_for_history = get_global_config().num_visits - 1
-    
+    config = get_global_config()
+    num_visits_for_history = config.num_visits - 1
     patient_key = (patient_id, num_visits_for_history)
+    representation_method = config.representation_method
 
-    history_section = "\n".join(f"Visit {i}: {turn_to_sentence(visit)}" for i, visit in enumerate(patient["visits"][:num_visits_for_history]))
+    # --- Build patient history depending on method ---
+    if representation_method == "visit_sentence":
+        history_section = "\n".join(
+            f"Visit {i}: {turn_to_sentence(visit)}"
+            for i, visit in enumerate(patient["visits"][:num_visits_for_history])
+        )
+    elif representation_method == "bag_of_codes":
+        history_items = []
+        for i, visit in enumerate(patient["visits"][:num_visits_for_history]):
+            codes = []
+            codes.extend(d.get("Diagnosis_Name") for d in visit.get("diagnoses", []) if d.get("Diagnosis_Name"))
+            codes.extend(m.get("MedSimpleGenericName") for m in visit.get("medications", []) if m.get("MedSimpleGenericName"))
+            codes.extend(p.get("CPT_Procedure_Description") for p in visit.get("treatments", []) if p.get("CPT_Procedure_Description"))
+            codes = ", ".join(filter(None, codes))
+            history_items.append(f"Visit {i}: {codes}")
+        history_section = "\n".join(history_items)
+    else:
+        raise ValueError(f"Unsupported representation method: {representation_method}")
 
-    # A rough estimate: 1 token ~ 4 chars. Let's cap the history at around 1500 tokens.
-    max_history_chars = 1500 * 4 
+    # --- Trim history if needed ---
+    max_history_chars = 1500 * 4
     if len(history_section) > max_history_chars:
-        # Trim from the beginning of the string to keep the most recent data!
         history_section = history_section[-max_history_chars:]
-    
+
+    # --- Neighbor summary ---
     relevant_neighbors = nearest_neighbors_data.get(patient_key, [])
     neighbor_narratives = [
         get_narrative(patient_data_lookup[neighbor_id]["visits"][:neighbor_vidx + 1])
-        for (neighbor_id, neighbor_vidx), _, _ in relevant_neighbors[:get_global_config().num_neighbors]
+        for (neighbor_id, neighbor_vidx), _, _ in relevant_neighbors[:config.num_neighbors]
         if neighbor_id in patient_data_lookup
     ]
-    
     neighbor_summary_section = summarize_neighbor_narratives(neighbor_narratives)
 
+    # --- Random response options ---
     random_diagnoses = ', '.join(random.sample(all_response_options["diagnoses"], min(len(all_response_options["diagnoses"]), 3)))
     random_medications = ', '.join(random.sample(all_response_options["medications"], min(len(all_response_options["medications"]), 3)))
     random_treatments = ', '.join(random.sample(all_response_options["treatments"], min(len(all_response_options["treatments"]), 3)))
@@ -142,8 +160,8 @@ def generate_prompt(patient: dict) -> str:
     Diagnoses: E11.9, I10; Medications: Metformin; Treatments: Physical therapy referral
     
     ### BEGIN RESPONSE
-    """)
-    
+    """).strip()
+
     return prompt
 
 
@@ -175,13 +193,16 @@ def force_valid_prediction(prompt: str, max_retries: int = 5) -> dict[str, set[s
     Queries the LLM and retries if the response is empty.
     """
     for i in range(max_retries):
+        print(f"\n--- QUERY ATTEMPT {i+1} ---")
+        print("📤 PROMPT SENT TO LLM:\n", prompt[:1000], "...\n")  # Truncate if needed
         raw_response = query_llm(prompt)
+        print("📥 RAW RESPONSE:\n", raw_response)
+
         predicted = parse_llm_response(raw_response)
-        
         if any(predicted.values()):
             return predicted
-        
-        print(f"Warning: Empty or invalid response from LLM on try {i+1}. Retrying...")
-    
-    print(f"Error: Could not get a valid prediction after {max_retries} retries.", file=sys.stderr)
+
+        print(f"Warning: Empty or invalid response from LLM on try {i+1}. Retrying...\n")
+
+    print(f"❌ Error: Could not get a valid prediction after {max_retries} retries.", file=sys.stderr)
     return {"diagnoses": set(), "medications": set(), "treatments": set()}

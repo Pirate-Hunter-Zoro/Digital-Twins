@@ -61,18 +61,6 @@ if __name__ == "__main__":
 
     all_results = {}
     patients_processed = 0
-    
-    print("\n--- Loading Shared Data Libraries ---")
-    try:
-        with open('data/term_idf_registry.json', 'r') as f:
-            idf_registry = json.load(f)
-        with open("data/term_embedding_library_by_category.pkl", "rb") as f:
-            embedding_library = pickle.load(f)
-        print("...Shared data loaded and ready!")
-    except FileNotFoundError as e:
-        print(f"ERROR: Could not load required data libraries: {e}", file=sys.stderr)
-        print("Please ensure you have run 'generate_idf_registry.py' and 'generate_term_embeddings.py' first.", file=sys.stderr)
-        sys.exit(1)
 
     setup_prompt_generation()
     
