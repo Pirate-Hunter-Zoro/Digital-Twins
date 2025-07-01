@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --job-name=cosine_analysis
+#SBATCH --output=logs/compute_nearest_neighbors_%j_out.txt
+#SBATCH --error=logs/compute_nearest_neighbors_%j_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --time=9:00:00
+
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
+
+conda run -n vllm_env python scripts/calculations/compute_nearest_neighbors.py
+
+echo "✅ Done generating cosine similarity plots!"

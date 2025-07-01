@@ -140,3 +140,25 @@ def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, i
         print(f"Saved newly computed neighbors to {neighbors_file_path}")
         
     return neighbors
+
+if __name__ == "__main__":
+    from scripts.config import setup_config
+    from scripts.read_data.load_patient_data import load_patient_data
+
+    # === Default Config (you can override with argparse/env later if desired) ===
+    setup_config(
+        representation_method="visit_sentence",      # or "bag_of_codes"
+        vectorizer_method="biobert-mnli-mednli",     # match one of your downloaded models
+        distance_metric="euclidean",
+        num_visits=6,
+        num_patients=5000,
+        num_neighbors=5
+    )
+
+    print("📦 Loading patient data...")
+    patient_data = load_patient_data()
+    print(f"✅ Loaded {len(patient_data)} patients.")
+
+    print("🔍 Computing neighbors...")
+    _ = get_neighbors(patient_data)
+    print("🎉 Done! Neighbor data is cached.")
