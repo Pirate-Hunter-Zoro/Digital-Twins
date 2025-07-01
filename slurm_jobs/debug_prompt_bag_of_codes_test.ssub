@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=debug_prompt_test
-#SBATCH --output=logs/debug_prompt_test_%j_out.txt
-#SBATCH --error=logs/debug_prompt_test_%j_err.txt
+#SBATCH --output=logs/debug_prompt_test_bag_of_codes_%j_out.txt
+#SBATCH --error=logs/debug_prompt_test_bag_of_codes_%j_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -44,6 +44,13 @@ done
 
 # === 🧠 Run Debug Prompt Script ===
 echo "$(date): Running prompt test..."
-conda run -n vllm_env python scripts/debug/debug_prompt_test.py
+echo "$(date): Running prompt test..."
+conda run -n vllm_env python scripts/debug/debug_prompt_test.py \
+  --representation_method bag_of_codes \
+  --vectorizer_method biobert-mnli-mednli \
+  --distance_metric euclidean \
+  --num_visits 6 \
+  --num_patients 5000 \
+  --num_neighbors 5
 
 echo "$(date): Debug prompt test complete!"

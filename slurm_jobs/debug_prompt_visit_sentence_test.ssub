@@ -1,0 +1,55 @@
+#!/bin/bash
+#SBATCH --job-name=debug_prompt_test
+#SBATCH --output=logs/debug_prompt_test_visit_sentence_%j_out.txt
+#SBATCH --error=logs/debug_prompt_test_visit_sentence_%j_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=80G
+#SBATCH --gres=gpu:1
+#SBATCH --time=1:00:00
+
+# === 🧪 Config Parameters ===
+MODEL_PATH="unsloth/medgemma-27b-text-it-bnb-4bit"
+
+# === 🧬 Environment Setup ===
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+
+# === 🧭 Navigate to Project Root ===
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
+
+# === 🚀 Launch vLLM Server in Background ===
+echo "$(date): Starting vLLM server..."
+vllm serve $MODEL_PATH \
+  --dtype float16 \
+  --served-model-name medgemma \
+  --gpu-memory-utilization 0.5 \
+  --host 0.0.0.0 \
+  --max-model-len 5000 > logs/vllm_debug_server.log 2>&1 &
+
+VLLM_PID=$!
+trap "kill $VLLM_PID" EXIT
+
+# === ⏱ Wait for Server to Be Ready ===
+echo "$(date): Waiting for vLLM to be healthy..."
+for i in {1..120}; do
+  if curl -s http://localhost:8000/health | grep -q "OK"; then
+    echo "$(date): vLLM is healthy!"
+    break
+  fi
+  sleep 2
+done
+
+# === 🧠 Run Debug Prompt Script ===
+echo "$(date): Running prompt test..."
+conda run -n vllm_env python scripts/debug/debug_prompt_test.py \
+  --representation_method visit_sentence \
+  --vectorizer_method biobert-mnli-mednli \
+  --distance_metric euclidean \
+  --num_visits 6 \
+  --num_patients 5000 \
+  --num_neighbors 5
+
+echo "$(date): Debug prompt test complete!"

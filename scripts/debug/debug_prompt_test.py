@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+import argparse
 from pathlib import Path
 
 # --- Dynamic sys.path adjustment ---
@@ -11,38 +12,47 @@ if project_root not in sys.path:
 
 # --- Imports ---
 from scripts.read_data.load_patient_data import load_patient_data
-from scripts.calculations.process_patient import (
-    generate_prompt,
-    force_valid_prediction
-)
-
 from scripts.llm.query_and_response import setup_prompt_generation, generate_prompt, force_valid_prediction
-from scripts.read_data.load_patient_data import load_patient_data
+from scripts.config import setup_config
+
+
+def parse_debug_args():
+    parser = argparse.ArgumentParser(description="Debug Prompt Tester")
+
+    parser.add_argument("--representation_method", type=str, required=True)
+    parser.add_argument("--vectorizer_method", type=str, required=True)
+    parser.add_argument("--distance_metric", type=str, default="euclidean")
+    parser.add_argument("--num_visits", type=int, default=6)
+    parser.add_argument("--num_patients", type=int, default=5000)
+    parser.add_argument("--num_neighbors", type=int, default=5)
+
+    return parser.parse_args()
+
 
 def main():
-    setup_prompt_generation()  # <<<<<<<<<<<< THIS LINE IS MANDATORY
+    args = parse_debug_args()
+    setup_config(
+        representation_method=args.representation_method,
+        vectorizer_method=args.vectorizer_method,
+        distance_metric=args.distance_metric,
+        num_visits=args.num_visits,
+        num_patients=args.num_patients,
+        num_neighbors=args.num_neighbors
+    )
+
+    setup_prompt_generation()
 
     print("🧪 Debugging prompt generation + LLM prediction pipeline...")
 
     patients = load_patient_data()
 
     # Choose the first valid patient with enough visits
-    from scripts.config import setup_config
-    setup_config(
-        representation_method="bag_of_codes",
-        vectorizer_method="biobert-mnli-mednli",
-        distance_metric="euclidean",
-        num_visits=6,
-        num_patients=5000,
-        num_neighbors=5,
-    )
-
     for patient in patients:
-        if len(patient.get("visits", [])) >= 6:
+        if len(patient.get("visits", [])) >= args.num_visits:
             print(f"🎯 Using Patient ID: {patient['patient_id']}")
             break
     else:
-        raise ValueError("No patients with at least 6 visits!")
+        raise ValueError("No patients with enough visits!")
 
     prompt = generate_prompt(patient)
     print("\n📝 Generated Prompt:\n" + "-" * 60)
