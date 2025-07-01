@@ -75,15 +75,11 @@ if __name__ == "__main__":
         sys.exit(1)
 
     setup_prompt_generation()
-
-    worker_with_data = partial(process_patient, 
-                               idf_registry=idf_registry, 
-                               embedding_library=embedding_library)
     
     print(f"\n--- Starting Prediction Pool with {args.workers} Workers ---")
     process_pool = Pool(processes=args.workers)
     
-    pool_results = process_pool.imap_unordered(worker_with_data, patient_data_filtered)
+    pool_results = process_pool.imap_unordered(process_patient, patient_data_filtered)
     
     # Filename now includes representation_method for perfect separation of experiment results!
     output_file = f"data/patient_results_{global_config.num_patients}_{global_config.num_visits}_{global_config.representation_method}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
