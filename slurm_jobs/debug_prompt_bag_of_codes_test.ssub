@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=80G
 #SBATCH --gres=gpu:1
-#SBATCH --time=1:00:00
+#SBATCH --time=9:00:00
 
 # === 🧪 Config Parameters ===
 MODEL_PATH="unsloth/medgemma-27b-text-it-bnb-4bit"

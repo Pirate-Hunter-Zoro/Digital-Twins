@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=64G
-#SBATCH --time=2:00:00
+#SBATCH --time=9:00:00
 
 NUM_PATIENTS=5000
 NUM_VISITS=6

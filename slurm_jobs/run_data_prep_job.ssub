@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64 # Process_data.py uses many CPUs for Pandas
 #SBATCH --mem=160G # Process_data.py can use a lot of RAM
-#SBATCH --time=04:00:00 # Adjust based on expected data prep time
+#SBATCH --time=9:00:00 # Adjust based on expected data prep time
 #SBATCH --output=logs/data_prep_%j_stdout.txt
 #SBATCH --error=logs/data_prep_%j_stderr.txt
 

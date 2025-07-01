@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=160G
 #SBATCH --gres=gpu:1
-#SBATCH --time=3:00:00
+#SBATCH --time=9:00:00
 
 NUM_PATIENTS=5000
 NUM_VISITS=6
