@@ -16,8 +16,12 @@ from scripts.calculations.process_patient import (
     force_valid_prediction
 )
 
-# --- Main ---
+from scripts.llm.query_and_response import setup_prompt_generation, generate_prompt, force_valid_prediction
+from scripts.read_data.load_patient_data import load_patient_data
+
 def main():
+    setup_prompt_generation()  # <<<<<<<<<<<< THIS LINE IS MANDATORY
+
     print("🧪 Debugging prompt generation + LLM prediction pipeline...")
 
     patients = load_patient_data()

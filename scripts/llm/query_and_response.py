@@ -125,6 +125,9 @@ def generate_prompt(patient: dict) -> str:
         history_section = history_section[-max_history_chars:]
 
     # --- Neighbor summary ---
+    if nearest_neighbors_data is None:
+        raise RuntimeError("🚨 Nearest neighbor data is not initialized! Did you call setup_prompt_generation()?")
+
     relevant_neighbors = nearest_neighbors_data.get(patient_key, [])
     neighbor_narratives = [
         get_narrative(patient_data_lookup[neighbor_id]["visits"][:neighbor_vidx + 1])
