@@ -1,36 +1,59 @@
 #!/bin/bash
-#SBATCH --job-name=eval_visit_sentence
+#SBATCH --job-name=spearman_rho
 #SBATCH --output=logs/spearman_rho_%j_visit_sentence_out.txt
 #SBATCH --error=logs/spearman_rho_%j_visit_sentence_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
+#SBATCH --gres=gpu:1
 #SBATCH --time=9:00:00
 
+# 🧾 Config
 NUM_PATIENTS=5000
 NUM_VISITS=6
 REPRESENTATION="visit_sentence"
 VECTORIZER="biobert-mnli-mednli"
 DISTANCE_METRIC="euclidean"
 NUM_NEIGHBORS=5
+MODEL_PATH="unsloth/medgemma-27b-text-it-bnb-4bit"
 
-echo "--- Evaluation Parameters ---"
-echo "Representation: $REPRESENTATION"
-echo "Vectorizer: $VECTORIZER"
-echo "Distance Metric: $DISTANCE_METRIC"
+# 🧪 Logging
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+mkdir -p logs data
 
-# --- Environment Setup ---
+# ⚙️ Environment
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate vllm_env
 
-# --- Navigate to Project Directory ---
-cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
 
-# --- 👁️ Examine Nearest Neighbor Relationships First ---
-echo "$(date): Running neighbor inspection (examine_nearby_patients.py)..."
+# 🚀 Start vLLM server in background
+log "Starting vLLM server..."
+vllm serve $MODEL_PATH \
+  --dtype float16 \
+  --served-model-name medgemma \
+  --gpu-memory-utilization 0.5 \
+  --host 0.0.0.0 \
+  --max-model-len 5000 > logs/vllm_spearman_server.log 2>&1 &
+
+VLLM_PID=$!
+trap "kill $VLLM_PID" EXIT
+
+# ⏱ Wait until vLLM is ready
+log "Waiting for vLLM to be healthy..."
+for i in {1..120}; do
+  if curl -s http://localhost:8000/health | grep -q "OK"; then
+    log "vLLM is healthy!"
+    break
+  fi
+  sleep 2
+done
+
+# 🔬 Run Spearman correlation analysis
+log "Running examine_nearby_patients.py (Spearman's Rho)..."
 $CONDA_PREFIX/bin/python scripts/calculations/examine_nearby_patients.py \
   --representation_method $REPRESENTATION \
   --num_patients $NUM_PATIENTS \
@@ -39,10 +62,4 @@ $CONDA_PREFIX/bin/python scripts/calculations/examine_nearby_patients.py \
   --distance_metric $DISTANCE_METRIC \
   --num_neighbors $NUM_NEIGHBORS
 
-conda run -n vllm_env python scripts/analyze_results/calculate_spearmans_rho.py \
-  --representation_method $REPRESENTATION \
-  --num_patients $NUM_PATIENTS \
-  --num_visits $NUM_VISITS \
-  --vectorizer_method $VECTORIZER \
-  --distance_metric $DISTANCE_METRIC \
-  --num_neighbors $NUM_NEIGHBORS
+log "✅ Spearman correlation analysis complete!"
