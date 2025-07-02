@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=exp_A_bag_of_codes
-#SBATCH --output=logs/exp_A_bag_of_codes_%j_out.txt
-#SBATCH --error=logs/exp_A_bag_of_codes_%j_err.txt
+#SBATCH --output=logs/run_bag_of_codes_digital_twin_%j_out.txt
+#SBATCH --error=logs/run_bag_of_codes_digital_twin_%j_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -101,6 +101,17 @@ $CONDA_PREFIX/bin/python scripts/main.py \
   --workers $NUM_WORKERS 
 
 log "Main Python pipeline finished."
+
+$CONDA_PREFIX/bin/python scripts/calculations/compute_patient_prediction_scores.py \
+  --representation_method $REPRESENTATION \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS \
+  --workers $NUM_WORKERS 
+
+log "Prediction Evaluation pipeline finished."
 
 conda deactivate
 log "Ritual complete."

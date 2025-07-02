@@ -1,0 +1,117 @@
+#!/bin/bash
+#SBATCH --job-name=exp_A_bag_of_codes
+#SBATCH --output=logs/run_visit_sentence_digital_twin_%j_out.txt
+#SBATCH --error=logs/run_visit_sentence_digital_twin_%j_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=160G
+#SBATCH --gres=gpu:1
+#SBATCH --time=9:00:00
+
+# 🧾 --- Ritual Parameters ---
+NUM_PATIENTS=5000
+NUM_VISITS=6
+REPRESENTATION="visit_sentence"
+VECTORIZER="biobert-mnli-mednli"   # now using sentence transformer name directly
+DISTANCE_METRIC="euclidean"
+NUM_NEIGHBORS=5
+NUM_WORKERS=60
+
+# 🪄 Timestamped logging helper
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+# 📁 Ensure output folders exist
+mkdir -p logs
+mkdir -p data
+
+log "--- Ritual Parameters ---"
+log "Representation: $REPRESENTATION"
+log "Patients: $NUM_PATIENTS"
+log "Visits: $NUM_VISITS"
+log "Vectorizer: $VECTORIZER"
+log "Distance Metric: $DISTANCE_METRIC"
+log "Neighbors: $NUM_NEIGHBORS"
+log "Workers: $NUM_WORKERS"
+
+# 🔧 Environment Setup
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+# 📂 Navigate to project directory
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
+
+# 🎲 Dynamic Port Allocation to avoid collisions
+PORT=$((8000 + (RANDOM % 1000)))
+export VLLM_PORT=$PORT
+
+# 🚀 Start vLLM server in background
+log "Starting vLLM server on port $VLLM_PORT..."
+vllm serve unsloth/medgemma-27b-text-it-bnb-4bit \
+  --dtype float16 \
+  --served-model-name medgemma \
+  --gpu-memory-utilization 0.5 \
+  --host 0.0.0.0 \
+  --port $VLLM_PORT \
+  --max-model-len 5000 > logs/vllm_server_$SLURM_JOB_ID.log 2>&1 & 
+VLLM_PID=$!
+log "vLLM server started with PID: $VLLM_PID"
+
+# 🧼 Define cleanup function
+cleanup() {
+  log "Cleaning up vLLM server (PID: $VLLM_PID)..."
+  kill -TERM $VLLM_PID
+  wait $VLLM_PID 2>/dev/null
+  log "vLLM server stopped."
+}
+trap cleanup EXIT
+
+# ⏳ Wait for vLLM server to be ready
+log "Waiting for vLLM server to become healthy..."
+MAX_WAIT_TIME=1200
+WAIT_INTERVAL=5
+READY=false
+for ((i=0; i<MAX_WAIT_TIME/WAIT_INTERVAL; i++)); do
+  if curl -s -f http://localhost:$VLLM_PORT/health >/dev/null; then
+    READY=true
+    break
+  fi
+  sleep $WAIT_INTERVAL
+done
+
+if [ "$READY" = false ]; then
+  log "vLLM server failed to become healthy within timeout."
+  exit 1
+fi
+log "vLLM server is ready!"
+
+# 🧠 Run Main Python Pipeline
+log "Starting main Python pipeline..."
+$CONDA_PREFIX/bin/python scripts/main.py \
+  --representation_method $REPRESENTATION \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS \
+  --workers $NUM_WORKERS 
+
+log "Main Python pipeline finished."
+
+$CONDA_PREFIX/bin/python scripts/calculations/compute_patient_prediction_scores.py \
+  --representation_method $REPRESENTATION \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --vectorizer_method $VECTORIZER \
+  --distance_metric $DISTANCE_METRIC \
+  --num_neighbors $NUM_NEIGHBORS \
+  --workers $NUM_WORKERS 
+
+log "Prediction Evaluation pipeline finished."
+
+conda deactivate
+log "Ritual complete."
