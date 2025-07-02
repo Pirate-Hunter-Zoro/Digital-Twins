@@ -39,14 +39,10 @@ $CONDA_PREFIX/bin/python scripts/calculations/examine_nearby_patients.py \
   --distance_metric $DISTANCE_METRIC \
   --num_neighbors $NUM_NEIGHBORS
 
-# --- 🧠 Run Evaluation Script ---
-echo "$(date): Running evaluation..."
-$CONDA_PREFIX/bin/python scripts/analyze_results/evaluate.py \
+conda run -n vllm_env python scripts/analyze_results/calculate_spearmans_rho.py \
   --representation_method $REPRESENTATION \
   --num_patients $NUM_PATIENTS \
   --num_visits $NUM_VISITS \
   --vectorizer_method $VECTORIZER \
   --distance_metric $DISTANCE_METRIC \
   --num_neighbors $NUM_NEIGHBORS
-
-conda deactivate

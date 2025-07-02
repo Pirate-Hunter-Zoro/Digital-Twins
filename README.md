@@ -111,3 +111,8 @@ Scripts:
 Output:
 
 - `data/neighbors_<config>.pkl`
+
+### Personal Notes
+
+- Look at the closely-matched dimension - see which dimensions care about
+- Make sure patient before and right after trd occurs are similar (e.g. censored patient vs. uncensored patient)

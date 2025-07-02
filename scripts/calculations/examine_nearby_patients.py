@@ -11,11 +11,14 @@ if project_root not in sys.path:
 # --- End of sys.path adjustment ---
 
 from scripts.config import setup_config, get_global_config
-from scripts.eval.score_patient_prediction import score_prediction
 from scripts.eval.idf_utils import load_idf_registry
 from scripts.eval.load_neighbors import load_neighbors_for_config
 from scripts.eval.load_patient_results import load_all_patient_results
 from scripts.read_data.load_patient_data import load_patient_data
+from scripts.eval.scoring_utils import compute_weighted_cosine_score
+
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Setup
 setup_config(
@@ -33,6 +36,12 @@ neighbors_by_patient = load_neighbors_for_config(config)
 predictions = load_all_patient_results(config)
 idf_registry = load_idf_registry()
 all_patients = {p["patient_id"]: p for p in load_patient_data()}
+
+# Load vectorizer once
+vectorizer = SentenceTransformer(
+    f"/home/librad.laureateinstitute.org/mferguson/models/{config.vectorizer_method}",
+    local_files_only=True
+)
 
 # Prepare output paths
 os.makedirs("logs", exist_ok=True)
@@ -55,7 +64,21 @@ for patient_id, neighbors in neighbors_by_patient.items():
     actual = patient["visits"][config.num_visits - 1]
 
     try:
-        scores = score_prediction(predicted, actual, idf_registry)
+        actual_terms = set(actual["diagnoses"] + actual["medications"] + actual["treatments"])
+        predicted_terms = set(predicted["diagnoses"] + predicted["medications"] + predicted["treatments"])
+
+        if not actual_terms or not predicted_terms:
+            log_lines.append(f"[SKIP] No terms to compare for patient {patient_id}")
+            continue
+
+        actual_vecs = vectorizer.encode(list(actual_terms), convert_to_numpy=True)
+        predicted_vecs = vectorizer.encode(list(predicted_terms), convert_to_numpy=True)
+
+        sim_matrix = cosine_similarity(actual_vecs, predicted_vecs)
+        scores = compute_weighted_cosine_score(
+            sim_matrix, list(actual_terms), list(predicted_terms), idf_registry
+        )
+
         output_data.append({
             "patient_id": patient_id,
             "top_neighbors": [n[0][0] for n in neighbors[:3]],
