@@ -88,84 +88,54 @@ def summarize_neighbor_narratives(neighbor_narratives: list[str]) -> str:
     return query_llm(summary_prompt, max_tokens=512)
 
 
-def generate_prompt(patient: dict) -> str:
+def generate_prompt(patient_dict: dict) -> str:
     """
-    Generate a prompt to predict the patient's (n+1)st visit.
+    Generates a prompt string for the LLM based on patient history.
     """
-    global nearest_neighbors_data, all_response_options, patient_data_lookup
-
-    patient_id = patient["patient_id"]
+    from scripts.config import get_global_config
     config = get_global_config()
-    num_visits_for_history = config.num_visits - 1
-    patient_key = (patient_id, num_visits_for_history)
-    representation_method = config.representation_method
 
-    # --- Build patient history depending on method ---
-    if representation_method == "visit_sentence":
-        history_section = "\n".join(
-            f"Visit {i}: {turn_to_sentence(visit)}"
-            for i, visit in enumerate(patient["visits"][:num_visits_for_history])
-        )
-    elif representation_method == "bag_of_codes":
-        history_items = []
-        for i, visit in enumerate(patient["visits"][:num_visits_for_history]):
-            codes = []
-            codes.extend(d.get("Diagnosis_Name") for d in visit.get("diagnoses", []) if d.get("Diagnosis_Name"))
-            codes.extend(m.get("MedSimpleGenericName") for m in visit.get("medications", []) if m.get("MedSimpleGenericName"))
-            codes.extend(p.get("CPT_Procedure_Description") for p in visit.get("treatments", []) if p.get("CPT_Procedure_Description"))
-            codes = ", ".join(filter(None, codes))
-            history_items.append(f"Visit {i}: {codes}")
-        history_section = "\n".join(history_items)
-    else:
-        raise ValueError(f"Unsupported representation method: {representation_method}")
+    visits = patient_dict["visits"][: config.num_visits]
+    patient_id = patient_dict["patient_id"]
 
-    # --- Trim history if needed ---
-    max_history_chars = 1500 * 4
-    if len(history_section) > max_history_chars:
-        history_section = history_section[-max_history_chars:]
+    # Optional neighbors context
+    prompt_sections = []
 
-    # --- Neighbor summary ---
-    if nearest_neighbors_data is None:
-        raise RuntimeError("🚨 Nearest neighbor data is not initialized! Did you call setup_prompt_generation()?")
+    if config.include_neighbors and hasattr(config, "nearest_neighbors_data"):
+        neighbor_tuples = config.nearest_neighbors_data.get((patient_id, config.num_visits - 1), [])
+        for i, (neighbor_key, _, _) in enumerate(neighbor_tuples[: config.num_neighbors]):
+            neighbor_id, neighbor_idx = neighbor_key
+            neighbor_dict = config.full_patient_lookup.get(neighbor_id)
+            if neighbor_dict:
+                neighbor_visits = neighbor_dict["visits"][: neighbor_idx + 1]
+                neighbor_narrative = get_narrative(neighbor_visits)
+                prompt_sections.append(f"[Neighbor {i+1}]\n{neighbor_narrative}")
 
-    relevant_neighbors = nearest_neighbors_data.get(patient_key, [])
-    neighbor_narratives = [
-        get_narrative(patient_data_lookup[neighbor_id]["visits"][:neighbor_vidx + 1])
-        for (neighbor_id, neighbor_vidx), _, _ in relevant_neighbors[:config.num_neighbors]
-        if neighbor_id in patient_data_lookup
-    ]
-    neighbor_summary_section = summarize_neighbor_narratives(neighbor_narratives)
+    # Current patient narrative
+    patient_narrative = get_narrative(visits)
+    prompt_sections.append(f"[Patient History]\n{patient_narrative}")
 
-    # --- Random response options ---
-    random_diagnoses = ', '.join(random.sample(all_response_options["diagnoses"], min(len(all_response_options["diagnoses"]), 3)))
-    random_medications = ', '.join(random.sample(all_response_options["medications"], min(len(all_response_options["medications"]), 3)))
-    random_treatments = ', '.join(random.sample(all_response_options["treatments"], min(len(all_response_options["treatments"]), 3)))
+    # NEW: Unrestricted instruction
+    prompt_sections.append(
+        "[Instruction]\n"
+        "Based on the patient history above, predict the next clinical visit. "
+        "Return the predicted diagnoses, medications, and treatments as structured JSON:"
+    )
 
-    prompt = textwrap.dedent(f"""
-    Based on the patient's history and a summary of similar cases, predict the diagnoses, medications, and treatments for the patient's next visit.
+    # Example format
+    prompt_sections.append("""
+        [Output Format Example]
+        ```json
+        {
+        "predicted": {
+            "diagnoses": ["Example Diagnosis A", "Example Diagnosis B"],
+            "medications": ["Example Medication"],
+            "treatments": ["Example Treatment"]
+        }
+        }
+    """)
 
-    PATIENT HISTORY:
-    {history_section}
-
-    SUMMARY OF SIMILAR CASES:
-    {neighbor_summary_section}
-
-    You MUST choose from the following valid options.
-
-    Diagnoses Options: {random_diagnoses}
-    Medications Options: {random_medications}
-    Treatments Options: {random_treatments}
-
-    Respond with ONLY the following format and no additional text or explanation:
-    Diagnoses: <comma-separated list>; Medications: <comma-separated list>; Treatments: <comma-separated list>
-
-    Example:
-    Diagnoses: E11.9, I10; Medications: Metformin; Treatments: Physical therapy referral
-    
-    ### BEGIN RESPONSE
-    """).strip()
-
-    return prompt
+    return "\n\n".join(prompt_sections).strip()
 
 
 def parse_llm_response(response: str) -> dict[str, set[str]]:
