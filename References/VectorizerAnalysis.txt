@@ -1,0 +1,29 @@
+Why Tylenol ≠ Acetaminophen in an embedding space
+Factor
+How it shapes the learned vector
+Tokenization & vocabulary
+• In most BPE/WordPiece vocabularies Tylenol is stored as one or two rare-frequency tokens, while acetaminophen is broken into several common biomedical sub-words (e.g., “aceta▁”, “mino”, “phen”).
+• Different token boundaries → different base vectors before any context is seen.
+Corpus frequency & domain
+• Tylenol appears mainly in consumer-facing text (ads, news, parenting blogs, recall reports).
+• Acetaminophen dominates academic, regulatory, EHR, and pharmacology corpora.
+⇒ The statistical “neighborhoods” the model sees during training only partially overlap.
+Semantic associations
+• Tylenol co-occurs with brand-specific modifiers (“Extra Strength”, “Rapid Release”) and product SKUs.
+• Acetaminophen co-occurs with mechanistic terms (“analgesic”, “hepatotoxicity”), synonyms (“paracetamol”), and dosage calculations.
+These co-occurrence patterns tug the vectors toward different regions of the semantic manifold.
+Sentiment & pragmatics
+• Tylenol carries marketing tone, litigation history (1982 cyanide tampering), and pediatric dosing debates.
+• Acetaminophen is relatively neutral or technical.
+Embedding algorithms encode such affective/pragmatic signals, further separating the vectors.
+Geographic & stylistic variation
+• Outside North America, paracetamol is preferred; acetaminophen is still found in scientific writing; Tylenol is scarce. Regional skew in the training data reduces overlap in global embeddings.
+Regularization & anisotropy
+Even when two words share many contexts, optimization constraints (e.g., unit-norm, negative sampling) keep their vectors from collapsing into one point; they settle at a cosine similarity that balances shared and unique contexts (often ≈ 0.8–0.9 for true synonyms).
+ 
+Net effect
+The two tokens land close but not identical in embedding space—similar enough that a nearest-neighbor search retrieves either for “pain-relief, fever-reducer” queries, yet distinct enough to encode brand-specific and professional-terminology nuances.
+Downstream models that use contextual embeddings (e.g., GPT-4) can still infer that Tylenol ↔ acetaminophen in a given sentence because the surrounding context layers align their meanings, but the static base vectors reflect the corpus-level differences above.
+ 
+Take-away: Embeddings are not dictionaries; they are data-driven fingerprints. Brand versus generic names inhabit overlapping yet distinguishable neighborhoods because the language we write about them differs in token structure, audience, sentiment, and domain.
+ 
