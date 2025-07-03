@@ -48,14 +48,51 @@ def clean_term(term: str) -> str:
     return term.strip()
 
 
-# --- Main term categorizer ---
-def main():
-    config = get_global_config()
-    ROOT_DIR = Path(__file__).resolve().parents[2]
+import os
+import sys
+import re
+import json
+from pathlib import Path
+from collections import defaultdict
+import argparse
 
-    json_filename = f"patient_results_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.json"
-    TERM_JSON_PATH = ROOT_DIR / "data" / json_filename
-    OUTPUT_PATH = ROOT_DIR / "data" / "grouped_terms_by_category.json"
+# --- Dynamic sys.path adjustment ---
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = Path(current_script_dir).resolve().parents[2]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# --- Term cleaner ---
+def clean_term(term: str) -> str:
+    term = term.lower().strip()
+    term = term.replace('"', '').replace("'", '')
+    term = re.sub(r"^\\+|\\+$", "", term)
+    term = re.sub(r"\([^)]*hcc[^)]*\)", "", term)
+    term = re.sub(r"\(cms[^)]*\)", "", term)
+    term = re.sub(r"\b\(\d{3}(\.\d+)?\)", "", term)
+    term = re.sub(r",+", "", term)
+
+    blacklist = [
+        "initial encounter", "unspecified", "nos", "nec",
+        "<none>", "<None>", ";", ":", 
+        "at \d+ oclock position", "during pregnancy.*",
+        "due to.*", "with late onset", "with dysplasia", "without dysplasia"
+    ]
+    for noise in blacklist:
+        term = re.sub(noise, "", term)
+
+    return re.sub(r"\s+", " ", term).strip()
+
+
+def main(args):
+    data_dir = project_root / "data"
+
+    json_filename = (
+        f"patient_results_{args.num_patients}_{args.num_visits}_"
+        f"visit_sentence_{args.vectorizer_method}_{args.distance_metric}.json"
+    )
+    TERM_JSON_PATH = data_dir / json_filename
+    OUTPUT_PATH = data_dir / f"grouped_terms_by_category_{args.vectorizer_method}_{args.num_patients}_{args.num_visits}.json"
 
     with open(TERM_JSON_PATH, "r") as f:
         results = json.load(f)
@@ -72,7 +109,6 @@ def main():
                     if cleaned:
                         categorized_terms[category].add(cleaned)
 
-    # Flatten sets to sorted lists
     final_terms = {cat: sorted(list(terms)) for cat, terms in categorized_terms.items()}
 
     with open(OUTPUT_PATH, "w") as f:
@@ -80,7 +116,13 @@ def main():
 
     print(f"✅ Saved grouped terms to {OUTPUT_PATH}")
 
+
 if __name__ == "__main__":
-    setup_config(num_visits=6, num_neighbors=10, num_patients=5000, vectorizer_method='sentence_transformer',
-                 distance_metric='euclidean', representation_method='bag_of_codes')
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--vectorizer_method", required=True)
+    parser.add_argument("--num_visits", type=int, default=6)
+    parser.add_argument("--num_patients", type=int, default=5000)
+    parser.add_argument("--distance_metric", default="euclidean")
+    args = parser.parse_args()
+
+    main(args)

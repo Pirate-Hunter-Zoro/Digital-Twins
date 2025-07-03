@@ -1,0 +1,48 @@
+#!/bin/bash
+#SBATCH --job-name=debug_${REP}_${VEC}_${MODEL_NAME}
+#SBATCH --output=logs/debug_prompt_test_%j_${REP}_${VEC}_${MODEL_NAME}_out.txt
+#SBATCH --error=logs/debug_prompt_test_%j_${REP}_${VEC}_${MODEL_NAME}_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=80G
+#SBATCH --gres=gpu:1
+#SBATCH --time=9:00:00
+
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
+
+echo "$(date): Launching vLLM for $MODEL_NAME..."
+vllm serve $MODEL_PATH \
+  --dtype float16 \
+  --served-model-name $MODEL_NAME \
+  --gpu-memory-utilization 0.5 \
+  --host 0.0.0.0 \
+  --max-model-len 5000 > logs/vllm_server_${REP}_${VEC}_${MODEL_NAME}.log 2>&1 &
+
+VLLM_PID=$!
+trap "kill $VLLM_PID" EXIT
+
+for i in {1..120}; do
+  if curl -s http://localhost:8000/health | grep -q "OK"; then
+    echo "$(date): vLLM is healthy!"
+    break
+  fi
+  sleep 2
+done
+
+echo "$(date): Running prompt test..."
+conda run -n vllm_env python scripts/debug/debug_prompt_test.py \
+  --representation_method $REP \
+  --vectorizer_method $VEC \
+  --distance_metric $DIST \
+  --num_visits $VISITS \
+  --num_patients $PTS \
+  --num_neighbors $NEIGHBORS \
+  --model_name $MODEL_NAME
+
+echo "$(date): Job complete!"

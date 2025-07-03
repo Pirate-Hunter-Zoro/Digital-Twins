@@ -1,43 +1,50 @@
-
+import os
+import sys
 import json
-import pickle
-from pathlib import Path
+import argparse
 
-# --- Config paths ---
-project_root = Path(__file__).resolve().parent.parent.parent
-data_dir = project_root / "data"
+# --- Dynamic sys.path adjustment ---
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_script_dir, "..", ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-results_path = data_dir / "patient_results_5000_6_bag_of_codes_sentence_transformer_euclidean.json"
-embeddings_path = data_dir / "term_embedding_library_mpnet.pkl"
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--representation_method", required=True)
+    parser.add_argument("--vectorizer_method", required=True)
+    parser.add_argument("--distance_metric", default="euclidean")
+    parser.add_argument("--num_visits", type=int, default=6)
+    parser.add_argument("--num_patients", type=int, default=5000)
+    args = parser.parse_args()
 
-# --- Load data ---
-print(f"📦 Loading results from: {results_path.name}")
-with open(results_path, "r") as f:
-    results = json.load(f)
+    # Build result path from config-like values
+    results_path = os.path.join(
+        project_root,
+        "data",
+        f"results_{args.num_patients}_{args.num_visits}_{args.representation_method}_{args.vectorizer_method}_{args.distance_metric}.json"
+    )
 
-print(f"📦 Loading embeddings from: {embeddings_path.name}")
-with open(embeddings_path, "rb") as f:
-    embedding_library = pickle.load(f)
+    if not os.path.exists(results_path):
+        print(f"❌ File not found: {results_path}")
+        return
 
-# --- Gather all terms ---
-all_terms = set()
-for entry in results.values():
-    for cat in ["predicted", "actual"]:
-        cat_terms = entry.get(cat, {})
-        for subcat in ["diagnoses", "medications", "treatments"]:
-            all_terms.update(cat_terms.get(subcat, []))
+    with open(results_path, "r") as f:
+        results = json.load(f)
 
-# --- Check which are missing ---
-missing_terms = [term for term in all_terms if term not in embedding_library]
+    all_predicted_terms = set()
+    for patient_id, data in results.items():
+        for category in ["diagnoses", "medications", "treatments"]:
+            all_predicted_terms.update(data["prediction"].get(category, []))
 
-print(f"🔍 Total unique terms from result file: {len(all_terms)}")
-print(f"❌ Terms missing from embedding library: {len(missing_terms)}")
+    print(f"🔍 Total unique predicted terms: {len(all_predicted_terms)}")
+    missing = [term for term in sorted(all_predicted_terms) if not term.strip()]
+    if missing:
+        print("⚠️ Empty or missing terms found:")
+        for term in missing:
+            print(f"- '{term}'")
+    else:
+        print("✅ All terms appear to be non-empty and valid.")
 
-if missing_terms:
-    print("\n🧟‍♂️ Terms with NO embeddings:")
-    for term in sorted(missing_terms)[:30]:  # Show first 30
-        print(f" - {term}")
-    if len(missing_terms) > 30:
-        print(f"...and {len(missing_terms) - 30} more.")
-else:
-    print("✅ All terms are covered by the embedding library!")
+if __name__ == "__main__":
+    main()

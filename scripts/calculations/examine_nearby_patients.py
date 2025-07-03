@@ -6,6 +6,7 @@ import numpy as np
 from scipy.stats import spearmanr
 from scipy.spatial.distance import mahalanobis
 from numpy.linalg import inv
+from collections import defaultdict
 
 # --- Dynamic sys.path adjustment ---
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,6 +16,41 @@ if project_root not in sys.path:
 
 from scripts.config import setup_config, get_global_config
 from scripts.llm.llm_helper import get_relevance_score, get_narrative
+from scripts.read_data.load_patient_data import load_patient_data
+
+# === Memoization Paths ===
+def get_cache_paths(config, model_name):
+    stem = f"{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}_{model_name}"
+    return {
+        "relevance_scores": os.path.join("data", f"relevance_cache_{stem}.jsonl"),
+        "narratives": os.path.join("data", f"narratives_cache_{stem}.json"),
+        "spearman_output": os.path.join("data", f"spearman_rho_{stem}.json"),
+        "progress": os.path.join("data", f"processed_patients_{stem}.txt"),
+    }
+
+def load_cached_narratives(path):
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_cached_narratives(path, cache):
+    with open(path, "w") as f:
+        json.dump(cache, f)
+
+def append_relevance_log(path, entry):
+    with open(path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+def load_processed_patient_ids(path):
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return set(f.read().splitlines())
+    return set()
+
+def append_processed_patient_id(path, patient_key):
+    with open(path, "a") as f:
+        f.write(f"{patient_key}\n")
 
 def compute_mahalanobis_distance_to_group(patient_vec, neighbor_vecs):
     if len(neighbor_vecs) < 2:
@@ -38,6 +74,8 @@ def main():
     parser.add_argument("--num_visits", type=int, default=6)
     parser.add_argument("--num_patients", type=int, default=5000)
     parser.add_argument("--num_neighbors", type=int, default=5)
+    parser.add_argument("--model_name", type=str, default="medgemma")
+    parser.add_argument("--max_patients", type=int, default=500)
     args = parser.parse_args()
 
     setup_config(
@@ -50,75 +88,89 @@ def main():
     )
 
     config = get_global_config()
+    paths = get_cache_paths(config, args.model_name)
 
-    data_dir = os.path.join(project_root, "data")
-    neighbors_path = os.path.join(data_dir, f"neighbors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.pkl")
-    all_vectors_path = os.path.join(data_dir, f"all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl")
-    patient_data_path = os.path.join(data_dir, "all_patients_combined.json")
+    os.makedirs("data", exist_ok=True)
+    narrative_cache = load_cached_narratives(paths["narratives"])
+    processed_ids = load_processed_patient_ids(paths["progress"])
 
-    with open(neighbors_path, "rb") as f:
-        neighbors_dict = pickle.load(f)
-
-    with open(all_vectors_path, "rb") as f:
-        vector_dict = pickle.load(f)
-
-    from scripts.read_data.load_patient_data import load_patient_data
     patient_data = load_patient_data()
     patient_lookup = {p["patient_id"]: p for p in patient_data}
 
-    print("--- Beginning correlation computation ---")
+    with open(os.path.join("data", f"neighbors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.pkl"), "rb") as f:
+        neighbors_dict = pickle.load(f)
+
+    with open(os.path.join("data", f"all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl"), "rb") as f:
+        vector_dict = pickle.load(f)
+
     results = []
+    processed = 0
+
+    print(f"🧪 Resuming analysis up to {args.max_patients} patients...")
 
     for (patient_id, visit_idx), patient_vector in vector_dict.items():
-        if (patient_id, visit_idx) not in neighbors_dict:
-            print(f"Skipping {patient_id} @ visit {visit_idx} — no neighbors found.")
+        patient_key = f"{patient_id}:{visit_idx}"
+        if processed >= args.max_patients:
+            break
+        if patient_key in processed_ids:
+            continue
+
+        neighbors = neighbors_dict.get((patient_id, visit_idx))
+        if not neighbors:
             continue
 
         patient = patient_lookup.get(patient_id)
         if not patient:
-            print(f"Skipping {patient_id} — patient not found.")
             continue
 
-        try:
-            patient_narrative = get_narrative(patient["visits"][:visit_idx + 1])
-        except Exception as e:
-            print(f"Skipping {patient_id} — narrative generation failed: {e}")
-            continue
+        if patient_key not in narrative_cache:
+            try:
+                narrative_cache[patient_key] = get_narrative(patient["visits"][:visit_idx + 1])
+            except Exception:
+                print(f"Skipping {patient_id} — narrative generation failed")
+                continue
 
-        neighbors = neighbors_dict[(patient_id, visit_idx)][:config.num_neighbors]
-
+        patient_narrative = narrative_cache[patient_key]
         relevance_scores = []
         neighbor_vectors = []
 
-        for (neighbor_id, neighbor_vidx), _, neighbor_vec in neighbors:
-            neighbor = patient_lookup.get(neighbor_id)
-            if not neighbor:
-                continue
-            try:
-                neighbor_narrative = get_narrative(neighbor["visits"][:neighbor_vidx + 1])
-                relevance = get_relevance_score(patient_narrative, neighbor_narrative)
-                relevance_scores.append(relevance)
-                neighbor_vectors.append(neighbor_vec)
-            except Exception as e:
-                print(f"Skipping neighbor {neighbor_id} — relevance failed: {e}")
-                continue
+        for (neighbor_id, neighbor_vidx), _, neighbor_vec in neighbors[:config.num_neighbors]:
+            neighbor_key = f"{neighbor_id}:{neighbor_vidx}"
+            if neighbor_key not in narrative_cache:
+                neighbor = patient_lookup.get(neighbor_id)
+                if not neighbor:
+                    continue
+                try:
+                    narrative_cache[neighbor_key] = get_narrative(neighbor["visits"][:neighbor_vidx + 1])
+                except Exception:
+                    continue
+
+            neighbor_narrative = narrative_cache[neighbor_key]
+            relevance = get_relevance_score(patient_narrative, neighbor_narrative)
+            relevance_scores.append(relevance)
+            neighbor_vectors.append(neighbor_vec)
+
+            append_relevance_log(paths["relevance_scores"], {
+                "patient": patient_key,
+                "neighbor": neighbor_key,
+                "score": relevance,
+            })
 
         if len(relevance_scores) < 2:
-            print(f"Skipping {patient_id} — not enough valid neighbors (found {len(relevance_scores)}).")
             continue
 
         avg_relevance = np.mean(relevance_scores)
-        neighbor_vec_matrix = np.vstack(neighbor_vectors)
-        mahal_dist = compute_mahalanobis_distance_to_group(patient_vector, neighbor_vec_matrix)
+        mahal_dist = compute_mahalanobis_distance_to_group(patient_vector, np.vstack(neighbor_vectors))
 
-        if np.isnan(mahal_dist):
-            print(f"Skipping {patient_id} — Mahalanobis distance invalid.")
-            continue
+        if not np.isnan(mahal_dist):
+            results.append((avg_relevance, mahal_dist))
+            processed += 1
+            append_processed_patient_id(paths["progress"], patient_key)
 
-        results.append((avg_relevance, mahal_dist))
+    save_cached_narratives(paths["narratives"], narrative_cache)
 
     if not results:
-        print("⚠️ No valid patient results found. Exiting early.")
+        print("❌ No valid results, exiting.")
         return
 
     relevance_vals, mahalanobis_vals = zip(*results)
@@ -130,11 +182,10 @@ def main():
         "num_patients": len(relevance_vals)
     }
 
-    output_path = os.path.join(data_dir, f"spearman_rho_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.json")
-    with open(output_path, "w") as f:
+    with open(paths["spearman_output"], "w") as f:
         json.dump(summary, f, indent=2)
 
-    print("✅ Done!")
+    print("✅ Spearman correlation complete!")
     print(json.dumps(summary, indent=2))
 
 if __name__ == "__main__":

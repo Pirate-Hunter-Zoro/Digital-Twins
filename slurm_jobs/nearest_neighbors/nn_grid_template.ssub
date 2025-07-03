@@ -1,0 +1,32 @@
+#!/bin/bash
+#SBATCH --job-name=nn_${REP}_${VEC}_${DIST}
+#SBATCH --output=logs/nn_%j_${REP}_${VEC}_${DIST}_out.txt
+#SBATCH --error=logs/nn_%j_${REP}_${VEC}_${DIST}_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=160G
+#SBATCH --gres=gpu:1
+#SBATCH --time=9:00:00
+
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
+
+mkdir -p logs data
+
+echo "$(date): Running compute_nearest_neighbors for $REP | $VEC | $DIST | Neighbors=$NBR"
+
+$CONDA_PREFIX/bin/python scripts/calculations/compute_nearest_neighbors.py \
+  --representation_method $REP \
+  --num_patients $PTS \
+  --num_visits $VISITS \
+  --vectorizer_method $VEC \
+  --distance_metric $DIST \
+  --num_neighbors $NBR \
+  --workers $NUM_WORKERS
+
+echo "$(date): Finished compute_nearest_neighbors for $REP | $VEC | $DIST"

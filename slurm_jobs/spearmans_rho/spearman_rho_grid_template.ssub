@@ -1,0 +1,53 @@
+#!/bin/bash
+#SBATCH --job-name=spearman_rho
+#SBATCH --output=logs/spearman_rho_%j_${REP}_${VEC}_${DIST}_${MODEL_NAME}_out.txt
+#SBATCH --error=logs/spearman_rho_%j_${REP}_${VEC}_${DIST}_${MODEL_NAME}_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --gres=gpu:1
+#SBATCH --time=9:00:00
+
+# === ⚙️ Environment ===
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
+
+# === 🚀 Launch vLLM Server ===
+echo "$(date): Starting vLLM server for model: $MODEL_NAME"
+vllm serve $MODEL_PATH \
+  --dtype float16 \
+  --served-model-name $MODEL_NAME \
+  --gpu-memory-utilization 0.5 \
+  --host 0.0.0.0 \
+  --max-model-len 5000 > logs/vllm_server_${REP}_${VEC}_${DIST}_${MODEL_NAME}.log 2>&1 &
+
+VLLM_PID=$!
+trap "kill $VLLM_PID" EXIT
+
+# Wait until vLLM is ready
+for i in {1..120}; do
+  if curl -s http://localhost:8000/health | grep -q "OK"; then
+    echo "$(date): vLLM server is healthy!"
+    break
+  fi
+  sleep 2
+done
+
+# === 📊 Run Batch Script ===
+echo "$(date): Running Spearman rho calculation for model $MODEL_NAME..."
+$CONDA_PREFIX/bin/python scripts/calculations/examine_nearby_patients.py \
+  --representation_method $REP \
+  --num_patients $PTS \
+  --num_visits $VISITS \
+  --vectorizer_method $VEC \
+  --distance_metric $DIST \
+  --num_neighbors $NBR \
+  --max_patients $MAXP \
+  --model_name $MODEL_NAME
+
+echo "$(date): Job complete for $MODEL_NAME ($REP | $VEC | $DIST)"

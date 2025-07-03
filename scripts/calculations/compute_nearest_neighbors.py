@@ -1,6 +1,6 @@
-# --- compute_nearest_neighbors.py ---
 import sys
 import os
+import argparse
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pickle
@@ -11,19 +11,14 @@ current_script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-# --- End of sys.path adjustment ---
 
 data_dir = os.path.join(project_root, "data")
 
-from scripts.config import get_global_config
+from scripts.config import get_global_config, setup_config
 from scripts.common.utils import turn_to_sentence
+from scripts.read_data.load_patient_data import load_patient_data
 
 def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
-    """
-    For ONE patient, returns a dictionary containing ONLY the MOST RECENT
-    visit history window, formatted according to the configured representation method.
-    --- THIS IS OUR NEW UPGRADE SLOT! ---
-    """
     visit_histories = {}
     config = get_global_config()
     history_window_length = config.num_visits
@@ -32,133 +27,113 @@ def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
     if len(patient_visits) < history_window_length:
         return visit_histories
 
-    # We only care about the latest sequence of visits for prediction
     start_idx = len(patient_visits) - history_window_length
     relevant_visits = patient_visits[start_idx:]
     end_idx = len(patient_visits) - 1
 
-    history_string = ""
     if representation_method == "visit_sentence":
-        # R3: Temporal "Visit-Sentence" method (our original method)
         history_string = " | ".join(turn_to_sentence(visit) for visit in relevant_visits)
-    
     elif representation_method == "bag_of_codes":
-        # R2: Unordered Bag-of-codes method
         all_codes = []
         for visit in relevant_visits:
             all_codes.extend([d.get("Diagnosis_Name") for d in visit.get("diagnoses", []) if d.get("Diagnosis_Name")])
             all_codes.extend([m.get("MedSimpleGenericName") for m in visit.get("medications", []) if m.get("MedSimpleGenericName")])
             all_codes.extend([p.get("CPT_Procedure_Description") for p in visit.get("treatments", []) if p.get("CPT_Procedure_Description")])
         history_string = " ".join(filter(None, all_codes))
-
     else:
-        raise ValueError(f"Unknown representation method configured: {representation_method}")
+        raise ValueError(f"Unknown representation method: {representation_method}")
 
     visit_histories[end_idx] = history_string
     return visit_histories
 
-
-def get_visit_vectors(
-    patient_data: list[dict],
-) -> dict[tuple[str, int], np.ndarray]:
-    """
-    Keys are (patient_id, end_idx), values are np.ndarray vectors.
-    """
+def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndarray]:
     all_visit_strings = []
     all_keys = []
 
     for patient in patient_data:
         patient_id = patient["patient_id"]
-        patient_visits = patient["visits"]
-        visit_histories = get_visit_histories(patient_visits)
-
+        visit_histories = get_visit_histories(patient["visits"])
         for end_idx, visit_string in visit_histories.items():
             all_keys.append((patient_id, end_idx))
             all_visit_strings.append(visit_string)
 
-    vectorizer_instance = SentenceTransformer(f"/home/librad.laureateinstitute.org/mferguson/models/{get_global_config().vectorizer_method}", local_files_only=True)
-    
-    batch_size = 32
-    print(f"Encoding visit strings with batch size: {batch_size}")
+    vectorizer_path = os.path.join(project_root, "models", get_global_config().vectorizer_method)
+    vectorizer_instance = SentenceTransformer(vectorizer_path, local_files_only=True)
+
+    print(f"Encoding {len(all_visit_strings)} visit strings...")
     vectors = vectorizer_instance.encode(
         all_visit_strings,
-        batch_size=batch_size,
+        batch_size=32,
         show_progress_bar=True,
         convert_to_numpy=True
     )
-
     return {key: vec for key, vec in zip(all_keys, vectors)}
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--representation_method", required=True)
+    parser.add_argument("--vectorizer_method", required=True)
+    parser.add_argument("--distance_metric", default="euclidean")
+    parser.add_argument("--num_visits", type=int, default=6)
+    parser.add_argument("--num_patients", type=int, default=5000)
+    parser.add_argument("--num_neighbors", type=int, default=5)
+    parser.add_argument("--workers", type=int, default=8)
+    args = parser.parse_args()
 
-def get_neighbors(patient_data) -> dict[tuple[str, int], list[tuple[tuple[str, int], float, np.ndarray]]]:
-    """
-    Compute and sort by closeness the neighbors for each visit sequence.
-    Now includes representation_method in the cache file path to prevent data contamination between experiments!
-    """
+    setup_config(
+        representation_method=args.representation_method,
+        vectorizer_method=args.vectorizer_method,
+        distance_metric=args.distance_metric,
+        num_visits=args.num_visits,
+        num_patients=args.num_patients,
+        num_neighbors=args.num_neighbors
+    )
     config = get_global_config()
-    # Updated to include representation method in filename!
-    neighbors_file_path = os.path.join(
+
+    # === Check for existing output ===
+    neighbors_path = os.path.join(
         data_dir,
         f"neighbors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}.pkl"
     )
-    
-    try:
-        with open(neighbors_file_path, "rb") as f:
-            print(f"Loading pre-computed neighbors from {neighbors_file_path}")
-            neighbors = pickle.load(f)
-    except FileNotFoundError:
-        print("Pre-computed neighbors not found. Calculating from scratch...")
-        vectors_dict = get_visit_vectors(patient_data)
-        
-        all_vectors_path = os.path.join(
-            data_dir,
-            f"all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl"
+    if os.path.exists(neighbors_path):
+        print(f"✅ Neighbors already computed at {neighbors_path}. Skipping.")
+        return
+
+    print("🔍 Computing new nearest neighbors...")
+    patient_data = load_patient_data()
+    vectors_dict = get_visit_vectors(patient_data)
+
+    all_vectors_path = os.path.join(
+        data_dir,
+        f"all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl"
+    )
+    with open(all_vectors_path, "wb") as f:
+        pickle.dump(vectors_dict, f)
+    print(f"💾 Saved vector embeddings to {all_vectors_path}")
+
+    keys = list(vectors_dict.keys())
+    matrix = np.vstack([vectors_dict[k] for k in keys])
+
+    if config.distance_metric == "euclidean":
+        sim_matrix = -euclidean_distances(matrix)
+    elif config.distance_metric == "cosine":
+        sim_matrix = cosine_similarity(matrix)
+    else:
+        raise ValueError(f"Unsupported distance metric: {config.distance_metric}")
+
+    neighbors = {}
+    for i, key in enumerate(keys):
+        sims = sim_matrix[i]
+        ranked = sorted(
+            [(keys[j], sims[j], vectors_dict[keys[j]]) for j in range(len(keys)) if j != i],
+            key=lambda x: x[1],
+            reverse=True
         )
-        with open(all_vectors_path, "wb") as f:
-            pickle.dump(vectors_dict, f)
-        print(f"Saved all visit vectors to {all_vectors_path}")
+        neighbors[key] = ranked[:config.num_neighbors]
 
-        keys = list(vectors_dict.keys())
-        matrix = np.vstack(list(vectors_dict.values()))
-        
-        if config.distance_metric == "euclidean":
-            sim_matrix = -euclidean_distances(matrix) 
-        elif config.distance_metric == "cosine":
-            sim_matrix = cosine_similarity(matrix)
-        else:
-            raise ValueError(f"Unknown distance metric: {config.distance_metric}")
-
-        neighbors = {}
-        for i, patient_by_visit in enumerate(keys):
-            sims = sim_matrix[i]
-            sim_pairs = [(keys[j], sims[j], vectors_dict[keys[j]]) for j in range(len(keys)) if j != i]
-            sim_pairs.sort(key=lambda x: x[1], reverse=True)
-            neighbors[patient_by_visit] = sim_pairs
-
-        with open(neighbors_file_path, "wb") as f:
-            pickle.dump(neighbors, f)
-        print(f"Saved newly computed neighbors to {neighbors_file_path}")
-        
-    return neighbors
+    with open(neighbors_path, "wb") as f:
+        pickle.dump(neighbors, f)
+    print(f"✅ Saved neighbors to {neighbors_path}")
 
 if __name__ == "__main__":
-    from scripts.config import setup_config
-    from scripts.read_data.load_patient_data import load_patient_data
-
-    # === Default Config (you can override with argparse/env later if desired) ===
-    setup_config(
-        representation_method="visit_sentence",      # or "bag_of_codes"
-        vectorizer_method="biobert-mnli-mednli",     # match one of your downloaded models
-        distance_metric="euclidean",
-        num_visits=6,
-        num_patients=5000,
-        num_neighbors=5
-    )
-
-    print("📦 Loading patient data...")
-    patient_data = load_patient_data()
-    print(f"✅ Loaded {len(patient_data)} patients.")
-
-    print("🔍 Computing neighbors...")
-    _ = get_neighbors(patient_data)
-    print("🎉 Done! Neighbor data is cached.")
+    main()

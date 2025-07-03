@@ -1,46 +1,49 @@
+import os
+import sys
 import json
 import pickle
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+import argparse
 
-# 🧼 Term cleaner (safe fallback if not already done)
-def clean_term(term: str) -> str:
-    return term.strip().lower()
+# --- Dynamic sys.path adjustment ---
+current_script_dir = Path(__file__).resolve().parent
+project_root = current_script_dir.parents[2]
+project_loc = current_script_dir.parents[3]  # Where /models lives
 
-def main():
-    # 📂 Dynamic paths
-    ROOT_DIR = Path(__file__).resolve().parents[2]
-    PROJ_LOC = Path(__file__).resolve().parents[3]
-    TERM_JSON_PATH = ROOT_DIR / "data" / "grouped_terms_by_category.json"
-    OUTPUT_PATH = ROOT_DIR / "data" / "term_embedding_library_by_category.pkl"
-    MODEL_PATH = PROJ_LOC / "models" / "biobert-mnli-mednli"
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-    print("🧬 Beginning embedding generation by category...")
-    print(f"📥 Loading terms from: {TERM_JSON_PATH}")
-    print(f"🧠 Loading model from: {MODEL_PATH}")
+from scripts.analyze_results.prepare_categorized_embedding_terms import clean_term
 
-    model = SentenceTransformer(str(MODEL_PATH))
+def main(args):
+    model_dir = project_loc / "models" / args.model_name
+    model = SentenceTransformer(str(model_dir), local_files_only=True)
 
-    with open(TERM_JSON_PATH, "r") as f:
-        categorized_terms = json.load(f)
+    input_path = project_root / "data" / f"grouped_terms_by_category_{args.model_name}_{args.num_patients}_{args.num_visits}.json"
+    output_path = project_root / "data" / f"term_embedding_library_by_category_{args.model_name}_{args.num_patients}_{args.num_visits}.pkl"
+
+    with open(input_path, "r") as f:
+        grouped_terms = json.load(f)
 
     embedding_library = {}
+    for category, terms in grouped_terms.items():
+        cleaned_terms = [clean_term(t) for t in terms]
+        embeddings = model.encode(cleaned_terms, show_progress_bar=True, convert_to_numpy=True)
+        embedding_library[category] = [
+            {"term": t, "embedding": emb} for t, emb in zip(cleaned_terms, embeddings)
+        ]
 
-    for category, term_list in categorized_terms.items():
-        print(f"\n📦 Processing category: {category} ({len(term_list)} terms)")
-        cleaned_terms = list({clean_term(t) for t in term_list if t.strip()})
-        embeddings = model.encode(cleaned_terms, show_progress_bar=True, batch_size=64)
-
-        embedding_library[category] = {
-            term: vec for term, vec in zip(cleaned_terms, embeddings)
-        }
-
-    print(f"\n💾 Saving categorized embedding library to: {OUTPUT_PATH}")
-    with open(OUTPUT_PATH, "wb") as f:
+    with open(output_path, "wb") as f:
         pickle.dump(embedding_library, f)
 
-    print("✅ All category embeddings generated and saved!")
+    print(f"✅ Saved embeddings to {output_path}")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", required=True)
+    parser.add_argument("--num_patients", type=int, default=5000)
+    parser.add_argument("--num_visits", type=int, default=6)
+    args = parser.parse_args()
+    main(args)
