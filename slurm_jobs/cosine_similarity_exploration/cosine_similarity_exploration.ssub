@@ -1,7 +1,4 @@
 #!/bin/bash
-#SBATCH --job-name=cosine_similarity_${VEC}
-#SBATCH --output=logs/cosine_similarity_${VEC}_out.txt
-#SBATCH --error=logs/cosine_similarity_${VEC}_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -9,14 +6,29 @@
 #SBATCH --mem=64G
 #SBATCH --time=9:00:00
 
+VEC=$1
+
+# Manual log path creation based on $VEC
+JOB_NAME="cosine_similarity_${VEC}"
+OUT_LOG="logs/${JOB_NAME}_out.txt"
+ERR_LOG="logs/${JOB_NAME}_err.txt"
+
+# Set job name (optional, helpful if your job monitoring tools display it)
+#SBATCH --job-name=cosine_sim  # Static, just to satisfy SLURM, real name logged below
+
+echo "Job Name: $JOB_NAME"
+echo "Logging to $OUT_LOG and $ERR_LOG"
+
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate vllm_env
 
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
 
-echo "$(date): Running cosine similarity analysis with embedder ${VEC}"
+# Run analysis and redirect output manually
+echo "$(date): Running cosine similarity analysis with embedder ${VEC}" | tee "$OUT_LOG"
 $CONDA_PREFIX/bin/python scripts/analyze_results/analyze_embedding_cosine_stats.py \
-  --vectorizer_method $VEC
+  --vectorizer_method $VEC >> "$OUT_LOG" 2>> "$ERR_LOG"
+
 
 echo "$(date): Analysis complete!"

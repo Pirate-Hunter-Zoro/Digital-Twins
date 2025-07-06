@@ -1,83 +1,70 @@
+import os
+import sys
+import argparse
 import json
-import math
-from collections import Counter
-from pathlib import Path
+from collections import defaultdict
+from math import log
 
-def forge_cursed_energy_registry():
-    """
-    Analyzes all patient encounters to calculate the Inverse Document Frequency (IDF)
-    for every diagnosis, medication, and treatment, creating a registry
-    of each term's "Cursed Energy" or rarity.
+# --- Dynamic Pathing ---
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_script_dir, "..", ".."))
+sys.path.insert(0, project_root)
+from scripts.config import setup_config, get_global_config
+from scripts.eval.clean_terms import clean_term
 
-    This version is location-aware and works from within the 'scripts/calculations' folder.
-    """
-    # --- This is our new spatial awareness technique! ---
-    # First, the script finds its own absolute location in the file system.
-    script_path = Path(__file__).resolve()
-    # Then, it navigates up to the project's main folder (from 'scripts/calculations/').
-    project_root = script_path.parent.parent.parent
-    
-    # Now, it can accurately target the 'data' folder from the project root.
-    data_folder = project_root / "data"
-    input_data_path = data_folder / "all_patients_combined.json"
-    output_registry_path = data_folder / "term_idf_registry.json"
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--representation_method", required=True)
+    parser.add_argument("--vectorizer_method", required=True)
+    parser.add_argument("--distance_metric", required=True)
+    parser.add_argument("--num_visits", type=int, required=True)
+    parser.add_argument("--num_patients", type=int, required=True)
+    parser.add_argument("--num_neighbors", type=int, required=True)
+    parser.add_argument("--model_name", required=True)
+    args = parser.parse_args()
 
-    print("Beginning the final, location-aware forging ritual...")
-    print(f"Executing script from: {script_path.parent}")
-    print(f"Targeting Cursed Object at: {input_data_path}")
+    setup_config(
+        representation_method=args.representation_method,
+        vectorizer_method=args.vectorizer_method,
+        distance_metric=args.distance_metric,
+        num_visits=args.num_visits,
+        num_patients=args.num_patients,
+        num_neighbors=args.num_neighbors,
+        model_name=args.model_name,
+    )
+    config = get_global_config()
 
-    if not input_data_path.exists():
-        print(f"ERROR: The Cursed Object is not in its vault! Make sure '{input_data_path.name}' exists in the 'data' folder.")
-        return
-        
-    # Ensure the containment vault exists. This is unchanged but now uses the correct path.
-    data_folder.mkdir(parents=True, exist_ok=True)
+    filename_suffix = f"{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}_{config.model_name}"
+    input_path = os.path.join(project_root, "data", f"patient_results_{filename_suffix}.json")
+    output_path = os.path.join(project_root, "data", f"idf_registry_{filename_suffix}.json")
 
+    print(f"📥 Loading patient results from: {input_path}")
+    with open(input_path, "r") as f:
+        patient_results = json.load(f)
 
-    # --- First Pass: Tally the energy signatures of all terms ---
-    doc_frequency = Counter()
+    term_counts = defaultdict(int)
     total_docs = 0
 
-    with open(input_data_path, 'r', encoding='utf-8') as f:
-        all_patients = json.load(f)
+    for patient_id, data in patient_results.items():
+        all_terms = set()
+        for section in ["predicted", "actual"]:
+            for category in ["diagnoses", "medications", "treatments"]:
+                terms = data.get(section, {}).get(category, [])
+                cleaned_terms = {clean_term(t) for t in terms if clean_term(t)}
+                all_terms |= cleaned_terms
+        for term in all_terms:
+            term_counts[term] += 1
+        total_docs += 1
 
-    print("Processing all patient encounters to tally term frequencies...")
-    for patient in all_patients:
-        for encounter in patient.get('encounters', []):
-            total_docs += 1
-            
-            terms_in_this_encounter = set()
+    idf_scores = {
+        term: log(total_docs / count)
+        for term, count in term_counts.items()
+    }
 
-            for diagnosis in encounter.get('diagnoses', []):
-                if diagnosis.get('Diagnosis_Name'):
-                    terms_in_this_encounter.add(diagnosis['Diagnosis_Name'])
+    with open(output_path, "w") as f:
+        json.dump(idf_scores, f, indent=2)
 
-            for medication in encounter.get('medications', []):
-                if medication.get('MedSimpleGenericName'):
-                    terms_in_this_encounter.add(medication['MedSimpleGenericName'])
-
-            for procedure in encounter.get('procedures', []):
-                if procedure.get('CPT_Procedure_Description'):
-                    terms_in_this_encounter.add(procedure['CPT_Procedure_Description'])
-            
-            doc_frequency.update(terms_in_this_encounter)
-
-    print(f"Analysis complete. Found {total_docs} total encounters and {len(doc_frequency)} unique terms.")
-
-    # --- Second Pass: Perform the incantation to calculate Cursed Energy (IDF) ---
-    print("Calculating IDF scores for all unique terms...")
-    idf_scores = {}
-    for term, count in doc_frequency.items():
-        if count > 0:
-            idf_scores[term] = math.log(total_docs / count)
-
-    # --- Final Step: Seal the results in the Cursed Tool ---
-    print(f"Sealing the results into the registry at: {output_registry_path}")
-    with open(output_registry_path, 'w', encoding='utf-8') as f:
-        json.dump(idf_scores, f, indent=4)
-
-    print("\nRitual complete! The Cursed Energy Registry has been successfully forged and sealed in its vault!")
-
+    print(f"✅ Saved IDF registry to: {output_path}")
 
 if __name__ == "__main__":
-    forge_cursed_energy_registry()
+    main()

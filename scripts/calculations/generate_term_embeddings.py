@@ -1,49 +1,65 @@
 import os
 import sys
 import json
-import pickle
-from pathlib import Path
-from sentence_transformers import SentenceTransformer
-from tqdm import tqdm
 import argparse
+import pickle
+from sentence_transformers import SentenceTransformer
 
-# --- Dynamic sys.path adjustment ---
-current_script_dir = Path(__file__).resolve().parent
-project_root = current_script_dir.parents[2]
-project_loc = current_script_dir.parents[3]  # Where /models lives
+# --- Dynamic Pathing ---
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_script_dir, "..", ".."))
+sys.path.insert(0, project_root)
+from scripts.config import setup_config, get_global_config
 
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--representation_method", required=True)
+    parser.add_argument("--vectorizer_method", required=True)
+    parser.add_argument("--distance_metric", required=True)
+    parser.add_argument("--num_visits", type=int, required=True)
+    parser.add_argument("--num_patients", type=int, required=True)
+    parser.add_argument("--num_neighbors", type=int, required=True)
+    parser.add_argument("--model_name", required=True)
+    args = parser.parse_args()
 
-from scripts.analyze_results.prepare_categorized_embedding_terms import clean_term
+    setup_config(
+        representation_method=args.representation_method,
+        vectorizer_method=args.vectorizer_method,
+        distance_metric=args.distance_metric,
+        num_visits=args.num_visits,
+        num_patients=args.num_patients,
+        num_neighbors=args.num_neighbors,
+        model_name=args.model_name,
+    )
 
-def main(args):
-    model_dir = project_loc / "models" / args.model_name
-    model = SentenceTransformer(str(model_dir), local_files_only=True)
+    config = get_global_config()
 
-    input_path = project_root / "data" / f"grouped_terms_by_category_{args.model_name}_{args.num_patients}_{args.num_visits}.json"
-    output_path = project_root / "data" / f"term_embedding_library_by_category_{args.model_name}_{args.num_patients}_{args.num_visits}.pkl"
+    model_dir = os.path.join(project_root, "models", config.vectorizer_method)
+    embedder = SentenceTransformer(model_dir, local_files_only=True)
 
+    input_path = os.path.join(project_root, "data", f"grouped_terms_by_category_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}_{config.model_name}.json")
+    output_path = os.path.join(
+        project_root,
+        "data",
+        f"term_embedding_library_by_category_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}_{config.model_name}.pkl"
+    )
+
+    print(f"📥 Loading input terms from: {input_path}")
     with open(input_path, "r") as f:
-        grouped_terms = json.load(f)
+        terms_by_category = json.load(f)
 
-    embedding_library = {}
-    for category, terms in grouped_terms.items():
-        cleaned_terms = [clean_term(t) for t in terms]
-        embeddings = model.encode(cleaned_terms, show_progress_bar=True, convert_to_numpy=True)
-        embedding_library[category] = [
-            {"term": t, "embedding": emb} for t, emb in zip(cleaned_terms, embeddings)
+    term_library = {}
+    for category, terms in terms_by_category.items():
+        vectors = embedder.encode(terms, convert_to_numpy=True)
+        term_library[category] = [
+            {"term": term, "embedding": vector.tolist()}
+            for term, vector in zip(terms, vectors)
         ]
 
     with open(output_path, "wb") as f:
-        pickle.dump(embedding_library, f)
+        pickle.dump(term_library, f)
 
-    print(f"✅ Saved embeddings to {output_path}")
+    print(f"✅ Saved embedded terms to: {output_path}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name", required=True)
-    parser.add_argument("--num_patients", type=int, default=5000)
-    parser.add_argument("--num_visits", type=int, default=6)
-    args = parser.parse_args()
-    main(args)
+    main()

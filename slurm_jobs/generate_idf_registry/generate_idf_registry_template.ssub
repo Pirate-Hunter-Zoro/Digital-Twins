@@ -1,0 +1,33 @@
+#!/bin/bash
+#SBATCH --job-name=idf_${1}_${2}
+#SBATCH --output=logs/idf_%j_${1}_${2}_out.txt
+#SBATCH --error=logs/idf_%j_${1}_${2}_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=2:00:00
+
+VEC=$1
+MODEL_NAME=$2
+REP=$3
+NUM_PATIENTS=$4
+NUM_VISITS=$5
+DIST=$6
+NUM_NEIGHBORS=$7
+
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
+
+$CONDA_PREFIX/bin/python scripts/analyze_results/generate_idf_registry.py \
+  --vectorizer_method $VEC \
+  --model_name $MODEL_NAME \
+  --representation_method $REP \
+  --num_patients $NUM_PATIENTS \
+  --num_visits $NUM_VISITS \
+  --distance_metric $DIST \
+  --num_neighbors $NUM_NEIGHBORS

@@ -1,40 +1,29 @@
-# --- main.py ---
-import sys
 import os
-from functools import partial
-import pickle
+import sys
+import argparse
+import json
 
 # --- Dynamic sys.path adjustment ---
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_script_dir, '..'))
+project_root = os.path.abspath(os.path.join(current_script_dir, "..", ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-# --- End of sys.path adjustment ---
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-from scripts.parser import parse_data_args
-import json
-from multiprocessing import Pool
-from scripts.read_data.load_patient_data import load_patient_data
-from scripts.calculations.process_patient import process_patient
-from scripts.llm.query_and_response import setup_prompt_generation
 from scripts.config import setup_config, get_global_config
+from scripts.llm.query_and_response import setup_prompt_generation, generate_prediction_output
+from scripts.read_data.load_patient_data import load_patient_data
 
-def convert_sets_to_lists(obj):
-    if isinstance(obj, dict):
-        return {k: convert_sets_to_lists(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_sets_to_lists(v) for v in obj]
-    elif isinstance(obj, set):
-        return list(obj)
-    else:
-        return obj
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--representation_method", required=True)
+    parser.add_argument("--vectorizer_method", required=True)
+    parser.add_argument("--distance_metric", required=True)
+    parser.add_argument("--num_visits", type=int, required=True)
+    parser.add_argument("--num_patients", type=int, required=True)
+    parser.add_argument("--num_neighbors", type=int, required=True)
+    parser.add_argument("--model_name", required=True)
+    args = parser.parse_args()
 
-if __name__ == "__main__":
-    args = parse_data_args()
-
-    # --- FIX APPLIED: Connecting the new representation_method wire! ---
     setup_config(
         representation_method=args.representation_method,
         vectorizer_method=args.vectorizer_method,
@@ -42,51 +31,32 @@ if __name__ == "__main__":
         num_visits=args.num_visits,
         num_patients=args.num_patients,
         num_neighbors=args.num_neighbors,
+        model_name=args.model_name,
     )
-    # --- End of Fix ---
-    
-    global_config = get_global_config()
 
-    print("--- Loading and Filtering Patient Data ---")
-    patient_data_raw = load_patient_data()
-    print(f"Loaded {len(patient_data_raw)} total patients.")
-
-    required_visits = global_config.num_visits
-    patient_data_filtered = [
-        p for p in patient_data_raw if len(p.get("visits", [])) >= required_visits
-    ]
-    print(f"Filtered down to {len(patient_data_filtered)} patients with at least {required_visits} visits.")
-    if len(patient_data_raw) > len(patient_data_filtered):
-        print(f"Discarded {len(patient_data_raw) - len(patient_data_filtered)} patients due to insufficient visit history.")
-
-    all_results = {}
-    patients_processed = 0
+    config = get_global_config()
 
     setup_prompt_generation()
-    
-    print(f"\n--- Starting Prediction Pool with {args.workers} Workers ---")
-    process_pool = Pool(processes=args.workers)
-    
-    pool_results = process_pool.imap_unordered(process_patient, patient_data_filtered)
-    
-    # Filename now includes representation_method for perfect separation of experiment results!
-    output_file = f"data/patient_results_{global_config.num_patients}_{global_config.num_visits}_{global_config.representation_method}_{global_config.vectorizer_method}_{global_config.distance_metric}.json"
+    patients = load_patient_data()
 
-    try:
-        for patient_id, result in pool_results:
-            all_results[patient_id] = convert_sets_to_lists(result)
-            patients_processed += 1
-            if patients_processed % args.save_every == 0:
-                with open(output_file, "w") as f:
-                    json.dump(all_results, f, indent=4)
-                print(f"Saved results after processing {patients_processed} patients.")
-    except Exception as e:
-        print(f"An error occurred during multiprocessing: {e}", file=sys.stderr)
-    finally:
-        with open(output_file, "w") as f:
-            json.dump(all_results, f, indent=4)
-        print(f"\nFinished processing {patients_processed} patients. Final results saved to {output_file}.")
+    results = {}
+    for patient in patients:
+        try:
+            prediction = generate_prediction_output(patient)
+            results[patient["patient_id"]] = prediction
+        except Exception as e:
+            print(f"Skipping patient {patient['patient_id']}: {e}")
+            continue
 
-        process_pool.close()
-        process_pool.join()
-        print("--- All processes complete! ---")
+    output_file = os.path.join(
+        project_root,
+        "data",
+        f"patient_results_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.distance_metric}_{config.model_name}.json"
+    )
+    with open(output_file, "w") as f:
+        json.dump(results, f, indent=2)
+
+    print(f"✅ Saved predictions to: {output_file}")
+
+if __name__ == "__main__":
+    main()

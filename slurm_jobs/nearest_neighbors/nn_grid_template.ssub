@@ -1,7 +1,4 @@
 #!/bin/bash
-#SBATCH --job-name=nn_${REP}_${VEC}_${DIST}
-#SBATCH --output=logs/nn_%j_${REP}_${VEC}_${DIST}_out.txt
-#SBATCH --error=logs/nn_%j_${REP}_${VEC}_${DIST}_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -10,23 +7,40 @@
 #SBATCH --gres=gpu:1
 #SBATCH --time=9:00:00
 
+# === 📥 Accept Parameters ===
+REP=$1
+VEC=$2
+DIST=$3
+NEIGHBORS=$4
+VISITS=$5
+PATIENTS=$6
+
+# === 🏷️ Logging Setup ===
+JOB_NAME="nn_${REP}_${VEC}_${DIST}"
+OUT_LOG="logs/nn_${JOB_NAME}_out.txt"
+ERR_LOG="logs/nn_${JOB_NAME}_err.txt"
+
+echo "📛 Job Name: $JOB_NAME"
+echo "📤 Output Log: $OUT_LOG"
+echo "📥 Error Log: $ERR_LOG"
+
+# === ⚙️ Environment Setup ===
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate vllm_env
 
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
 
-mkdir -p logs data
-
-echo "$(date): Running compute_nearest_neighbors for $REP | $VEC | $DIST | Neighbors=$NBR"
+# === 🧠 Run NN Calculation ===
+echo "$(date): Running compute_nearest_neighbors.py..." | tee -a "$OUT_LOG"
 
 $CONDA_PREFIX/bin/python scripts/calculations/compute_nearest_neighbors.py \
-  --representation_method $REP \
-  --num_patients $PTS \
-  --num_visits $VISITS \
-  --vectorizer_method $VEC \
-  --distance_metric $DIST \
-  --num_neighbors $NBR \
-  --workers $NUM_WORKERS
+  --representation_method "$REP" \
+  --vectorizer_method "$VEC" \
+  --distance_metric "$DIST" \
+  --num_neighbors "$NEIGHBORS" \
+  --num_visits "$VISITS" \
+  --num_patients "$PATIENTS" \
+  --workers 60 >> "$OUT_LOG" 2>> "$ERR_LOG"
 
-echo "$(date): Finished compute_nearest_neighbors for $REP | $VEC | $DIST"
+echo "$(date): ✅ NN computation finished for $REP, $VEC, $DIST" | tee -a "$OUT_LOG"

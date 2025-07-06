@@ -105,7 +105,7 @@ def main():
 
     all_vectors_path = os.path.join(
         data_dir,
-        f"all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}.pkl"
+        f"all_vectors_{config.num_patients}_{config.num_visits}_{config.representation_method}_{config.vectorizer_method}_{config.model_name}.pkl"
     )
     with open(all_vectors_path, "wb") as f:
         pickle.dump(vectors_dict, f)
