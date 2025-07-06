@@ -24,7 +24,7 @@ for REP in "${REPRESENTATIONS[@]}"; do
 
               sbatch \
                 --export=ALL,REP=$REP,PTS=$PTS,VISITS=$VISITS,VEC=$VEC,DIST=$DIST,NBR=$NBR,MODEL_NAME=$MODEL_NAME,MODEL_PATH=$MODEL_PATH \
-                predict_grid_template.ssub
+                slurm_jobs/next_visit_prediction/predict_grid_template.ssub
             done
           done
         done

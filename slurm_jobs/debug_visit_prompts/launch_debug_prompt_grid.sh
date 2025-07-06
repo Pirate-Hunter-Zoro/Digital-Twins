@@ -25,7 +25,7 @@ for i in "${!MODEL_NAMES[@]}"; do
 
               sbatch \
                 --export=ALL,REP=$REP,VEC=$VEC,DIST=$DIST,VISITS=$VISITS,PTS=$PTS,NEIGHBORS=$NEIGHBORS,MODEL_NAME=$MODEL_NAME,MODEL_PATH=$MODEL_PATH \
-                debug_prompt_test_template.ssub
+                slurm_jobs/debug_visit_prompts/debug_prompt_test_template.ssub
 
             done
           done

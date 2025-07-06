@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH --job-name=cosine_similarity_${VEC}
+#SBATCH --output=logs/cosine_similarity_${VEC}_out.txt
+#SBATCH --error=logs/cosine_similarity_${VEC}_err.txt
+#SBATCH --partition=c3_short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --time=9:00:00
+
+module load Python/3.11.5-GCCcore-13.2.0
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate vllm_env
+
+cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
+
+echo "$(date): Running cosine similarity analysis with embedder ${VEC}"
+$CONDA_PREFIX/bin/python scripts/analyze_results/analyze_embedding_cosine_stats.py \
+  --vectorizer_method $VEC
+
+echo "$(date): Analysis complete!"

@@ -26,7 +26,7 @@ for REP in "${REPRESENTATIONS[@]}"; do
 
                 sbatch \
                   --export=ALL,REP=$REP,PTS=$PTS,VISITS=$VISITS,VEC=$VEC,DIST=$DIST,NBR=$NBR,MAXP=$MAXP,MODEL_NAME=$MODEL_NAME,MODEL_PATH=$MODEL_PATH \
-                  spearman_grid_template.ssub
+                  slurm_jobs/spearmans_rho/spearman_grid_template.ssub
 
               done
             done
