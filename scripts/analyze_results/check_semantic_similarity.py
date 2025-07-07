@@ -29,12 +29,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--vectorizer_method", required=True, help="Vectorizer model name")
     args = parser.parse_args()
-    
-    model_path = PROJ_LOC / "models" / args.vectorizer_method
-    model = SentenceTransformer(str(model_path), local_files_only=True)
 
     ROOT_DIR = Path(__file__).resolve().parents[2]
     PROJ_LOC = Path(__file__).resolve().parents[3]
+
+    model_path = PROJ_LOC / "models" / args.vectorizer_method
+    model = SentenceTransformer(str(model_path), local_files_only=True)
 
     # --- Define term pairs ---
     test_pairs = {
