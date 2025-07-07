@@ -70,7 +70,12 @@ def main():
     for cat in term_library:
         print(f"🔍 Analyzing category: {cat}")
         terms = term_library[cat]
-        term_vecs = np.vstack([item["embedding"] for item in terms])
+        if isinstance(terms, dict):  # New-style: {term: embedding}
+            term_vecs = np.vstack(list(terms.values()))
+        elif isinstance(terms, list):  # Old-style: [{"term": ..., "embedding": ...}]
+            term_vecs = np.vstack([item["embedding"] for item in terms])
+        else:
+            raise TypeError(f"Unexpected format for terms in category '{cat}': {type(terms)}")
 
         within = compute_within_category_cosines(term_vecs)
 
