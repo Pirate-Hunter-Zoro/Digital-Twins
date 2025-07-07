@@ -2,7 +2,7 @@
 # launch_debug_prompt_grid.sh
 
 REPRESENTATIONS=("visit_sentence")
-VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-MiniLM-L6-v2" "all-mpnet-base-v2" "biobert-mnli-mednli" "cambridgeltl-SapBERT-from-PubMedBERT-fulltext" "paraphrase-multilingual-MiniLM-L12-v2" "pritamdeka-BioBERT-mnli-snli-scinli-scitail-mednli-stsb")
+VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-mpnet-base-v2" "biobert-mnli-mednli")
 DISTANCE_METRICS=("euclidean")
 NUM_VISITS_LIST=(6)
 NUM_PATIENTS_LIST=(5000)

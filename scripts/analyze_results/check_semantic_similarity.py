@@ -16,6 +16,7 @@ if str(scripts_dir) not in sys.path:
 
 from calculations.prepare_categorized_embedding_terms import clean_term
 from config import setup_config, get_global_config
+from models.embedder import FallbackEmbedder
 
 from transformers import AutoTokenizer, AutoModel
 import torch
@@ -24,22 +25,6 @@ from sentence_transformers import SentenceTransformer
 # --- Cosine similarity ---
 def cosine_similarity(a, b):
     return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
-
-# --- Fallback embedding method ---
-def get_sentence_embedder(model_path):
-    try:
-        return SentenceTransformer(str(model_path), local_files_only=True), "sentence-transformers"
-    except Exception:
-        tokenizer = AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
-        model = AutoModel.from_pretrained(str(model_path), local_files_only=True)
-
-        def embed_fn(text):
-            inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-            with torch.no_grad():
-                outputs = model(**inputs)
-                cls_embedding = outputs.last_hidden_state[:, 0, :]
-            return cls_embedding[0].numpy()
-        return embed_fn, "hf-transformers"
 
 def main():
     parser = argparse.ArgumentParser()
@@ -65,7 +50,7 @@ def main():
         ]
     }
 
-    embedder, embed_type = get_sentence_embedder(model_path)
+    embedder, embed_type = FallbackEmbedder(model_path)
 
     results = {}
     for category, pairs in test_pairs.items():

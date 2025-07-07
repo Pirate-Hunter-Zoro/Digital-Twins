@@ -20,21 +20,7 @@ if str(scripts_dir) not in sys.path:
 
 from calculations.prepare_categorized_embedding_terms import clean_term
 from config import setup_config, get_global_config
-
-def get_sentence_embedder(model_path):
-    try:
-        return SentenceTransformer(str(model_path), local_files_only=True), "sentence-transformers"
-    except Exception:
-        tokenizer = AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
-        model = AutoModel.from_pretrained(str(model_path), local_files_only=True)
-
-        def embed_fn(text):
-            inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-            with torch.no_grad():
-                outputs = model(**inputs)
-                cls_embedding = outputs.last_hidden_state[:, 0, :]
-            return cls_embedding[0].numpy()
-        return embed_fn, "hf-transformers"
+from models.embedder import FallbackEmbedder
 
 def main():
     parser = argparse.ArgumentParser()
@@ -66,7 +52,7 @@ def main():
         term_data = json.load(f)
 
     model_path = project_loc / "models" / config.vectorizer_method
-    embedder, embed_type = get_sentence_embedder(model_path)
+    embedder, embed_type = FallbackEmbedder(model_path)
 
     term_embedding_library = {}
 

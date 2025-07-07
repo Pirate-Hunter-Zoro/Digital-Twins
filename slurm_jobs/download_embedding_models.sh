@@ -8,7 +8,6 @@ cd "$(dirname "$0")/../.."
 
 # Ensure models directory exists
 mkdir -p models
-cd models
 
 # Array of HuggingFace model IDs to download
 MODEL_LIST=(
@@ -19,15 +18,21 @@ MODEL_LIST=(
   "cambridgeltl/SapBERT-from-PubMedBERT-fulltext"
 )
 
-echo "Downloading models to: $(pwd)"
+echo "Downloading models to: $(pwd)/models"
+
 for MODEL_ID in "${MODEL_LIST[@]}"; do
-  # Convert model ID to folder-friendly name
   DIR_NAME=$(echo "$MODEL_ID" | sed 's|/|-|g')
-  if [ -d "$DIR_NAME" ]; then
+  TARGET_DIR="models/$DIR_NAME"
+
+  if [ -d "$TARGET_DIR" ]; then
     echo "✅ Model already exists: $DIR_NAME"
   else
-    echo "⬇️  Downloading $MODEL_ID into $DIR_NAME"
-    transformers-cli download "$MODEL_ID" --cache-dir "./$DIR_NAME"
+    echo "⬇️  Downloading $MODEL_ID into $DIR_NAME using SentenceTransformer"
+    python3 -c "
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('${MODEL_ID}')
+model.save('${TARGET_DIR}')
+" || echo "❌ Failed to download $MODEL_ID"
   fi
 done
 
