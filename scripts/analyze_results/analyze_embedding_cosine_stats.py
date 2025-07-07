@@ -78,6 +78,7 @@ def main():
             raise TypeError(f"Unexpected format for category '{cat}'")
 
         # Comparison category
+        random_other_cat = np.random.choice(other_cats)
         other_terms = term_library[random_other_cat]
         if isinstance(other_terms, dict):
             other_vecs = np.vstack(list(other_terms.values()))
