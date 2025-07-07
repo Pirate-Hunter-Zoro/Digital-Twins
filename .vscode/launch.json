@@ -5,19 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Examine Nearby Patient Relevance (vllm_env)",
+            "name": "Python Debugger: Examine Nearby Patient Relevance (venv)",
             "type": "debugpy",
             "request": "launch",
             "program": "examine_nearby_patients.py",
             "console": "integratedTerminal",
             // --- ADD THIS SECTION ---
-            "python": "/home/librad.laureateinstitute.org/mferguson/.conda/envs/vllm_env/bin/python"
+            "python": "/home/librad.laureateinstitute.org/mferguson/.conda/envs/venv/bin/python"
             // OR (if you created it with `venv`):
-            // "python": "${workspaceFolder}/vllm_env/bin/python"
+            // "python": "${workspaceFolder}/venv/bin/python"
             // OR, if you are unsure of the exact path, use the "envFile" approach
             // "envFile": "${workspaceFolder}/.env"
             // And in your .env file, add:
-            // PATH=/home/librad.laureateinstitute.org/mferguson/.conda/envs/vllm_env/bin:$PATH
+            // PATH=/home/librad.laureateinstitute.org/mferguson/.conda/envs/venv/bin:$PATH
             // --- END ADDITION ---
         }
     ]

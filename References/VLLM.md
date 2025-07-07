@@ -9,8 +9,8 @@ This guide walks you through launching `vllm` on a compute node, using a local C
 Use Python 3.10–3.12. Run the following:
 
 ```bash
-conda create -n vllm_env python=3.12 -y
-conda activate vllm_env
+conda create -n venv python=3.12 -y
+conda activate venv
 pip install -r requirements.txt
 ```
 
@@ -35,7 +35,7 @@ srun --partition=c3_short --gres=gpu --pty bash
 
 Once you're in the compute node (e.g. `compute305`):
 ```bash
-conda activate vllm_env
+conda activate venv
 ```
 
 Obtain the snapshot of the model you have downloaded from running ```download_model.py```
@@ -68,7 +68,7 @@ ssh compute305
 Then:
 
 ```bash
-conda activate vllm_env
+conda activate venv
 python query_llm.py
 ```
 

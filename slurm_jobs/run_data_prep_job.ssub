@@ -10,7 +10,7 @@
 
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
-conda activate vllm_env
+conda activate venv
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins/
 
 # --- Run process_data.py for JSON generation ---
