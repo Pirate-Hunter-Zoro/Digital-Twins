@@ -2,7 +2,7 @@
 
 # === Grid Parameters ===
 REPRESENTATIONS=("visit_sentence")
-VECTORIZERS=("biobert-mnli-mednli")
+VECTORIZERS=("biobert-mnli-mednli" "gte-large" "e5-large-v2" "all-mpnet-base-v2" "mxbai-embed-large-v1")
 DISTANCE_METRICS=("euclidean")
 NUM_PATIENTS_LIST=(5000)
 NUM_VISITS_LIST=(6)
@@ -20,8 +20,8 @@ for REP in "${REPRESENTATIONS[@]}"; do
           for MODEL_NAME in "${MODEL_NAMES[@]}"; do
 
             JOB_NAME="cosine_${REP}_${VEC}_${DIST}_${PATIENTS}_${VISITS}"
-            LOG_OUT="logs/${JOB_NAME}_%j_out.txt"
-            LOG_ERR="logs/${JOB_NAME}_%j_err.txt"
+            LOG_OUT="logs/${JOB_NAME}_out.txt"
+            LOG_ERR="logs/${JOB_NAME}_err.txt"
 
             echo "Launching $JOB_NAME..."
 

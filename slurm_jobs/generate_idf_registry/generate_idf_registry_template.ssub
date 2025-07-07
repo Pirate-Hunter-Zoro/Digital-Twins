@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=idf_${1}_${2}
-#SBATCH --output=logs/idf_%j_${1}_${2}_out.txt
-#SBATCH --error=logs/idf_%j_${1}_${2}_err.txt
+#SBATCH --output=logs/idf_${1}_${2}_out.txt
+#SBATCH --error=logs/idf_${1}_${2}_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
