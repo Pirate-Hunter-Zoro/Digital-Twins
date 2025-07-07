@@ -6,17 +6,20 @@ from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pickle
 from sentence_transformers import SentenceTransformer
 
+
 # --- Dynamic sys.path adjustment ---
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+current_script_dir = Path(__file__).resolve().parent  # /.../scripts/analyze_results
+scripts_dir = current_script_dir.parent               # /.../scripts
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+# --- End of dynamic sys.path adjustment ---
 
+from config import setup_config, get_global_config
+from common.utils import turn_to_sentence
+from read_data.load_patient_data import load_patient_data
+
+project_root = scripts_dir.parent  # /.../project_root
 data_dir = os.path.join(project_root, "data")
-
-from scripts.config import get_global_config, setup_config
-from scripts.common.utils import turn_to_sentence
-from scripts.read_data.load_patient_data import load_patient_data
 
 def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
     visit_histories = {}
