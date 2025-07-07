@@ -1,40 +1,34 @@
 #!/bin/bash
+# === New GPT Embedding Model Download Section ===
 
-# === Grid Parameters ===
-REPRESENTATIONS=("visit_sentence")
-VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-mpnet-base-v2" "biobert-mnli-mednli")
-DISTANCE_METRICS=("euclidean")
-NUM_PATIENTS_LIST=(5000)
-NUM_VISITS_LIST=(6)
-MODEL_NAMES=("medgemma")
+# Root path for model downloads
+MODEL_ROOT=../models
+mkdir -p $MODEL_ROOT
 
-TEMPLATE="slurm_jobs/cosine_similarity_exploration/cosine_similarity_exploration.ssub"
+echo "📦 Downloading GPT-style models into $MODEL_ROOT"
 
-mkdir -p logs data
+GPT_MODELS=(
+  "EleutherAI/gpt-j-6B"
+  "mistralai/Mistral-7B-Instruct-v0.2"
+  "NousResearch/Nous-Hermes-2-Mistral-7B"
+  "openchat/openchat-3.5-1210"
+  "openai-community/gpt2"  # optionally test classic GPT-2
+  "allenai/OLMo-7B"        # from the paper, a newer high-quality model
+)
 
-for REP in "${REPRESENTATIONS[@]}"; do
-  for VEC in "${VECTORIZERS[@]}"; do
-    for DIST in "${DISTANCE_METRICS[@]}"; do
-      for PATIENTS in "${NUM_PATIENTS_LIST[@]}"; do
-        for VISITS in "${NUM_VISITS_LIST[@]}"; do
-          for MODEL_NAME in "${MODEL_NAMES[@]}"; do
-
-            JOB_NAME="cosine_${REP}_${VEC}_${DIST}_${PATIENTS}_${VISITS}"
-            LOG_OUT="logs/${JOB_NAME}_out.txt"
-            LOG_ERR="logs/${JOB_NAME}_err.txt"
-
-            echo "Launching $JOB_NAME..."
-
-            sbatch \
-              --job-name="$JOB_NAME" \
-              --output="$LOG_OUT" \
-              --error="$LOG_ERR" \
-              "$TEMPLATE" "$REP" "$VEC" "$DIST" "$PATIENTS" "$VISITS" "$MODEL_NAME"
-
-            sleep 1
-          done
-        done
-      done
-    done
-  done
+for MODEL in "${GPT_MODELS[@]}"; do
+  MODEL_DIR=${MODEL//\//-}
+  TARGET_DIR="$MODEL_ROOT/$MODEL_DIR"
+  if [ -d "$TARGET_DIR" ]; then
+    echo "✅ Model already exists: $MODEL_DIR"
+  else
+    echo "⬇️  Downloading $MODEL into $MODEL_DIR"
+    python3 -c "
+from transformers import AutoModel, AutoTokenizer
+AutoTokenizer.from_pretrained('$MODEL', cache_dir='$TARGET_DIR')
+AutoModel.from_pretrained('$MODEL', cache_dir='$TARGET_DIR')
+"
+  fi
 done
+
+echo "🎉 GPT-style model downloads complete!"

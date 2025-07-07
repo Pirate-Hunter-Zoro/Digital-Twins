@@ -2,7 +2,7 @@ from transformers import AutoModel, AutoTokenizer
 import torch
 import numpy as np
 
-class FallbackEmbedder:
+class TransformerEmbedder:
     def __init__(self, model_path):
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)

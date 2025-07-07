@@ -1,39 +1,34 @@
 #!/bin/bash
+# === New GPT Embedding Model Download Section ===
 
-# This script should be placed in Digital-Twins/slurm_jobs
-# It downloads various sentence embedding models to ../models/
+# Root path for model downloads
+MODEL_ROOT=../models
+mkdir -p $MODEL_ROOT
 
-# Navigate to the project parent directory (one level above Digital-Twins)
-cd "$(dirname "$0")/../.."
+echo "📦 Downloading GPT-style models into $MODEL_ROOT"
 
-# Ensure models directory exists
-mkdir -p models
-
-# Array of HuggingFace model IDs to download
-MODEL_LIST=(
-  "sentence-transformers/all-mpnet-base-v2"
-  "sentence-transformers/all-MiniLM-L6-v2"
-  "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-  "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
-  "cambridgeltl/SapBERT-from-PubMedBERT-fulltext"
+GPT_MODELS=(
+  "EleutherAI/gpt-j-6B"
+  "mistralai/Mistral-7B-Instruct-v0.2"
+  "NousResearch/Nous-Hermes-2-Mistral-7B"
+  "openchat/openchat-3.5-1210"
+  "openai-community/gpt2"
+  "allenai/OLMo-7B"       
 )
 
-echo "Downloading models to: $(pwd)/models"
-
-for MODEL_ID in "${MODEL_LIST[@]}"; do
-  DIR_NAME=$(echo "$MODEL_ID" | sed 's|/|-|g')
-  TARGET_DIR="models/$DIR_NAME"
-
+for MODEL in "${GPT_MODELS[@]}"; do
+  MODEL_DIR=${MODEL//\//-}
+  TARGET_DIR="$MODEL_ROOT/$MODEL_DIR"
   if [ -d "$TARGET_DIR" ]; then
-    echo "✅ Model already exists: $DIR_NAME"
+    echo "✅ Model already exists: $MODEL_DIR"
   else
-    echo "⬇️  Downloading $MODEL_ID into $DIR_NAME using SentenceTransformer"
+    echo "⬇️  Downloading $MODEL into $MODEL_DIR"
     python3 -c "
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('${MODEL_ID}')
-model.save('${TARGET_DIR}')
-" || echo "❌ Failed to download $MODEL_ID"
+from transformers import AutoModel, AutoTokenizer
+AutoTokenizer.from_pretrained('$MODEL', cache_dir='$TARGET_DIR')
+AutoModel.from_pretrained('$MODEL', cache_dir='$TARGET_DIR')
+"
   fi
 done
 
-echo "🎉 Done downloading all sentence embedding models!"
+echo "🎉 GPT-style model downloads complete!"
