@@ -50,7 +50,8 @@ def main():
         ]
     }
 
-    embedder, embed_type = FallbackEmbedder(model_path)
+    embedder = FallbackEmbedder(model_path)
+    embed_type = embedder.embed_type
 
     results = {}
     for category, pairs in test_pairs.items():

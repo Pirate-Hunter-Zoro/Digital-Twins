@@ -10,6 +10,9 @@ class FallbackEmbedder:
         except Exception as e:
             raise RuntimeError(f"❌ Failed to load model from {model_path}: {e}")
 
+    def __call__(self, text: str):
+        return self.encode(text)
+
     def encode(self, sentence: str, convert_to_numpy=True, normalize_embeddings=True):
         inputs = self.tokenizer(sentence, return_tensors="pt", truncation=True, padding=True)
         with torch.no_grad():
@@ -28,3 +31,7 @@ class FallbackEmbedder:
         if convert_to_numpy:
             return embeddings.cpu().numpy()[0]
         return embeddings
+
+    @property
+    def embed_type(self):
+        return "transformers-fallback"

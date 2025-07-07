@@ -52,7 +52,8 @@ def main():
         term_data = json.load(f)
 
     model_path = project_loc / "models" / config.vectorizer_method
-    embedder, embed_type = FallbackEmbedder(model_path)
+    embedder = FallbackEmbedder(model_path)
+    embed_type = embedder.embed_type
 
     term_embedding_library = {}
 
