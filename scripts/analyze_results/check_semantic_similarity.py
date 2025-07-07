@@ -6,6 +6,7 @@ import numpy as np
 from pathlib import Path
 from numpy.linalg import norm
 from sentence_transformers import SentenceTransformer
+import argparse
 
 # --- Dynamic path setup ---
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,7 +16,6 @@ if project_root not in sys.path:
 
 # --- Imports ---
 from scripts.calculations.prepare_categorized_embedding_terms import clean_term
-from scripts.config import setup_config, get_global_config
 
 # --- Cosine similarity ---
 def cosine_similarity(a, b):
@@ -26,19 +26,15 @@ def embed_term(term, model):
     return model.encode(term, convert_to_numpy=True, normalize_embeddings=True)
 
 def main():
-    # --- Config setup ---
-    setup_config(num_visits=6, num_neighbors=10, num_patients=5000,
-                 vectorizer_method='biobert-mnli-mednli',
-                 distance_metric='euclidean', representation_method='bag_of_codes')
-    config = get_global_config()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--vectorizer_method", required=True, help="Vectorizer model name")
+    args = parser.parse_args()
+    
+    model_path = PROJ_LOC / "models" / args.vectorizer_method
+    model = SentenceTransformer(str(model_path), local_files_only=True)
+
     ROOT_DIR = Path(__file__).resolve().parents[2]
     PROJ_LOC = Path(__file__).resolve().parents[3]
-
-    # --- Load model and embeddings ---
-    print(f"🧠 Loading model from: {config.vectorizer_method}")
-    model = SentenceTransformer(str(PROJ_LOC / "models" / config.vectorizer_method))
-    with open(ROOT_DIR / "data" / "term_embedding_library_by_category.pkl", "rb") as f:
-        grouped_data = pickle.load(f)
 
     # --- Define term pairs ---
     test_pairs = {
@@ -61,18 +57,12 @@ def main():
     results = {}
     for category, pairs in test_pairs.items():
         cat_results = []
-        embeddings = grouped_data.get(category, {})
         for term_a, term_b in pairs:
             a_clean = clean_term(term_a)
             b_clean = clean_term(term_b)
 
-            vec_a = embeddings.get(a_clean)
-            vec_b = embeddings.get(b_clean)
-
-            if vec_a is None:
-                vec_a = embed_term(a_clean, model)
-            if vec_b is None:
-                vec_b = embed_term(b_clean, model)
+            vec_a = embed_term(a_clean, model)
+            vec_b = embed_term(b_clean, model)
 
             sim_score = cosine_similarity(vec_a, vec_b)
             cat_results.append({
@@ -81,13 +71,11 @@ def main():
                 "cosine_similarity": float(f"{sim_score:.4f}"),
                 "term_a_cleaned": a_clean,
                 "term_b_cleaned": b_clean,
-                "generated_a": a_clean not in embeddings,
-                "generated_b": b_clean not in embeddings
             })
         results[category] = cat_results
 
     # --- Save results ---
-    output_path = ROOT_DIR / "data" / "semantic_similarity_examples.json"
+    output_path = ROOT_DIR / "data" / f"semantic_similarity_examples_{args.vectorizer_method}.json"
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
 
