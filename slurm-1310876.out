@@ -1,0 +1,4 @@
+Job Name: cosine_similarity_
+Logging to logs/cosine_similarity__out.txt and logs/cosine_similarity__err.txt
+Sun Jul  6 18:44:51 CDT 2025: Running cosine similarity analysis with embedder 
+Sun Jul  6 18:44:57 CDT 2025: Analysis complete!
