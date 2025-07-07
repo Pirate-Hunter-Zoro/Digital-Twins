@@ -70,18 +70,20 @@ def main():
     for cat in term_library:
         print(f"🔍 Analyzing category: {cat}")
         terms = term_library[cat]
-        if isinstance(terms, dict):  # New-style: {term: embedding}
+        
+        # Category embeddings
+        if isinstance(terms, dict):
             term_vecs = np.vstack(list(terms.values()))
-        elif isinstance(terms, list):  # Old-style: [{"term": ..., "embedding": ...}]
-            term_vecs = np.vstack([item["embedding"] for item in terms])
         else:
-            raise TypeError(f"Unexpected format for terms in category '{cat}': {type(terms)}")
+            raise TypeError(f"Unexpected format for category '{cat}'")
 
-        within = compute_within_category_cosines(term_vecs)
-
-        other_cats = [c for c in term_library if c != cat]
-        random_other_cat = np.random.choice(other_cats)
-        other_vecs = np.vstack([item["embedding"] for item in term_library[random_other_cat]])
+        # Comparison category
+        other_terms = term_library[random_other_cat]
+        if isinstance(other_terms, dict):
+            other_vecs = np.vstack(list(other_terms.values()))
+        else:
+            raise TypeError(f"Unexpected format for category '{random_other_cat}'")
+        
         cross = compute_cross_category_cosines(term_vecs, other_vecs)
 
         plt.figure(figsize=(10, 6))
