@@ -1,42 +1,54 @@
 import os
 import sys
 import json
-import pickle
+import argparse
 import numpy as np
 from pathlib import Path
 from numpy.linalg import norm
+
+import sys
+from pathlib import Path
+
+current_script_dir = Path(__file__).resolve().parent
+scripts_dir = current_script_dir.parent
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+
+from calculations.prepare_categorized_embedding_terms import clean_term
+from config import setup_config, get_global_config
+
+from transformers import AutoTokenizer, AutoModel
+import torch
 from sentence_transformers import SentenceTransformer
-import argparse
-
-# --- Dynamic path setup ---
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# --- Imports ---
-from scripts.calculations.prepare_categorized_embedding_terms import clean_term
 
 # --- Cosine similarity ---
 def cosine_similarity(a, b):
     return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
 
-# --- Fallback vector generator ---
-def embed_term(term, model):
-    return model.encode(term, convert_to_numpy=True, normalize_embeddings=True)
+# --- Fallback embedding method ---
+def get_sentence_embedder(model_path):
+    try:
+        return SentenceTransformer(str(model_path), local_files_only=True), "sentence-transformers"
+    except Exception:
+        tokenizer = AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
+        model = AutoModel.from_pretrained(str(model_path), local_files_only=True)
+
+        def embed_fn(text):
+            inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+            with torch.no_grad():
+                outputs = model(**inputs)
+                cls_embedding = outputs.last_hidden_state[:, 0, :]
+            return cls_embedding[0].numpy()
+        return embed_fn, "hf-transformers"
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--vectorizer_method", required=True, help="Vectorizer model name")
+    parser.add_argument("--vectorizer_method", required=True)
     args = parser.parse_args()
 
-    ROOT_DIR = Path(__file__).resolve().parents[2]
-    PROJ_LOC = Path(__file__).resolve().parents[3]
+    project_loc = Path(__file__).resolve().parents[3]
+    model_path = project_loc / "models" / args.vectorizer_method
 
-    model_path = PROJ_LOC / "models" / args.vectorizer_method
-    model = SentenceTransformer(str(model_path), local_files_only=True)
-
-    # --- Define term pairs ---
     test_pairs = {
         "diagnoses": [
             ("heart attack", "myocardial infarction"),
@@ -53,7 +65,8 @@ def main():
         ]
     }
 
-    # --- Process and save similarities ---
+    embedder, embed_type = get_sentence_embedder(model_path)
+
     results = {}
     for category, pairs in test_pairs.items():
         cat_results = []
@@ -61,8 +74,8 @@ def main():
             a_clean = clean_term(term_a)
             b_clean = clean_term(term_b)
 
-            vec_a = embed_term(a_clean, model)
-            vec_b = embed_term(b_clean, model)
+            vec_a = embedder.encode(a_clean) if embed_type == "sentence-transformers" else embedder(a_clean)
+            vec_b = embedder.encode(b_clean) if embed_type == "sentence-transformers" else embedder(b_clean)
 
             sim_score = cosine_similarity(vec_a, vec_b)
             cat_results.append({
@@ -74,8 +87,7 @@ def main():
             })
         results[category] = cat_results
 
-    # --- Save results ---
-    output_path = ROOT_DIR / "data" / f"semantic_similarity_examples_{args.vectorizer_method}.json"
+    output_path = project_loc / "Digital-Twins" / "data" / f"semantic_similarity_examples_{args.vectorizer_method}.json"
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
 
