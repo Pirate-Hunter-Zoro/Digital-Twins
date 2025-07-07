@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=term_embed_${1}
-#SBATCH --output=logs/term_embed_${1}_${2}_out.txt
-#SBATCH --error=logs/term_embed_${1}_${2}_err.txt
+#SBATCH --job-name=term_embed
+#SBATCH --output=logs/placeholder_out.txt
+#SBATCH --error=logs/placeholder_err.txt
 #SBATCH --partition=c3_short
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -9,6 +9,7 @@
 #SBATCH --mem=64G
 #SBATCH --time=4:00:00
 
+# === 🔧 Arguments ===
 VEC=$1
 MODEL_NAME=$2
 REP=$3
@@ -16,6 +17,14 @@ NUM_PATIENTS=$4
 NUM_VISITS=$5
 DIST=$6
 NUM_NEIGHBORS=$7
+
+# === ✏️ Redirect Logs ===
+LOG_PREFIX="logs/term_embed_${VEC}_${MODEL_NAME}_${REP}_${NUM_PATIENTS}_${NUM_VISITS}_${DIST}_${NUM_NEIGHBORS}"
+exec > "${LOG_PREFIX}_out.txt" 2> "${LOG_PREFIX}_err.txt"
+
+# === 🚀 Your Job Code ===
+echo "Vectorizer: $VEC"
+echo "Model: $MODEL_NAME"
 
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh

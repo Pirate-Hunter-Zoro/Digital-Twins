@@ -2,7 +2,7 @@
 
 # === Grid Parameters ===
 REPRESENTATIONS=("visit_sentence")
-VECTORIZERS=("biobert-mnli-mednli" "gte-large" "e5-large-v2" "all-mpnet-base-v2" "mxbai-embed-large-v1")
+VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-MiniLM-L6-v2" "all-mpnet-base-v2" "biobert-mnli-mednli" "cambridgeltl-SapBERT-from-PubMedBERT-fulltext" "paraphrase-multilingual-MiniLM-L12-v2" "pritamdeka-BioBERT-mnli-snli-scinli-scitail-mednli-stsb")
 DISTANCE_METRICS=("euclidean")
 NUM_PATIENTS_LIST=(5000)
 NUM_VISITS_LIST=(6)

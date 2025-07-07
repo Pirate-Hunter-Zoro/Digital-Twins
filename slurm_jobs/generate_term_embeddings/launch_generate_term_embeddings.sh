@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # === 🔁 Parameter Grid ===
-VECTORIZERS=("biobert-mnli-mednli")
+VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-MiniLM-L6-v2" "all-mpnet-base-v2" "biobert-mnli-mednli" "cambridgeltl-SapBERT-from-PubMedBERT-fulltext" "paraphrase-multilingual-MiniLM-L12-v2" "pritamdeka-BioBERT-mnli-snli-scinli-scitail-mednli-stsb")
 NUM_PATIENTS_LIST=(5000)
 NUM_VISITS_LIST=(6)
 REPRESENTATIONS=("visit_sentence")
@@ -18,7 +18,7 @@ for VECTOR in "${VECTORIZERS[@]}"; do
         for NUM_VISITS in "${NUM_VISITS_LIST[@]}"; do
           for DIST in "${DISTANCE_METRICS[@]}"; do
             for NN in "${NUM_NEIGHBORS_LIST[@]}"; do
-              sbatch slurm_jobs/embedding_grid/generate_term_embeddings_template.ssub \
+              sbatch slurm_jobs/generate_term_embeddings/generate_term_embeddings_template.ssub \
                 "$VECTOR" "$MODEL" "$REP" "$NUM_PATIENTS" "$NUM_VISITS" "$DIST" "$NN"
             done
           done
