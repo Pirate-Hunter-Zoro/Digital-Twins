@@ -86,6 +86,7 @@ def main():
         else:
             raise TypeError(f"Unexpected format for category '{random_other_cat}'")
         
+        within = compute_within_category_cosines(term_vecs)
         cross = compute_cross_category_cosines(term_vecs, other_vecs)
 
         plt.figure(figsize=(10, 6))
