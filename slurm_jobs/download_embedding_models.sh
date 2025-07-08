@@ -22,12 +22,9 @@ if [ -z "$HUGGINGFACE_TOKEN" ]; then
 fi
 
 MODELS=(
-  "EleutherAI/gpt-j-6B"
-  "mistralai/Mistral-7B-Instruct-v0.2"
-  "NousResearch/Nous-Hermes-2-Mistral-7B"
-  "openchat/openchat-3.5-1210"
-  "openai-community/gpt2"
-  "allenai/OLMo-7B"
+"sentence-transformers/all-mpnet-base-v2"
+"pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
+"Qwen/Qwen3-Embedding-8B"
 )
 
 DEST_DIR="../models"
