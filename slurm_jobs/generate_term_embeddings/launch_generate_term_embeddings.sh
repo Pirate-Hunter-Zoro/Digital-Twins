@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # === 🔁 Parameter Grid ===
-VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-mpnet-base-v2" "biobert-mnli-mednli")
+VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-mpnet-base-v2" "biobert-mnli-mednli" "Qwen/Qwen3-Embedding-8B")
 NUM_PATIENTS_LIST=(5000)
 NUM_VISITS_LIST=(6)
 REPRESENTATIONS=("visit_sentence")

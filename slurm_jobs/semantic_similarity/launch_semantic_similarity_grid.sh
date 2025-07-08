@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # === Embedding Models ===
-VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-mpnet-base-v2" "biobert-mnli-mednli")
+VECTORIZERS=("BioBERT-mnli-snli-scinli-scitail-mednli-stsb" "all-mpnet-base-v2" "biobert-mnli-mednli" "Qwen/Qwen3-Embedding-8B")
 
 TEMPLATE="slurm_jobs/semantic_similarity/semantic_similarity_template.ssub"
 
