@@ -1,21 +1,24 @@
 #!/bin/bash
-#SBATCH --job-name=sem_sim
-#SBATCH --output=logs/semantic_similarity_${1}_out.txt
-#SBATCH --error=logs/semantic_similarity_${1}_err.txt
-#SBATCH --partition=c3_short
+#SBATCH --output=logs/%x_out.txt
+#SBATCH --error=logs/%x_err.txt
+#SBATCH --partition=c3_accel
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --time=9:00:00
+#SBATCH --time=168:00:00
 
 # === ⚙️ Environment ===
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
-conda activate venv
+conda activate hugging_env
 
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
 
-echo "$(date): Running semantic similarity with vectorizer $1"
+echo "$(date): Running embed_term_pairs.py with model $1 on the new c3_accel partition!"
+echo "My job name is %x and my Job ID is %j!"
 
-$CONDA_PREFIX/bin/python scripts/analyze_results/check_semantic_similarity.py --vectorizer_method "$1"
+# === Run the Correct Script! ===
+$CONDA_PREFIX/bin/python scripts/semantic_similarity/embed_term_pairs.py --model "$1"
+
+echo "$(date): All done! The results should be magnificent!"
