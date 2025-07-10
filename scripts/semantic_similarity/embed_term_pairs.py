@@ -1,5 +1,6 @@
 import os
 import json
+import csv # We need to give it the CSV instruction manual!
 import argparse
 from sentence_transformers import SentenceTransformer, util
 
@@ -28,27 +29,27 @@ model = SentenceTransformer(local_model_path)
 with open(term_pairs_path, "r") as f:
     term_pairs = json.load(f)
 
-# === Compute similarities ===
-results = []
-for pair in term_pairs:
-    term = pair["term"]
-    counterpart = pair["counterpart"]
-    term_embedding = model.encode(term, convert_to_tensor=True)
-    counterpart_embedding = model.encode(counterpart, convert_to_tensor=True)
-    cosine_sim = util.cos_sim(term_embedding, counterpart_embedding).item()
+# === THIS IS THE NEW PART! ===
+# Where we're going to save our beautiful new CSV file!
+output_dir = os.path.join(root_dir, "data", "embeddings")
+os.makedirs(output_dir, exist_ok=True)
+output_path = os.path.join(output_dir, sanitized_model_name + ".csv")
 
-    results.append({
-        "term": term,
-        "commercial": counterpart,
-        "cosine_similarity": cosine_sim,
-        "model": model_name
-    })
+# === Compute similarities and WRITE to the CSV! ===
+with open(output_path, 'w', newline='', encoding='utf-8') as outfile:
+    writer = csv.writer(outfile)
+    # A beautiful header for our beautiful data!
+    writer.writerow(['term', 'counterpart', 'cosine_similarity', 'model'])
 
-# === Save to file ===
-output_path = os.path.join(root_dir, "data", "embeddings", model_name.replace("/", "-") + ".json")
-os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    print("🧠 Okay, let's get to work! Calculating similarities!")
+    for pair in term_pairs:
+        term = pair["term"]
+        counterpart = pair["counterpart"]
+        term_embedding = model.encode(term, convert_to_tensor=True)
+        counterpart_embedding = model.encode(counterpart, convert_to_tensor=True)
+        cosine_sim = util.cos_sim(term_embedding, counterpart_embedding).item()
 
-with open(output_path, "w") as f:
-    json.dump(results, f, indent=2)
+        # Write the results right away! So efficient!
+        writer.writerow([term, counterpart, cosine_sim, model_name])
 
-print(f"✅ Done. Saved to {output_path}")
+print(f"✅ YAY! Done! Your beautiful new CSV is saved at {output_path}")

@@ -1,24 +1,49 @@
 #!/bin/bash
-#SBATCH --output=logs/%x_out.txt
-#SBATCH --error=logs/%x_err.txt
-#SBATCH --partition=c3_accel
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --time=168:00:00
 
-# === ⚙️ Environment ===
-module load Python/3.11.5-GCCcore-13.2.0
+#SBATCH --job-name=semantic_similarity
+#SBATCH --partition=c3_accel
+#SBATCH --time=7-00:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+
+# --- THIS IS THE NEW, SUPER-SMART PART! ---
+# The absolute, unchanging, forever-home for our logs!
+LOG_DIR="/home/librad.laureateinstitute.org/mferguson/Digital-Twins/slurm_jobs/semantic_similarity/logs"
+# We'll still ask it to create the directory, just in case!
+mkdir -p "$LOG_DIR"
+# We tell Slurm the EXACT address to send the mail!
+#SBATCH --output=${LOG_DIR}/%x-%A.out
+#SBATCH --error=${LOG_DIR}/%x-%A.err
+
+
+# --- Safety First! ---
+if [ "$#" -ne 1 ]; then
+    echo "ERROR! I need one argument: the model_name"
+    exit 1
+fi
+
+MODEL_NAME=$1
+
+# --- Activate our glorious environment! ---
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate hugging_env
 
-cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
+set -e
 
-echo "$(date): Running embed_term_pairs.py with model $1 on the new c3_accel partition!"
-echo "My job name is %x and my Job ID is %j!"
+# --- Get our bearings! ---
+PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
+PYTHON_SCRIPT="$PROJECT_ROOT/scripts/semantic_similarity/embed_term_pairs.py"
 
-# === Run the Correct Script! ===
-$CONDA_PREFIX/bin/python scripts/semantic_similarity/embed_term_pairs.py --model "$1"
+echo "========================================================"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Running on host: $(hostname)"
+echo "Model Name: ${MODEL_NAME}"
+echo "Log files will be sent to: ${LOG_DIR}"
+echo "========================================================"
 
-echo "$(date): All done! The results should be magnificent!"
+# --- EXECUTE! ---
+python "$PYTHON_SCRIPT" --model "$MODEL_NAME"
+
+echo "🎉 Glorious success! Job for ${MODEL_NAME} is complete!"

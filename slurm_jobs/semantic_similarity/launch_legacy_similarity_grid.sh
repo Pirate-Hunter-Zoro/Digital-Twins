@@ -9,12 +9,6 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # Now we build a perfect, absolute path to our template!
 SBATCH_TEMPLATE_PATH="${SCRIPT_DIR}/legacy_similarity_template.ssub"
 
-
-# --- Our Legacy Contestants! ---
-declare -A MODELS
-MODELS["glove-6B-300d"]="/media/scratch/mferguson/legacy_models/glove.6B.300d.txt"
-MODELS["word2vec-google-news-300"]="/media/scratch/mferguson/legacy_models/GoogleNews-vectors-negative300.bin"
-
 # A quick check to make sure our magic worked!
 if [ ! -f "$SBATCH_TEMPLATE_PATH" ]; then
     echo "ERROR! I can't find my beautiful submission template at ${SBATCH_TEMPLATE_PATH}"
