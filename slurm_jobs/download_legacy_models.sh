@@ -1,35 +1,40 @@
 #!/bin/bash
 
-# We'll need this to unzip our new toys!
-# You might need to install it first!
-# sudo yum install unzip
-
+# We are serious this time! If anything fails, we stop!
 set -e
 
-# Our NEW, super-special legacy model home!
+# The final, permanent home for our models!
 DEST_DIR="/media/scratch/mferguson/legacy_models"
-# A temporary place to put the downloads!
+# A temporary, secret lair for our zip files!
 TEMP_DIR=$(mktemp -d)
 
-echo "mkdir -p '$DEST_DIR'"
+echo "Okay, deep breath! Let's try this again!"
+echo "Creating our directories..."
 mkdir -p "$DEST_DIR"
-
-echo "mkdir -p '$TEMP_DIR'"
 mkdir -p "$TEMP_DIR"
+echo "✅ Directories are ready and waiting!"
 
-# --- GloVe's Grand Entrance! ---
-echo "⬇️  Here comes GloVe! It's a big one!"
-kaggle datasets download -d anindya2906/glove6b -p "$TEMP_DIR"
-unzip "$TEMP_DIR/glove6b.zip" -d "$DEST_DIR"
-echo "✅ GloVe is home safe and sound!"
+# --- GloVe's Grand Entrance ---
+echo "⬇️  Downloading the GloVe zip file to my secret lair: $TEMP_DIR"
+kaggle datasets download -d thanakomsn/glove6b300dtxt -p "$TEMP_DIR"
+echo "✅ GloVe zip file has been captured!"
+echo "📦 Now, let's unpack it DIRECTLY into its REAL home!"
+unzip "$TEMP_DIR/glove6b300dtxt.zip" -d "$DEST_DIR"
+echo "✨ GloVe is officially home safe and sound!"
 
 # --- Word2Vec's Wonderful Arrival! ---
-echo "⬇️  And here's Word2Vec! ZOOOOOM!"
+echo "⬇️  Downloading the Word2Vec zip file to the secret lair..."
 kaggle datasets download -d leadbest/googlenewsvectorsnegative300 -p "$TEMP_DIR"
+echo "✅ Word2Vec zip file has been secured!"
+echo "📦 Unpacking Word2Vec DIRECTLY into its final home!"
 unzip "$TEMP_DIR/googlenewsvectorsnegative300.zip" -d "$DEST_DIR"
-echo "✅ Word2Vec has arrived!"
+echo "✨ Word2Vec has officially arrived!"
 
-# Let's be tidy and clean up our temporary files!
+# --- The Final Cleanup ---
+echo "🧹 Now that everyone is home, I'll clean up my secret lair..."
 rm -rf "$TEMP_DIR"
+echo "✅ All clean!"
 
-echo "🎉 YAY! All our legacy models are ready for action!"
+echo "🎉 YAY! The data-ghost has been busted! The models should be there now! Let's check!"
+# This is the proof! Let's see what's in there!
+ls -l "$DEST_DIR"

@@ -1,50 +1,33 @@
 #!/bin/bash
 
-#SBATCH --job-name=legacy_sim_grid
-#SBATCH --partition=c3_accel
-#SBATCH --time=1-00:00:00
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --mem=32G
-
-# Activate your wonderful Conda environment!
-source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
-conda activate hugging_env
-
+# The only job of this script is to LAUNCH other jobs!
 set -e
 
-# The path to our project, because we're organized!
-PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
-# Our new legacy script!
-PYTHON_SCRIPT="$PROJECT_ROOT/scripts/semantic_similarity/embed_term_pairs_legacy.py"
-# The term pairs we want to test!
-TERM_PAIRS_FILE="$PROJECT_ROOT/data/term_pairs.csv"
-# Where the results will go!
-OUTPUT_DIR="$PROJECT_ROOT/results/semantic_similarity_legacy"
+# --- THIS IS THE MAGIC PART! ---
+# This line finds the directory where THIS script lives, no matter where you run it from!
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# Now we build a perfect, absolute path to our template!
+SBATCH_TEMPLATE_PATH="${SCRIPT_DIR}/legacy_similarity_template.ssub"
 
-mkdir -p "$OUTPUT_DIR"
 
 # --- Our Legacy Contestants! ---
 declare -A MODELS
 MODELS["glove-6B-300d"]="/media/scratch/mferguson/legacy_models/glove.6B.300d.txt"
 MODELS["word2vec-google-news-300"]="/media/scratch/mferguson/legacy_models/GoogleNews-vectors-negative300.bin"
 
+# A quick check to make sure our magic worked!
+if [ ! -f "$SBATCH_TEMPLATE_PATH" ]; then
+    echo "ERROR! I can't find my beautiful submission template at ${SBATCH_TEMPLATE_PATH}"
+    exit 1
+fi
+
 # --- Let the Games Begin! ---
 for model_name in "${!MODELS[@]}"; do
     model_path=${MODELS[$model_name]}
-    output_file="$OUTPUT_DIR/similarity_${model_name}.csv"
     
-    echo "🚀 Launching job for ${model_name}!"
-
-    CMD="python $PYTHON_SCRIPT --model_path \"$model_path\" --term_pairs_file \"$TERM_PAIRS_FILE\" --output_file \"$output_file\""
-    
-    # We have to add a special flag for our Word2Vec friend!
-    if [[ "$model_name" == "word2vec-google-news-300" ]]; then
-        CMD="$CMD --is_word2vec"
-    fi
-
-    # Run the command!
-    eval $CMD
+    echo "🚀 Submitting job for ${model_name} from my cozy home at ${SCRIPT_DIR}!"
+    # The sbatch command sends our worker bot off to the queue!
+    sbatch "$SBATCH_TEMPLATE_PATH" "$model_name" "$model_path"
 done
 
-echo "🎉 All legacy jobs have been launched! Let's get that data!"
+echo "🎉 All legacy jobs have been submitted to the Slurm queue! Use 'squeue -u mferguson' to check on them!"

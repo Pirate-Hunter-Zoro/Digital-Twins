@@ -7,8 +7,13 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=32G
 
+# --- Our NEW, beautifully named log files! ---
+# Note: I'm making a logs directory right here for simplicity!
+mkdir -p ./logs
+#SBATCH --output=./logs/%x-%A.out  # %x is the job name, %A is the Job ID
+#SBATCH --error=./logs/%x-%A.err
+
 # --- Safety First! ---
-# We need to make sure we get our arguments!
 if [ "$#" -ne 2 ]; then
     echo "ERROR! I need two arguments: model_name and model_path"
     exit 1
@@ -16,12 +21,6 @@ fi
 
 MODEL_NAME=$1
 MODEL_PATH=$2
-
-# --- Our NEW, beautifully named log files! ---
-LOG_DIR="/home/librad.laureateinstitute.org/mferguson/Digital-Twins/slurm_jobs/semantic_similarity/logs"
-#SBATCH --output=${LOG_DIR}/${MODEL_NAME}.out
-#SBATCH --error=${LOG_DIR}/${MODEL_NAME}.err
-
 
 # --- Activate our glorious environment! ---
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
@@ -32,12 +31,12 @@ set -e
 # --- Get our bearings! ---
 PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
 PYTHON_SCRIPT="$PROJECT_ROOT/scripts/semantic_similarity/embed_term_pairs_legacy.py"
-TERM_PAIRS_FILE="$PROJECT_ROOT/data/term_pairs.csv"
+# Using the correct JSON file!
+TERM_PAIRS_FILE="$PROJECT_ROOT/data/term_pairs.json"
 OUTPUT_DIR="$PROJECT_ROOT/results/semantic_similarity_legacy"
 OUTPUT_FILE="$OUTPUT_DIR/similarity_${MODEL_NAME}.csv"
 
 mkdir -p "$OUTPUT_DIR"
-mkdir -p "$LOG_DIR" # Make sure the log directory exists!
 
 echo "========================================================"
 echo "Job ID: $SLURM_JOB_ID"
