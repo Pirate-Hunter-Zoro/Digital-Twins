@@ -1,58 +1,51 @@
 #!/bin/bash
 
-# Activate Conda environment
+# Activate your wonderful Conda environment!
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate hugging_env
 
 set -e
 
-echo "📦 Downloading GPT-style models into ../models"
+# Find our project root, because we're smart like that!
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
+CANDIDATE_FILE="$PROJECT_ROOT/data/vectorizer_candidates.txt"
+# Our NEW, ULTIMATE, SCRATCH-TASTIC model destination!
+DEST_DIR="/media/scratch/mferguson/models"
 
-# Load Hugging Face token from .env
-if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
-else
-  echo "❌ .env file not found. Please create one with your HUGGINGFACE_TOKEN."
-  exit 1
+# Make sure our new home exists!
+mkdir -p "$DEST_DIR"
+
+if [ ! -f "$CANDIDATE_FILE" ]; then
+    echo "❌ ERROR: I can't find the vectorizer candidates at $CANDIDATE_FILE!"
+    exit 1
 fi
 
-if [ -z "$HUGGINGFACE_TOKEN" ]; then
-  echo "❌ HUGGINGFACE_TOKEN is not set in .env. Exiting."
-  exit 1
-fi
+# Read all our model friends into a list!
+mapfile -t MODELS < "$CANDIDATE_FILE"
 
-MODELS=(
-"sentence-transformers/all-mpnet-base-v2"
-"pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
-"Qwen/Qwen3-Embedding-8B"
-)
-
-DEST_DIR="../models"
+echo "📦 Found ${#MODELS[@]} models to download into our ultimate scratchpad at $DEST_DIR! Let the downloading BEGIN!"
 
 for model_id in "${MODELS[@]}"; do
+  # Make a safe folder name! No slashes allowed!
   folder_name=$(echo "$model_id" | tr '/' '-')
-  echo "⬇️  Downloading $model_id into $folder_name"
+  model_dir="$DEST_DIR/$folder_name"
 
-  python <<EOF || echo "⚠️  Skipped $model_id due to error"
-from transformers import AutoTokenizer, AutoModel
-from huggingface_hub import login
-import os
-
-login(token=os.environ["HUGGINGFACE_TOKEN"])
-model_id = "$model_id"
-model_dir = os.path.join("$DEST_DIR", "$folder_name")
-
-trust_remote_code = model_id in [
-    "allenai/OLMo-7B"
-]
-
-tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=trust_remote_code)
-tokenizer.save_pretrained(model_dir)
-
-model = AutoModel.from_pretrained(model_id, trust_remote_code=trust_remote_code)
-model.save_pretrained(model_dir)
-EOF
-
+  if [ -d "$model_dir" ]; then
+    echo "✅ Hooray! We already have $model_id at $model_dir"
+  else
+    echo "⬇️  Here comes $model_id! ZOOOOOM!"
+    # Use a little Python magic to download!
+    python -c "
+from sentence_transformers import SentenceTransformer
+model_id = '$model_id'
+model_dir = '$model_dir'
+print(f'Saving {model_id} to {model_dir}...')
+model = SentenceTransformer(model_id)
+model.save(model_dir)
+print(f'✅ Successfully saved {model_id}!')
+" || echo "⚠️  Whoopsie! Had a little trouble with $model_id. We'll skip it for now!"
+  fi
 done
 
-echo "🎉 GPT-style model downloads complete!"
+echo "🎉 YAY! All the models are snug in their new scratchy homes!"

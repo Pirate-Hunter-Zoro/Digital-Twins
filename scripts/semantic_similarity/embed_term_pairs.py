@@ -10,13 +10,20 @@ args = parser.parse_args()
 model_name = args.model
 print(f"🔍 Using model: {model_name}")
 
-# === Load the model ===
-model = SentenceTransformer(model_name)
-
 # === Load term pairs ===
 script_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.abspath(os.path.join(script_dir, "..", ".."))
 term_pairs_path = os.path.join(root_dir, "data", "term_pairs.json")
+
+# === Load the model ===
+# Sanitize the model name to match the folder name we created!
+sanitized_model_name = model_name.replace("/", "-")
+# The path to our NEW, super-spacious, scratch-tastic model home!
+local_model_path = f"/media/scratch/mferguson/models/{sanitized_model_name}"
+
+print(f"📦 Loading local model from: {local_model_path}")
+# Load it from our very own folder! No internet required!
+model = SentenceTransformer(local_model_path)
 
 with open(term_pairs_path, "r") as f:
     term_pairs = json.load(f)
