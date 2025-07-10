@@ -1,43 +1,26 @@
 #!/bin/bash
 
-# === Find the project root directory, no matter where the script is run from! ===
-# This gets the directory where this script itself is located.
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-# This goes up two levels from the script's location to find the main project folder.
-PROJECT_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
+# The only job of this script is to LAUNCH other jobs!
+set -e
 
-# === Read Embedding Models from File ===
-# Now we build the full, glorious path to our candidates file!
-CANDIDATE_FILE="$PROJECT_ROOT/data/vectorizer_candidates.txt"
-if [ ! -f "$CANDIDATE_FILE" ]; then
-    echo "ERROR: Vectorizer candidate file not found at $CANDIDATE_FILE"
+# --- Our Legacy Contestants! ---
+declare -A MODELS
+MODELS["glove-6B-300d"]="/media/scratch/mferguson/legacy_models/glove.6B.300d.txt"
+MODELS["word2vec-google-news-300"]="/media/scratch/mferguson/legacy_models/GoogleNews-vectors-negative300.bin"
+
+# --- Point to our NEW, perfectly named template! ---
+SBATCH_TEMPLATE_PATH="$(pwd)/legacy_similarity_template.ssub"
+if [ ! -f "$SBATCH_TEMPLATE_PATH" ]; then
+    echo "ERROR! I can't find the submission template at ${SBATCH_TEMPLATE_PATH}"
     exit 1
 fi
-mapfile -t VECTORIZERS < "$CANDIDATE_FILE"
 
-TEMPLATE="slurm_jobs/semantic_similarity/semantic_similarity_template.ssub"
-
-mkdir -p logs
-
-echo "Found ${#VECTORIZERS[@]} models to test. Let's do this!"
-
-for VEC in "${VECTORIZERS[@]}"; do
-  # Sanitize model name for file paths
-  JOB_VEC_NAME=$(echo "$VEC" | tr '/' '_')
-
-  JOB_NAME="semantic_sim_${JOB_VEC_NAME}"
-  LOG_OUT="logs/${JOB_NAME}_out.txt"
-  LOG_ERR="logs/${JOB_NAME}_err.txt"
-
-  echo "Launching $JOB_NAME..."
-
-  sbatch \
-    --job-name="$JOB_NAME" \
-    --output="$LOG_OUT" \
-    --error="$LOG_ERR" \
-    "$TEMPLATE" "$VEC"
-
-  sleep 1
+# --- Let the Games Begin! ---
+for model_name in "${!MODELS[@]}"; do
+    model_path=${MODELS[$model_name]}
+    
+    echo "🚀 Submitting job for ${model_name}..."
+    sbatch "$SBATCH_TEMPLATE_PATH" "$model_name" "$model_path"
 done
 
-echo "All jobs launched! Now we wait for the glorious data!"
+echo "🎉 All legacy jobs have been submitted to the Slurm queue! Use 'squeue -u mferguson' to check on them!"
