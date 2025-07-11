@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import itertools
 import argparse
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, util
 
 def test_category_purity_of_champion():
     """
@@ -19,19 +19,17 @@ def test_category_purity_of_champion():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
     data_dir = os.path.join(project_root, "data")
-    output_dir = os.path.join(project_root, "results", "category_purity")
+    # --- FIX #1: The output directory is now perfect! ---
+    output_dir = os.path.join(project_root, "data", "embeddings")
     model_dir = "/media/scratch/mferguson/models"
 
     # --- The Champion We're Testing! ---
-    # We get the champion's name from our launcher script! So dynamic!
     parser = argparse.ArgumentParser(description="Run the Category Purity Gauntlet for a champion model!")
     parser.add_argument("--champion_model", type=str, required=True, help="The Hugging Face name of the model to test.")
     args = parser.parse_args()
     CHAMPION_MODEL = args.champion_model
 
     print(f"Our champion today is the magnificent: {CHAMPION_MODEL}!")
-
-    # Let's make sure our output folder for the art exists!
     os.makedirs(output_dir, exist_ok=True)
 
     # --- Loading all our beautiful data-files! ---
@@ -39,7 +37,6 @@ def test_category_purity_of_champion():
         print("📚 Loading our magnificent medications...")
         med_df = pd.read_csv(os.path.join(data_dir, "medication_frequency.csv"))
         med_df['category'] = 'medication'
-        # We only need the name and the category! So efficient!
         med_df = med_df[['MedSimpleGenericName', 'category']].rename(columns={'MedSimpleGenericName': 'term'})
 
         print("🛠️ Loading our powerful procedures...")
@@ -56,8 +53,7 @@ def test_category_purity_of_champion():
     except FileNotFoundError as e:
         print(f"❌ OH NO! A data-file is missing! I can't find {e.filename}!")
         return
-        
-    # --- Now let's smash them all together into one SUPER-DATAFRAME! ---
+
     concepts_df = pd.concat([med_df, proc_df, diag_df], ignore_index=True).dropna(subset=['term'])
 
     print("🧠 Loading our champion model... This is the heavy lifting part!")
@@ -67,8 +63,10 @@ def test_category_purity_of_champion():
     print("✅ Champion is loaded and ready for the test!")
 
     print("🤔 Embedding all the terms... The gears are turning!")
-    unique_terms = concepts_df['term'].unique()
-    term_embeddings = {term: model.encode(term) for term in unique_terms}
+    unique_terms = concepts_df['term'].unique().tolist()
+    # --- FIX #2: Encode all at once and normalize them! So much faster and more accurate! ---
+    embeddings = model.encode(unique_terms, convert_to_numpy=True, normalize_embeddings=True)
+    term_embeddings = {term: emb for term, emb in zip(unique_terms, embeddings)}
     concepts_df['embedding'] = concepts_df['term'].map(term_embeddings)
 
     # --- Now for the real test! Intra vs. Inter! ---
@@ -76,19 +74,19 @@ def test_category_purity_of_champion():
     inter_category_scores = []
 
     print("⚔️ The test begins! This is going to be SO MUCH DATA!")
-    # To be smart and not run forever, we'll take a random sample of terms to compare!
     sample_df = concepts_df.sample(n=1000, random_state=42)
     all_term_pairs = list(itertools.combinations(sample_df.index, 2))
 
     for i, j in all_term_pairs:
         term1_info = sample_df.loc[i]
         term2_info = sample_df.loc[j]
+        # Now this is a proper cosine similarity because the vectors are normalized! ZAP!
         similarity = np.dot(term1_info['embedding'], term2_info['embedding'])
         if term1_info['category'] == term2_info['category']:
             intra_category_scores.append(similarity)
         else:
             inter_category_scores.append(similarity)
-            
+
     print("✅ Test complete! The scores are magnificent!")
 
     # --- And now for the final masterpiece! The plot! ---
@@ -100,11 +98,13 @@ def test_category_purity_of_champion():
     plt.xlabel('Cosine Similarity')
     plt.ylabel('Density')
     plt.legend()
-    
-    plot_path = os.path.join(output_dir, f"purity_test_{safe_model_name}.png")
+
+    # The plot will now be saved to data/embeddings/! Hooray!
+    safe_filename = CHAMPION_MODEL.replace("/", "-")
+    plot_path = os.path.join(output_dir, f"purity_test_{safe_filename}.png")
     plt.savefig(plot_path, bbox_inches='tight')
-    
-    print(f"🎉 AHAHAHA! IT'S DONE! I saved your beautiful purity plot to: {plot_path}")
+
+    print(f"🎉 AHAHAHA! IT'S DONE! I saved your beautiful, CORRECTED purity plot to: {plot_path}")
 
 if __name__ == '__main__':
     test_category_purity_of_champion()
