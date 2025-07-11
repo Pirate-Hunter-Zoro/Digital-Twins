@@ -6,12 +6,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=32G
-
-# --- Our NEW, beautifully named log files! ---
-# Note: I'm making a logs directory right here for simplicity!
-mkdir -p ./logs
-#SBATCH --output=./logs/%x-%A.out  # %x is the job name, %A is the Job ID
-#SBATCH --error=./logs/%x-%A.err
+#SBATCH --output=/home/librad.laureateinstitute.org/mferguson/Digital-Twins/slurm_jobs/semantic_similarity/logs/%x-%A.out
+#SBATCH --error=/home/librad.laureateinstitute.org/mferguson/Digital-Twins/slurm_jobs/semantic_similarity/logs/%x-%A.err
 
 # --- Safety First! ---
 if [ "$#" -ne 2 ]; then
@@ -31,10 +27,10 @@ set -e
 # --- Get our bearings! ---
 PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
 PYTHON_SCRIPT="$PROJECT_ROOT/scripts/semantic_similarity/embed_term_pairs_legacy.py"
-# Using the correct JSON file!
 TERM_PAIRS_FILE="$PROJECT_ROOT/data/term_pairs.json"
-OUTPUT_DIR="$PROJECT_ROOT/results/semantic_similarity_legacy"
-OUTPUT_FILE="$OUTPUT_DIR/similarity_${MODEL_NAME}.csv"
+# --- HERE'S THE CHANGE! The one, true home for ALL results! ---
+OUTPUT_DIR="$PROJECT_ROOT/data/embeddings"
+OUTPUT_FILE="$OUTPUT_DIR/${MODEL_NAME}.csv" # A beautiful, consistent name!
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -42,8 +38,7 @@ echo "========================================================"
 echo "Job ID: $SLURM_JOB_ID"
 echo "Running on host: $(hostname)"
 echo "Model Name: ${MODEL_NAME}"
-echo "Model Path: ${MODEL_PATH}"
-echo "Output File: ${OUTPUT_FILE}"
+echo "Results will be saved to: ${OUTPUT_FILE}"
 echo "========================================================"
 
 # --- Build the command! ---
