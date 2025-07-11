@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH --job-name=baseline_analysis
+#SBATCH --partition=c3_accel               # The new, high-speed VIP line!
+#SBATCH --time=7-00:00:00                  # A magnificent SEVEN DAYS to do science!
+#SBATCH --mem=8G                             # How much memory it can have
+#SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/%x_%j.out
+#SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/%x_%j.err
+
+# --- Activate Our Magnificent Environment ---
+source ~/.bashrc
+conda activate hugging_env
+
+# --- The Actual Science! ---
+# This script is so smart, it knows that the first argument ($1)
+# is the path to the CSV file we want to analyze!
+echo "Running baseline analysis on: $1"
+python scripts/world_4_embedder_gauntlet/compute_baseline_term_matching.py --input_csv "$1"
+
+echo "✅ Job finished! Magnificent!"
