@@ -5,12 +5,15 @@ import json
 from collections import defaultdict
 from math import log
 
-# --- Dynamic Pathing ---
+# --- The Magnificent Fix! ---
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_script_dir, "..", ".."))
-sys.path.insert(0, project_root)
-from scripts.config import setup_config, get_global_config
-from scripts.eval.clean_terms import clean_term
+project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+# ---------------------------
+
+from scripts.common.config import setup_config, get_global_config
+from scripts.common.utils import clean_term
 
 def main():
     parser = argparse.ArgumentParser()
@@ -57,7 +60,7 @@ def main():
         total_docs += 1
 
     idf_scores = {
-        term: log(total_docs / count)
+        term: log(total_docs / (count + 1))  # Added smoothing! So robust!
         for term, count in term_counts.items()
     }
 

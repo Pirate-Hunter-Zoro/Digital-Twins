@@ -48,30 +48,16 @@ def create_medication_pairs(med_freq_file, rxnorm_file):
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    # --- PATHING LOGIC! ---
-    # Our folder structure is:
-    # Digital-Twins/  <-- The Root
-    # |-- scripts/
-    # |   |-- semantic_similarity/
-    # |   |   |-- (this script is here!)
-    # |-- data/
-    # |   |-- (our CSVs are here!)
-
-    # The script is in 'semantic_similarity', so we need to go two levels up to find the root project directory
-    base_dir = Path(__file__).parents[1] # This goes up from 'semantic_similarity' to 'scripts'
-    project_root = base_dir.parent      # This goes up from 'scripts' to 'Digital-Twins'
-    data_dir = project_root / 'data'    # And now we find the data folder!
-
-    # Make sure the data directory exists!
+    current_script_dir = Path(__file__).resolve().parent
+    project_root = current_script_dir.parents[1]
+    data_dir = project_root / 'data'
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    # Define input file paths relative to the 'data' directory
     diagnosis_file = data_dir / 'diagnosis_frequency.csv'
     procedure_file = data_dir / 'procedure_frequency.csv'
     med_freq_file = data_dir / 'medication_frequency.csv'
     rxnorm_file = data_dir / 'RXNorm_Table-25_06_17-v1.csv'
     
-    # Generate pairs
     print("Ooh, let's find some twins! Starting with diagnoses... 🩺")
     diag_pairs = create_diagnosis_pairs(diagnosis_file)
     print(f"Found {len(diag_pairs)} diagnosis pairs! ZAP!")
@@ -84,10 +70,8 @@ if __name__ == "__main__":
     med_pairs = create_medication_pairs(med_freq_file, rxnorm_file)
     print(f"Found {len(med_pairs)} medication pairs! AMAZING!")
     
-    # Combine all pairs
     all_pairs = diag_pairs + proc_pairs + med_pairs
     
-    # Save to a JSON file in the 'data' directory
     output_filename = data_dir / 'term_pairs.json'
     with open(output_filename, 'w') as f:
         json.dump(all_pairs, f, indent=4)

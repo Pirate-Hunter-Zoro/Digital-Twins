@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 
 # --- Dynamic sys.path adjustment ---
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -46,3 +47,27 @@ def turn_to_sentence(encounter_obj: dict) -> str:
             sentences.append("Treatments: " + ", ".join(treatment_descriptions))
 
     return "; ".join(sentences) if sentences else "No information recorded for this visit."
+
+def clean_term(term: str) -> str:
+    """
+    Cleans a medical term string for embedding.
+    This is our magnificent, centralized term-scrubber!
+    """
+    term = term.lower().strip()
+    term = term.replace('"', '').replace("'", '')
+    term = re.sub(r"^\\+|\\+$", "", term)
+    term = re.sub(r"\([^)]*hcc[^)]*\)", "", term)
+    term = re.sub(r"\(cms[^)]*\)", "", term)
+    term = re.sub(r"\b\(\d{3}(\.\d+)?\)", "", term)
+    term = re.sub(r",+", "", term)
+
+    blacklist = [
+        "initial encounter", "unspecified", "nos", "nec",
+        "<none>", "<None>", ";", ":",
+        r"at \d+ oclock position", r"during pregnancy.*",
+        r"due to.*", r"with late onset", r"with dysplasia", r"without dysplasia"
+    ]
+    for noise in blacklist:
+        term = re.sub(noise, "", term)
+
+    return re.sub(r"\s+", " ", term).strip()

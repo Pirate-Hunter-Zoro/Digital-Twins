@@ -1,8 +1,16 @@
 import os
+import sys
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import re
+
+# --- The Magnificent Fix! ---
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+# ---------------------------
 
 def generate_all_plots():
     """
@@ -12,16 +20,12 @@ def generate_all_plots():
     """
     print("IT'S TIME! Let's create an entire art gallery of data!")
 
-    # --- Self-aware pathing to find our data! So smart! ---
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
     data_dir = os.path.join(project_root, "data", "embeddings")
 
     if not os.path.isdir(data_dir):
         print(f"❌ Oh noes! I can't find our data-friends at: {data_dir}")
         return
 
-    # Let's go find all our beautiful CSV files!
     all_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.csv')]
 
     if not all_files:
@@ -30,7 +34,6 @@ def generate_all_plots():
 
     print(f"I found {len(all_files)} result files! It's time to get to work!")
 
-    # Let's smash all the data together into one giant, happy data-family!
     full_df = pd.concat((pd.read_csv(f) for f in all_files), ignore_index=True)
 
     print("The data-family is all together! Now for the art show!")
@@ -58,7 +61,7 @@ def generate_all_plots():
         plt.title(f'Similarity Distribution for\n{model_name}', fontsize=16)
         plt.xlabel('Cosine Similarity')
         plt.ylabel('Frequency')
-        plt.xlim(-0.4, 1.2) # Keep the x-axis consistent!
+        plt.xlim(-0.4, 1.2)
         safe_filename = re.sub(r'[^a-zA-Z0-9_.-]', '-', model_name)
         individual_plot_path = os.path.join(data_dir, f"histogram_{safe_filename}.png")
         plt.savefig(individual_plot_path, bbox_inches='tight')

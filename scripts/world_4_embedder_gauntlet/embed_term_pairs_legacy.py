@@ -24,7 +24,6 @@ def main():
     parser.add_argument("--model_path", type=str, required=True, help="Path to the pre-trained model file.")
     parser.add_argument("--term_pairs_file", type=str, required=True, help="Path to the JSON file with term pairs.")
     parser.add_argument("--output_file", type=str, required=True, help="Path to write the output CSV.")
-    # --- HERE'S A NEW PART! It needs to know its own name! ---
     parser.add_argument("--model_name", type=str, required=True, help="The name of the model being used.")
     parser.add_argument("--is_word2vec", action='store_true', help="Flag if the model is in Word2Vec binary format.")
     args = parser.parse_args()
@@ -42,7 +41,6 @@ def main():
 
     with open(args.output_file, 'w', newline='', encoding='utf-8') as outfile:
         writer = csv.writer(outfile)
-        # --- A NEW, PERFECT HEADER! ---
         writer.writerow(['term', 'counterpart', 'cosine_similarity', 'model'])
 
         print("🧠 Let's start thinking! Calculating similarities...")
@@ -58,7 +56,6 @@ def main():
             
             similarity = cosine_similarity(vec1, vec2)[0][0]
             
-            # --- AND A NEW, PERFECT ROW WITH THE MODEL'S NAME! ---
             writer.writerow([term, counterpart, similarity, args.model_name])
 
     print(f"🎉 All done! Results are saved in {args.output_file}!")

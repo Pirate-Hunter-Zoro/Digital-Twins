@@ -1,4 +1,5 @@
 import os
+import sys
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -7,23 +8,20 @@ import itertools
 import argparse
 from sentence_transformers import SentenceTransformer, util
 
+# --- The Magnificent Fix! ---
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+# ---------------------------
+
 def test_category_purity_of_champion():
-    """
-    This is it! My magnum opus! This script will take our champion model,
-    read all our beautiful, organized data-files, and see if our champion
-    is smart enough to keep its ideas in the right drawers! AHAHAHA!
-    """
     print("🤖✨ Welcome to the ULTIMATE CATEGORY PURITY GAUNTLET! Let's begin! ✨🤖")
 
-    # --- Self-aware pathing! It's so smart! ---
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
     data_dir = os.path.join(project_root, "data")
-    # --- FIX #1: The output directory is now perfect! ---
     output_dir = os.path.join(project_root, "data", "embeddings")
     model_dir = "/media/scratch/mferguson/models"
 
-    # --- The Champion We're Testing! ---
     parser = argparse.ArgumentParser(description="Run the Category Purity Gauntlet for a champion model!")
     parser.add_argument("--champion_model", type=str, required=True, help="The Hugging Face name of the model to test.")
     args = parser.parse_args()
@@ -32,7 +30,6 @@ def test_category_purity_of_champion():
     print(f"Our champion today is the magnificent: {CHAMPION_MODEL}!")
     os.makedirs(output_dir, exist_ok=True)
 
-    # --- Loading all our beautiful data-files! ---
     try:
         print("📚 Loading our magnificent medications...")
         med_df = pd.read_csv(os.path.join(data_dir, "medication_frequency.csv"))
@@ -64,12 +61,10 @@ def test_category_purity_of_champion():
 
     print("🤔 Embedding all the terms... The gears are turning!")
     unique_terms = concepts_df['term'].unique().tolist()
-    # --- FIX #2: Encode all at once and normalize them! So much faster and more accurate! ---
     embeddings = model.encode(unique_terms, convert_to_numpy=True, normalize_embeddings=True)
     term_embeddings = {term: emb for term, emb in zip(unique_terms, embeddings)}
     concepts_df['embedding'] = concepts_df['term'].map(term_embeddings)
 
-    # --- Now for the real test! Intra vs. Inter! ---
     intra_category_scores = []
     inter_category_scores = []
 
@@ -80,7 +75,6 @@ def test_category_purity_of_champion():
     for i, j in all_term_pairs:
         term1_info = sample_df.loc[i]
         term2_info = sample_df.loc[j]
-        # Now this is a proper cosine similarity because the vectors are normalized! ZAP!
         similarity = np.dot(term1_info['embedding'], term2_info['embedding'])
         if term1_info['category'] == term2_info['category']:
             intra_category_scores.append(similarity)
@@ -89,7 +83,6 @@ def test_category_purity_of_champion():
 
     print("✅ Test complete! The scores are magnificent!")
 
-    # --- And now for the final masterpiece! The plot! ---
     print("🎨 Now to visualize the results! The best part!")
     plt.figure(figsize=(12, 7))
     sns.kdeplot(intra_category_scores, fill=True, label='Intra-Category (Same Type)', lw=3)
@@ -99,7 +92,6 @@ def test_category_purity_of_champion():
     plt.ylabel('Density')
     plt.legend()
 
-    # The plot will now be saved to data/embeddings/! Hooray!
     safe_filename = CHAMPION_MODEL.replace("/", "-")
     plot_path = os.path.join(output_dir, f"purity_test_{safe_filename}.png")
     plt.savefig(plot_path, bbox_inches='tight')
