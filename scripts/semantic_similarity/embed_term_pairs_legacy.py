@@ -18,12 +18,14 @@ def get_avg_vector(terms, model):
 
 def main():
     """
-    The main event! Now with the right keys to the treasure!
+    The main event! Now speaking the universal language of data!
     """
     parser = argparse.ArgumentParser(description="Embed term pairs using classic models like Word2Vec or GloVe.")
     parser.add_argument("--model_path", type=str, required=True, help="Path to the pre-trained model file.")
     parser.add_argument("--term_pairs_file", type=str, required=True, help="Path to the JSON file with term pairs.")
     parser.add_argument("--output_file", type=str, required=True, help="Path to write the output CSV.")
+    # --- HERE'S A NEW PART! It needs to know its own name! ---
+    parser.add_argument("--model_name", type=str, required=True, help="The name of the model being used.")
     parser.add_argument("--is_word2vec", action='store_true', help="Flag if the model is in Word2Vec binary format.")
     args = parser.parse_args()
 
@@ -40,24 +42,24 @@ def main():
 
     with open(args.output_file, 'w', newline='', encoding='utf-8') as outfile:
         writer = csv.writer(outfile)
-        writer.writerow(['term1', 'term2', 'similarity'])
+        # --- A NEW, PERFECT HEADER! ---
+        writer.writerow(['term', 'counterpart', 'cosine_similarity', 'model'])
 
         print("🧠 Let's start thinking! Calculating similarities...")
-        # --- THIS IS THE NEW PART! ---
         for pair in term_pairs:
-            # We use the right names to get our terms!
-            term1_str = pair['term']
-            term2_str = pair['counterpart']
+            term = pair['term']
+            counterpart = pair['counterpart']
             
-            term1_words = term1_str.lower().split()
-            term2_words = term2_str.lower().split()
+            term_words = term.lower().split()
+            counterpart_words = counterpart.lower().split()
             
-            vec1 = get_avg_vector(term1_words, model).reshape(1, -1)
-            vec2 = get_avg_vector(term2_words, model).reshape(1, -1)
+            vec1 = get_avg_vector(term_words, model).reshape(1, -1)
+            vec2 = get_avg_vector(counterpart_words, model).reshape(1, -1)
             
             similarity = cosine_similarity(vec1, vec2)[0][0]
             
-            writer.writerow([term1_str, term2_str, similarity])
+            # --- AND A NEW, PERFECT ROW WITH THE MODEL'S NAME! ---
+            writer.writerow([term, counterpart, similarity, args.model_name])
 
     print(f"🎉 All done! Results are saved in {args.output_file}!")
 

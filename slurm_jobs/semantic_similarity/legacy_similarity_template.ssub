@@ -42,7 +42,7 @@ echo "Results will be saved to: ${OUTPUT_FILE}"
 echo "========================================================"
 
 # --- Build the command! ---
-CMD="python $PYTHON_SCRIPT --model_path \"$MODEL_PATH\" --term_pairs_file \"$TERM_PAIRS_FILE\" --output_file \"$OUTPUT_FILE\""
+CMD="python $PYTHON_SCRIPT --model_path \"$MODEL_PATH\" --term_pairs_file \"$TERM_PAIRS_FILE\" --output_file \"$OUTPUT_FILE\" --model_name \"$MODEL_NAME\""
 
 # Add the special flag just for our Word2Vec friend!
 if [[ "$MODEL_NAME" == "word2vec-google-news-300" ]]; then
