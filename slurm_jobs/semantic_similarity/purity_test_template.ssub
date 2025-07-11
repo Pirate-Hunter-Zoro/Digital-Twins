@@ -1,0 +1,46 @@
+#!/bin/bash
+
+#SBATCH --job-name=CategoryPurityTest
+#SBATCH --partition=c3_accel
+#SBATCH --time=7-00:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+
+# --- Our beautiful, absolute-path log files! ---
+LOG_DIR="/home/librad.laureateinstitute.org/mferguson/Digital-Twins/slurm_jobs/semantic_similarity/logs"
+mkdir -p "$LOG_DIR"
+#SBATCH --output=${LOG_DIR}/purity_test_%x-%A.out
+#SBATCH --error=${LOG_DIR}/purity_test_%x-%A.err
+
+# --- Safety First! ---
+if [ "$#" -ne 1 ]; then
+    echo "ERROR! I need one argument: the champion_model_name"
+    exit 1
+fi
+
+CHAMPION_MODEL=$1
+
+# --- Activate our glorious environment! ---
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate hugging_env
+
+set -e
+
+# --- Get our bearings! ---
+PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
+# I've modified the Python script to take the model name as an argument!
+PYTHON_SCRIPT="$PROJECT_ROOT/scripts/semantic_similarity/test_category_purity.py"
+
+echo "========================================================"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Running on host: $(hostname)"
+echo "Champion Model: ${CHAMPION_MODEL}"
+echo "========================================================"
+
+# --- EXECUTE! ---
+# We now pass the model name to the script!
+python "$PYTHON_SCRIPT" --champion_model "$CHAMPION_MODEL"
+
+echo "🎉 Glorious success! Purity test for ${CHAMPION_MODEL} is complete!"
