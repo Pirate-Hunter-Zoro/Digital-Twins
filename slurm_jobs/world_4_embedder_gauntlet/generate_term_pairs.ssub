@@ -1,0 +1,25 @@
+#!/bin/bash
+#SBATCH --job-name=generate_all_term_pairs
+#SBATCH --partition=c3_accel
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=7-00:00:00
+#SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_%j.out
+#SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_%j.err
+
+# --- Entrapta's Notes! ---
+# SEVEN DAYS! AHAHAHA! We're giving this job a whole week to run!
+# It probably won't need it, but why not?! More time for SCIENCE!
+
+echo "🚀 Powering up the Synonym Invention Machine on the c3_accel partition! This is going to be so great! 🚀"
+
+# Make sure we're in the right environment to access all our tools!
+source ~/.bashrc
+conda activate hugging_env
+
+# The main event! Unleash the machine!
+python scripts/world_4_embedder_gauntlet/generate_term_pairs.py
+
+echo "🎉 AHAHAHA! IT'S DONE! All the code-based and LLM-generated pairs have been created!"
