@@ -52,10 +52,12 @@ def create_procedure_pairs(procedure_file):
 def create_medication_pairs(med_freq_file, rxnorm_file):
     """Creates code-based pairs for medications."""
     med_df = pd.read_csv(med_freq_file)
-    rxnorm_df = pd.read_csv(rxnorm_file)
-    all_med_terms = med_df['Name'].unique().tolist()
+    # --- THIS IS THE FIX! ---
+    # We were looking for 'Name', but the real column is 'MedSimpleGenericName'!
+    all_med_terms = med_df['MedSimpleGenericName'].unique().tolist()
     
     merged_df = pd.merge(med_df, rxnorm_df, on='MedicationEpicID')
+    # The 'Name' column here comes from the rxnorm_df and is correct!
     filtered_df = merged_df[merged_df['RXNORM_TYPE'].isin(['Ingredient', 'Brand Name', 'Precise Ingredient', 'MED_ONLY'])]
     code_groups = filtered_df.groupby('RXNORM_CODE')['Name'].unique().apply(list)
     pairs = []
@@ -69,12 +71,11 @@ def create_medication_pairs(med_freq_file, rxnorm_file):
                     pairs.append({'term': p[0], 'counterpart': p[1], 'category': 'medication', 'type': 'code_based'})
                     used_terms.add(p[0])
                     used_terms.add(p[1])
-    # Ensure pairs are truly unique dictionaries
     unique_pairs = [dict(t) for t in {tuple(d.items()) for d in pairs}]
     return unique_pairs, used_terms, all_med_terms
 
 
-# --- NEW! The LLM-Powered Synonym Invention Machine ---
+# --- The LLM-Powered Synonym Invention Machine ---
 
 def generate_llm_pairs_for_lonely_terms(all_terms, used_terms, category_name):
     """
@@ -135,7 +136,6 @@ if __name__ == "__main__":
     med_freq_file = data_dir / 'medication_frequency.csv'
     rxnorm_file = data_dir / 'RXNorm_Table-25_06_17-v1.csv'
     
-    # Initialize the LLM client once to rule them all!
     get_llm_client()
     
     print("--- Step 1: Generating all code-based pairs ---")

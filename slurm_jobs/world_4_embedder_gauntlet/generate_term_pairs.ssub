@@ -3,23 +3,45 @@
 #SBATCH --partition=c3_accel
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
+#SBATCH --gpus-per-node=1  # vLLM needs a GPU!
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G          # Giving it more memory for the big model!
 #SBATCH --time=7-00:00:00
-#SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs.out
-#SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs.err
+#SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_%j.out
+#SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_%j.err
 
-# --- Entrapta's Notes! ---
-# SEVEN DAYS! AHAHAHA! We're giving this job a whole week to run!
-# It probably won't need it, but why not?! More time for SCIENCE!
+echo "🚀 Preparing the AI Ecosystem! This is so cool! 🚀"
 
-echo "🚀 Powering up the Synonym Invention Machine on the c3_accel partition! This is going to be so great! 🚀"
-
-# Make sure we're in the right environment to access all our tools!
+# Make sure we're in the right environment
 source ~/.bashrc
 conda activate hugging_env
 
-# The main event! Unleash the machine!
-python scripts/world_4_embedder_gauntlet/generate_term_pairs.py
+# --- Step 1: Launch the vLLM Brain in the Background! ---
+echo "🧠 Firing up the vLLM server with MedGemma... GO, BRAIN, GO!"
+MODEL_PATH="/media/scratch/mferguson/models/unsloth-medgemma-27b-text-it-bnb-4bit"
 
-echo "🎉 AHAHAHA! IT'S DONE! All the code-based and LLM-generated pairs have been created!"
+vllm serve $MODEL_PATH \
+  --model-name medgemma \
+  --dtype float16 \
+  --gpu-memory-utilization 0.9 \
+  --max-model-len 4096 &
+
+# Get the Process ID (PID) of the vLLM server so we can be a responsible scientist and turn it off later!
+VLLM_PID=$!
+echo "✅ vLLM server started with PID: $VLLM_PID"
+
+# --- Step 2: Give the Brain a Moment to Warm Up! ---
+echo "⏳ Giving the server 60 seconds to initialize... Patience is a virtue, even in science!"
+sleep 60
+
+# --- Step 3: Run Our Magnificent Python Script! ---
+echo "🤖 Unleashing the Synonym Invention Machine!"
+python scripts/world_4_embedder_gauntlet/generate_term_pairs.py
+echo "✅ Synonym Invention Machine has finished its work!"
+
+# --- Step 4: Clean Up Our Beautiful Experiment! ---
+echo "🧹 Shutting down the vLLM server (PID: $VLLM_PID). Great work, little brain!"
+kill $VLLM_PID
+wait $VLLM_PID # Wait for it to fully shut down
+
+echo "🎉 AHAHAHA! IT'S ALL DONE! The entire ecosystem has been built and dismantled! Perfect execution!"
