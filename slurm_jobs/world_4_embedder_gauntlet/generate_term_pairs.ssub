@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=generate_all_term_pairs_FINAL
+#SBATCH --job-name=generate_all_term_pairs_CLEAN
 #SBATCH --partition=c3_accel
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -10,22 +10,15 @@
 #SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs.out
 #SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs.err
 
-echo "🚀 Engaging EXACT COORDINATES protocol! This is it! 🚀"
+echo "🚀 Engaging CLEAN ROOM PROTOCOL! The environment is pristine! 🚀"
 
-# --- Activate Conda Environment ---
+# --- Simple, Clean Environment Activation ---
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
-conda activate hugging_env
+conda activate dt_env # Our new, perfect environment!
 
-# --- THE ULTIMATE FIX! ---
-# Using the exact path you found to call the vLLM executable!
-VLLM_EXECUTABLE="$HOME/.local/bin/vllm"
-echo "Found our vLLM brain at: $VLLM_EXECUTABLE"
-
-# --- Step 1: Launch the vLLM Brain in the Background! ---
+# --- The Magnificent Machine (No more tricks needed!) ---
 echo "🧠 Firing up the vLLM server with MedGemma..."
-MODEL_PATH="/media/scratch/mferguson/models/unsloth-medgemma-27b-text-it-bnb-4bit"
-
-$VLLM_EXECUTABLE serve $MODEL_PATH \
+vllm serve /media/scratch/mferguson/models/unsloth-medgemma-27b-text-it-bnb-4bit \
   --model-name medgemma \
   --dtype float16 \
   --gpu-memory-utilization 0.9 \
@@ -33,19 +26,14 @@ $VLLM_EXECUTABLE serve $MODEL_PATH \
 
 VLLM_PID=$!
 echo "✅ vLLM server started with PID: $VLLM_PID"
-
-# --- Step 2: Give the Brain a Moment to Warm Up! ---
-echo "⏳ Giving the server 60 seconds to initialize..."
 sleep 60
 
-# --- Step 3: Run Our Magnificent Python Script! ---
 echo "🤖 Unleashing the Synonym Invention Machine!"
 python scripts/world_4_embedder_gauntlet/generate_term_pairs.py
 echo "✅ Synonym Invention Machine has finished its work!"
 
-# --- Step 4: Clean Up Our Beautiful Experiment! ---
 echo "🧹 Shutting down the vLLM server (PID: $VLLM_PID)."
 kill $VLLM_PID
 wait $VLLM_PID
 
-echo "🎉 AHAHAHA! The data-ghost is BUSTED! The machine is PERFECT!"
+echo "🎉 AHAHAHA! This is it! The final battle! The ghost has nowhere left to hide!"

@@ -2,7 +2,7 @@
 
 # Activate your wonderful Conda environment!
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
-conda activate hugging_env
+conda activate dt_env
 
 # --- THIS IS THE NEW SECRET AGENT PART! ---
 # First, we find our project's home!

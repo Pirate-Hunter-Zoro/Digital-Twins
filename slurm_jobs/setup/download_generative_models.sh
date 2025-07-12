@@ -5,7 +5,7 @@ echo "🧠 Time to download a new brain! Let's get MedGemma! 🧠"
 
 # Activate our environment so we have all the tools!
 source ~/.bashrc
-conda activate hugging_env
+conda activate dt_env
 
 # --- THIS IS THE NEW SECRET AGENT PART! ---
 # Load our secret Hugging Face key!

@@ -30,7 +30,7 @@ echo "📥 Error Log: $ERR_LOG"
 # === ⚙️ Environment Setup ===
 module load Python/3.11.5-GCCcore-13.2.0
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
-conda activate hugging_env
+conda activate dt_env
 
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
 

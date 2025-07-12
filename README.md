@@ -55,8 +55,8 @@ Before you can unleash the full power of these magnificent machines, you'll need
 ### 1\. Conda Environment
 
 ```bash
-conda create --name hugging_env python=3.9
-conda activate hugging_env
+conda create --name dt_env python=3.9
+conda activate dt_env
 ```
 
 ### 2\. Python Dependencies
