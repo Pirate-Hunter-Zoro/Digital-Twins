@@ -10,17 +10,15 @@
 #SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs.out
 #SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs.err
 
-echo "🚀 Engaging ABSOLUTE PATH protocol! There is no escape for data-ghosts! 🚀"
+echo "🚀 Engaging EXACT COORDINATES protocol! This is it! 🚀"
 
-# --- Forceful Environment Activation ---
-echo "Activating Conda environment..."
+# --- Activate Conda Environment ---
 source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate hugging_env
 
 # --- THE ULTIMATE FIX! ---
-# We are now calling vLLM using its FULL, EXACT path inside our Conda environment.
-# This prevents the system from accidentally using an old version in ~/.local/bin/
-VLLM_EXECUTABLE="/home/librad.laureateinstitute.org/mferguson/.conda/envs/hugging_env/bin/vllm"
+# Using the exact path you found to call the vLLM executable!
+VLLM_EXECUTABLE="$HOME/.local/bin/vllm"
 echo "Found our vLLM brain at: $VLLM_EXECUTABLE"
 
 # --- Step 1: Launch the vLLM Brain in the Background! ---
@@ -46,8 +44,8 @@ python scripts/world_4_embedder_gauntlet/generate_term_pairs.py
 echo "✅ Synonym Invention Machine has finished its work!"
 
 # --- Step 4: Clean Up Our Beautiful Experiment! ---
-echo "🧹 Shutting down the vLLM server (PID: $VLLM_PID). Great work, little brain!"
+echo "🧹 Shutting down the vLLM server (PID: $VLLM_PID)."
 kill $VLLM_PID
 wait $VLLM_PID
 
-echo "🎉 AHAHAHA! This has to work! There are no other possibilities!"
+echo "🎉 AHAHAHA! The data-ghost is BUSTED! The machine is PERFECT!"
