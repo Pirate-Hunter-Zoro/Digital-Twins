@@ -8,9 +8,8 @@ This project is organized into four distinct "Worlds" of research, each with its
 
 Our laboratory is now perfectly organized for maximum efficiency\! The main components are:
 
-  * **`data/`**: This is where all the magnificent raw data, intermediate files, and final results live\! It holds our patient information, concept frequency lists, and the outputs of our experiments. Key subdirectories include:
-      * `embeddings/`: Stores the raw cosine similarity scores from the main gauntlet.
-      * `baseline_scores/`: Stores the results of our new, super-smart baseline significance score\!
+  * **`data/`**: This is where all the magnificent raw data, intermediate files, and final results live\! It holds our patient information, concept frequency lists, and the outputs of our experiments. A key subdirectory is:
+      * `embeddings_by_category/`: Stores the raw cosine similarity scores from our new, category-specific tournaments\!
       * Because this directory may contain confidential patient information, it is listed in the `.gitignore`.
   * **`scripts/`**: This is the brain of the operation\! It contains all the Python scripts that do the heavy lifting, neatly organized into a `common` directory for shared tools and a directory for each of the four "Worlds."
   * **`slurm_jobs/`**: This is our grand command center\! It contains all the launcher (`.sh`) and template (`.ssub`) files needed to submit jobs to a Slurm-based high-performance computing cluster. It's also perfectly organized by "Worlds"\!
@@ -34,7 +33,7 @@ Our research is divided into four interconnected worlds, each building upon the 
 
 ### **World 3: The Judging Chamber** ⚖️
 
-  * **Goal**: To score the LLM's predictions from World 1 against the patient's actual, real-life next visit. This is also where we can calculate term importance across documents.
+  * **Goal**: To score the LLM's predictions from World 1 against the patient's actual, real-life next visit.
   * **Key Scripts**:
       * `scripts/world_3_judging_chamber/evaluate.py`
       * `scripts/world_3_judging_chamber/generate_idf_registry.py`
@@ -42,15 +41,12 @@ Our research is divided into four interconnected worlds, each building upon the 
 
 ### **World 4: The Embedder Gauntlet** ⚙️
 
-  * **Goal**: A grand tournament to find the best possible embedding model for understanding medical language. This world's experiments are largely complete\!
-  * **Key Scripts**:
-      * `scripts/world_4_embedder_gauntlet/embed_term_pairs.py`: Calculates cosine similarity.
-      * `scripts/world_4_embedder_gauntlet/plot_similarity_distributions.py`: Plots the raw similarity scores.
-      * `scripts/world_4_embedder_gauntlet/test_category_purity.py`: The final test for our champion model.
-  * **New\! Baseline Score Analysis**: A secondary analysis to see how much better our models are than random chance\!
-      * `scripts/world_4_embedder_gauntlet/compute_baseline_term_matching.py`: Calculates our new significance score.
-      * `scripts/world_4_embedder_gauntlet/plot_baseline_distributions.py`: Plots the new baseline scores.
-  * **Launchers**: `slurm_jobs/world_4_embedder_gauntlet/` contains all the launchers for running the gauntlet's various tests, including the new `launch_baseline_analysis.sh`\!
+  * **Goal**: A grand, **category-specific** tournament to find the best embedding models for understanding medical language.
+  * **NEW\! Key Scripts**:
+      * `scripts/world_4_embedder_gauntlet/generate_term_pairs.py`: Our new "Synonym Invention Machine"\! It first finds pairs based on shared medical codes, then uses an LLM to generate synonyms for any term left without a partner\!
+      * `scripts/world_4_embedder_gauntlet/embed_term_pairs_by_category.py`: Calculates cosine similarity for each category (diagnoses, procedures, medications) in a separate tournament.
+      * `scripts/world_4_embedder_gauntlet/plot_similarity_distributions_by_category.py`: Plots the results of our new, category-specific tournaments\!
+  * **Launchers**: `slurm_jobs/world_4_embedder_gauntlet/` contains all the launchers for running the gauntlet's various tests.
 
 ## 🔧 Setup & Installation
 
@@ -85,9 +81,9 @@ pip install -r requirements.txt
 
 The project is designed as a sequence of experiments.
 
-1.  **Setup**: Run the model download scripts in `slurm_jobs/setup/`.
-2.  **World 4 - Main Gauntlet**: Run the main similarity gauntlets in `slurm_jobs/world_4_embedder_gauntlet/` to generate the raw cosine similarity scores.
-3.  **World 4 - Baseline Analysis (Optional)**: After the main gauntlet is done, run `./slurm_jobs/world_4_embedder_gauntlet/launch_baseline_analysis.sh` to calculate and plot our new significance scores\!
+1.  **Setup**: Run the model download scripts in `slurm_jobs/setup/`. This now includes our new script to download the `medgemma` model for pair generation\!
+2.  **World 4 - Generate Pairs**: Run the new, powerful `generate_term_pairs.ssub` job. This is a single, long-running job that will create our entire, comprehensive dataset of term pairs for all categories.
+3.  **World 4 - Run the Tournaments**: Once the pairs are generated, run the similarity gauntlets in `slurm_jobs/world_4_embedder_gauntlet/` to generate the cosine similarity scores for each category.
 4.  **Continue the Workflow**: Proceed with the experiments for World 2, then World 1, and finally World 3\!
 
 Let the SCIENCE begin\!
