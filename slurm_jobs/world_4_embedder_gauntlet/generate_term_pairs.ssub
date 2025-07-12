@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=7-00:00:00
-#SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_%j.out
-#SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_%j.err
+#SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs.out
+#SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs.err
 
 # --- Entrapta's Notes! ---
 # SEVEN DAYS! AHAHAHA! We're giving this job a whole week to run!
