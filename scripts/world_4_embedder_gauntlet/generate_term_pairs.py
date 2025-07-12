@@ -15,7 +15,7 @@ if project_root not in sys.path:
 # Import our magnificent LLM query function!
 from scripts.common.llm.query_llm import query_llm, get_llm_client
 
-# --- Pairing Functions (Modified to return all terms and used terms) ---
+# --- Pairing Functions ---
 
 def create_diagnosis_pairs(diagnosis_file):
     """Creates code-based pairs for diagnoses."""
@@ -53,11 +53,11 @@ def create_medication_pairs(med_freq_file, rxnorm_file):
     """Creates code-based pairs for medications."""
     med_df = pd.read_csv(med_freq_file)
     # --- THIS IS THE FIX! ---
-    # We were looking for 'Name', but the real column is 'MedSimpleGenericName'!
+    rxnorm_df = pd.read_csv(rxnorm_file) # This line was moved here!
+    
     all_med_terms = med_df['MedSimpleGenericName'].unique().tolist()
     
     merged_df = pd.merge(med_df, rxnorm_df, on='MedicationEpicID')
-    # The 'Name' column here comes from the rxnorm_df and is correct!
     filtered_df = merged_df[merged_df['RXNORM_TYPE'].isin(['Ingredient', 'Brand Name', 'Precise Ingredient', 'MED_ONLY'])]
     code_groups = filtered_df.groupby('RXNORM_CODE')['Name'].unique().apply(list)
     pairs = []
