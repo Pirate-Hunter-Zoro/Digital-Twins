@@ -1,0 +1,71 @@
+#!/bin/bash
+#SBATCH --job-name=${1}                  # Set the job name from the launcher
+#SBATCH --output=slurm_output/${1}_out.txt # Use the job name for the output file!
+#SBATCH --error=slurm_output/${1}_err.txt  # And for the error file!
+#SBATCH --partition=c3_accel             # The correct partition!
+#SBATCH --time=7-00:00:00                # 7 glorious days of compute time!
+#SBATCH --mem=32G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+
+# --- Parameter setup from launcher ---
+# The job name is $1, so our parameters start at $2 now!
+REP_METHOD=$2
+VEC_METHOD=$3
+DIST_METRIC=$4
+NUM_VISITS=$5
+NUM_PATIENTS=$6
+NUM_NEIGHBORS=$7
+
+echo "========================================================"
+echo "🚀 LAUNCHING WORLD 2 ANALYSIS 🚀"
+echo "Job Name: $1"
+echo "Representation Method: $REP_METHOD"
+echo "Vectorizer: $VEC_METHOD"
+echo "Distance Metric: $DIST_METRIC"
+echo "Num Visits: $NUM_VISITS"
+echo "Num Patients: $NUM_PATIENTS"
+echo "Num Neighbors: $NUM_NEIGHBORS"
+echo "========================================================"
+
+# --- Activate Conda Environment ---
+source ~/.bashrc
+conda activate dt_env
+echo "✅ Conda environment 'dt_env' activated."
+
+# --- STEP 1: Compute Nearest Neighbors (This runs FIRST!) ---
+echo "\n--- ⚙️ Running compute_nearest_neighbors.py ---"
+python scripts/world_2_neighbor_analysis/compute_nearest_neighbors.py \
+    --representation_method "$REP_METHOD" \
+    --vectorizer_method "$VEC_METHOD" \
+    --distance_metric "$DIST_METRIC" \
+    --num_visits "$NUM_VISITS" \
+    --num_patients "$NUM_PATIENTS" \
+    --num_neighbors "$NUM_NEIGHBORS"
+
+if [ $? -ne 0 ]; then
+    echo "❌ ERROR: compute_nearest_neighbors.py failed. Halting."
+    exit 1
+fi
+echo "✅ Neighbor computation complete."
+
+
+# --- STEP 2: Analyze Neighbors (This runs SECOND!) ---
+echo "\n--- 🔬 Running examine_and_correlate_neighbors.py ---"
+python scripts/world_2_neighbor_analysis/examine_and_correlate_neighbors.py \
+    --representation_method "$REP_METHOD" \
+    --vectorizer_method "$VEC_METHOD" \
+    --distance_metric "$DIST_METRIC" \
+    --num_visits "$NUM_VISITS" \
+    --num_patients "$NUM_PATIENTS" \
+    --num_neighbors "$NUM_NEIGHBORS" \
+    --model_name "medgemma"
+
+if [ $? -ne 0 ]; then
+    echo "❌ ERROR: examine_and_correlate_neighbors.py failed."
+    exit 1
+fi
+echo "✅ Analysis and graph generation complete."
+
+echo "\n🎉🎉🎉 WORLD 2 JOB FINISHED SUCCESSFULLY! 🎉🎉🎉"
