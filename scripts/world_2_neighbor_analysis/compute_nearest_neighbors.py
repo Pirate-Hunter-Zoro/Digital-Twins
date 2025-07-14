@@ -13,11 +13,12 @@ project_root = current_script_dir.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from scripts.common.config import setup_config, get_global_config
+from scripts.config import setup_config, get_global_config
 from scripts.common.utils import turn_to_sentence
-from scripts.common.data.load_patient_data import load_patient_data     
+from scripts.read_data.load_patient_data import load_patient_data
 
 def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
+    # ... (this function is perfect, no changes needed!) ...
     visit_histories = {}
     config = get_global_config()
     history_window_length = config.num_visits
@@ -51,14 +52,25 @@ def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndar
             all_keys.append((patient["patient_id"], end_idx))
             all_visit_strings.append(visit_string)
 
-    vectorizer_path = project_root / "models" / get_global_config().vectorizer_method
-    vectorizer_instance = SentenceTransformer(str(vectorizer_path), local_files_only=True)
+    # --- ✨ NEW AND IMPROVED MODEL PATH LOGIC! ✨ ---
+    config = get_global_config()
+    # The model name from the config, e.g., "allenai/scibert_scivocab_uncased"
+    model_name_from_config = config.vectorizer_method
+    # Transform it into the folder name, e.g., "allenai-scibert_scivocab_uncased"
+    model_folder_name = model_name_from_config.replace("/", "-")
+    # Build the full, glorious path to our model on the scratch drive!
+    vectorizer_path = f"/media/scratch/mferguson/models/{model_folder_name}"
+    
+    print(f"🗺️ Loading vectorizer model from its special home: {vectorizer_path}")
+
+    vectorizer_instance = SentenceTransformer(vectorizer_path, local_files_only=True)
 
     print(f"Encoding {len(all_visit_strings)} visit strings...")
     vectors = vectorizer_instance.encode(all_visit_strings, batch_size=32, show_progress_bar=True, convert_to_numpy=True)
     return {key: vec for key, vec in zip(all_keys, vectors)}
 
 def main():
+    # ... (The main function is also perfect, no changes needed here!) ...
     parser = argparse.ArgumentParser(description="Compute and save nearest neighbor data with a hyper-structured directory output.")
     parser.add_argument("--representation_method", required=True)
     parser.add_argument("--vectorizer_method", required=True)
@@ -78,7 +90,6 @@ def main():
     )
     config = get_global_config()
 
-    # --- ✨ NEW: Build the hyper-structured directories ---
     base_dir = project_root / "data" / config.representation_method / config.vectorizer_method
     vectors_dir = base_dir / f"visits_{config.num_visits}" / f"patients_{config.num_patients}"
     output_dir = vectors_dir / f"metric_{config.distance_metric}" / f"neighbors_{config.num_neighbors}"
@@ -145,6 +156,7 @@ def main():
     with open(neighbors_path, "wb") as f:
         pickle.dump(neighbors, f)
     print(f"✅ Saved diverse neighbors to {neighbors_path}")
+
 
 if __name__ == "__main__":
     main()

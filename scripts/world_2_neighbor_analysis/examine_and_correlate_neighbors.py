@@ -18,7 +18,7 @@ if str(project_root) not in sys.path:
 
 from scripts.common.config import setup_config, get_global_config
 from scripts.common.llm.llm_helper import get_relevance_score, get_narrative
-from scripts.common.data.load_patient_data import load_patient_data
+from scripts.common.data_loading.load_patient_data import load_patient_data
 
 # --- Biomni Integration! ---
 try:
