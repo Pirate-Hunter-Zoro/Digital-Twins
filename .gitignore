@@ -5,3 +5,4 @@ models/
 .env
 Metadata/
 *.out
+slurm_output/

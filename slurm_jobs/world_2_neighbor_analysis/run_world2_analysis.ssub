@@ -1,32 +1,28 @@
 #!/bin/bash
-#SBATCH --job-name=${1}                  # Set the job name from the launcher
-#SBATCH --output=slurm_output/${1}_out.txt # Use the job name for the output file!
-#SBATCH --error=slurm_output/${1}_err.txt  # And for the error file!
-#SBATCH --partition=c3_accel             # The correct partition!
-#SBATCH --time=7-00:00:00                # 7 glorious days of compute time!
+#SBATCH --output=slurm_output/%x_out.txt # Use %x (the job name) for the output file!
+#SBATCH --error=slurm_output/%x_err.txt  # And for the error file!
+#SBATCH --partition=c3_accel
+#SBATCH --time=7-00:00:00
 #SBATCH --mem=32G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 
 # --- Parameter setup from launcher ---
-# The job name is $1, so our parameters start at $2 now!
-REP_METHOD=$2
-VEC_METHOD=$3
-DIST_METRIC=$4
-NUM_VISITS=$5
-NUM_PATIENTS=$6
-NUM_NEIGHBORS=$7
+# We're no longer passing the job name, so our parameters start back at $1!
+REP_METHOD=$1
+VEC_METHOD=$2
+DIST_METRIC=$3
+NUM_VISITS=$4
+NUM_PATIENTS=$5
+NUM_NEIGHBORS=$6
 
 echo "========================================================"
 echo "🚀 LAUNCHING WORLD 2 ANALYSIS 🚀"
-echo "Job Name: $1"
+echo "Job Name: $SLURM_JOB_NAME" # We can still print it here!
+echo "Job ID: $SLURM_JOB_ID"
 echo "Representation Method: $REP_METHOD"
-echo "Vectorizer: $VEC_METHOD"
-echo "Distance Metric: $DIST_METRIC"
-echo "Num Visits: $NUM_VISITS"
-echo "Num Patients: $NUM_PATIENTS"
-echo "Num Neighbors: $NUM_NEIGHBORS"
+# ... (The rest of the script is exactly the same!) ...
 echo "========================================================"
 
 # --- Activate Conda Environment ---
