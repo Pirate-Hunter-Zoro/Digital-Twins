@@ -1,6 +1,5 @@
 #!/bin/bash
-#SBATCH --output=slurm_output/%x_out.txt # Use %x (the job name) for the output file!
-#SBATCH --error=slurm_output/%x_err.txt  # And for the error file!
+#SBATCH --job-name=%x
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --mem=32G
@@ -8,21 +7,17 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 
-# --- Parameter setup from launcher ---
-# We're no longer passing the job name, so our parameters start back at $1!
-REP_METHOD=$1
-VEC_METHOD=$2
-DIST_METRIC=$3
-NUM_VISITS=$4
-NUM_PATIENTS=$5
-NUM_NEIGHBORS=$6
-
+# --- Parameter setup from environment variables ---
 echo "========================================================"
 echo "🚀 LAUNCHING WORLD 2 ANALYSIS 🚀"
-echo "Job Name: $SLURM_JOB_NAME" # We can still print it here!
+echo "Job Name: $SLURM_JOB_NAME"
 echo "Job ID: $SLURM_JOB_ID"
-echo "Representation Method: $REP_METHOD"
-# ... (The rest of the script is exactly the same!) ...
+echo "Representation Method: $REP_METHOD_ENV"
+echo "Vectorizer: $VEC_METHOD_ENV"
+echo "Distance Metric: $DIST_METRIC_ENV"
+echo "Num Visits: $NUM_VISITS_ENV"
+echo "Num Patients: $NUM_PATIENTS_ENV"
+echo "Num Neighbors: $NUM_NEIGHBORS_ENV"
 echo "========================================================"
 
 # --- Activate Conda Environment ---
@@ -30,15 +25,15 @@ source ~/.bashrc
 conda activate dt_env
 echo "✅ Conda environment 'dt_env' activated."
 
-# --- STEP 1: Compute Nearest Neighbors (This runs FIRST!) ---
+# --- STEP 1: Compute Nearest Neighbors ---
 echo "\n--- ⚙️ Running compute_nearest_neighbors.py ---"
 python scripts/world_2_neighbor_analysis/compute_nearest_neighbors.py \
-    --representation_method "$REP_METHOD" \
-    --vectorizer_method "$VEC_METHOD" \
-    --distance_metric "$DIST_METRIC" \
-    --num_visits "$NUM_VISITS" \
-    --num_patients "$NUM_PATIENTS" \
-    --num_neighbors "$NUM_NEIGHBORS"
+    --representation_method "$REP_METHOD_ENV" \
+    --vectorizer_method "$VEC_METHOD_ENV" \
+    --distance_metric "$DIST_METRIC_ENV" \
+    --num_visits "$NUM_VISITS_ENV" \
+    --num_patients "$NUM_PATIENTS_ENV" \
+    --num_neighbors "$NUM_NEIGHBORS_ENV"
 
 if [ $? -ne 0 ]; then
     echo "❌ ERROR: compute_nearest_neighbors.py failed. Halting."
@@ -46,16 +41,15 @@ if [ $? -ne 0 ]; then
 fi
 echo "✅ Neighbor computation complete."
 
-
-# --- STEP 2: Analyze Neighbors (This runs SECOND!) ---
+# --- STEP 2: Analyze Neighbors and Generate Graph ---
 echo "\n--- 🔬 Running examine_and_correlate_neighbors.py ---"
 python scripts/world_2_neighbor_analysis/examine_and_correlate_neighbors.py \
-    --representation_method "$REP_METHOD" \
-    --vectorizer_method "$VEC_METHOD" \
-    --distance_metric "$DIST_METRIC" \
-    --num_visits "$NUM_VISITS" \
-    --num_patients "$NUM_PATIENTS" \
-    --num_neighbors "$NUM_NEIGHBORS" \
+    --representation_method "$REP_METHOD_ENV" \
+    --vectorizer_method "$VEC_METHOD_ENV" \
+    --distance_metric "$DIST_METRIC_ENV" \
+    --num_visits "$NUM_VISITS_ENV" \
+    --num_patients "$NUM_PATIENTS_ENV" \
+    --num_neighbors "$NUM_NEIGHBORS_ENV" \
     --model_name "medgemma"
 
 if [ $? -ne 0 ]; then

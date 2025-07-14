@@ -22,22 +22,25 @@ for rep_method in "${REPRESENTATION_METHODS[@]}"; do
         for num_patients in "${NUM_PATIENTS_LIST[@]}"; do
           for num_neighbors in "${NUM_NEIGHBORS_LIST[@]}"; do
 
-            # ✨ Create a unique job name for each experiment! ✨
             JOB_NAME="W2_${rep_method}_${vec_method_name}_${dist_metric}_v${num_visits}_p${num_patients}_n${num_neighbors}"
 
             echo "--------------------------------------------------"
             echo "Submitting Job: $JOB_NAME"
             echo "--------------------------------------------------"
 
-            # Use sbatch to submit the job, passing the JOB_NAME and all other parameters
-            sbatch slurm_jobs/world_2_neighbor_analysis/run_world2_analysis.ssub \
-              "$JOB_NAME" \
-              "$rep_method" \
-              "$vec_method_name" \
-              "$dist_metric" \
-              "$num_visits" \
-              "$num_patients" \
-              "$num_neighbors"
+            # ✨ Export variables and submit the job with explicit output paths! ✨
+            export REP_METHOD_ENV="$rep_method"
+            export VEC_METHOD_ENV="$vec_method_name"
+            export DIST_METRIC_ENV="$dist_metric"
+            export NUM_VISITS_ENV="$num_visits"
+            export NUM_PATIENTS_ENV="$num_patients"
+            export NUM_NEIGHBORS_ENV="$num_neighbors"
+
+            sbatch --job-name="$JOB_NAME" \
+                   --output="slurm_output/${JOB_NAME}_out.txt" \
+                   --error="slurm_output/${JOB_NAME}_err.txt" \
+                   --export=ALL \
+                   slurm_jobs/world_2_neighbor_analysis/run_world2_analysis.ssub
               
           done
         done
