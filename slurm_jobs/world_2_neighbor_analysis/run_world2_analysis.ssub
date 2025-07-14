@@ -1,5 +1,4 @@
 #!/bin/bash
-#SBATCH --job-name=%x
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --mem=32G
@@ -40,6 +39,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "✅ Neighbor computation complete."
+
 
 # --- STEP 2: Analyze Neighbors and Generate Graph ---
 echo "\n--- 🔬 Running examine_and_correlate_neighbors.py ---"

@@ -15,14 +15,15 @@ NUM_NEIGHBORS_LIST=(5)
 
 # --- Loop through all parameter combinations and launch jobs ---
 for rep_method in "${REPRESENTATION_METHODS[@]}"; do
-  for vec_method_path in "${VECTORIZER_METHODS[@]}"; do
-    vec_method_name=$(basename "$vec_method_path")
+  for vec_method in "${VECTORIZER_METHODS[@]}"; do
+    # Use the full vectorizer method name! No more basename!
     for dist_metric in "${DISTANCE_METRICS[@]}"; do
       for num_visits in "${NUM_VISITS_LIST[@]}"; do
         for num_patients in "${NUM_PATIENTS_LIST[@]}"; do
           for num_neighbors in "${NUM_NEIGHBORS_LIST[@]}"; do
 
-            JOB_NAME="W2_${rep_method}_${vec_method_name}_${dist_metric}_v${num_visits}_p${num_patients}_n${num_neighbors}"
+            # Create a unique job name for each experiment!
+            JOB_NAME="W2_${rep_method}_${vec_method//\//-}_${dist_metric}_v${num_visits}_p${num_patients}_n${num_neighbors}"
 
             echo "--------------------------------------------------"
             echo "Submitting Job: $JOB_NAME"
@@ -30,7 +31,7 @@ for rep_method in "${REPRESENTATION_METHODS[@]}"; do
 
             # ✨ Export variables and submit the job with explicit output paths! ✨
             export REP_METHOD_ENV="$rep_method"
-            export VEC_METHOD_ENV="$vec_method_name"
+            export VEC_METHOD_ENV="$vec_method" # Pass the full name!
             export DIST_METRIC_ENV="$dist_metric"
             export NUM_VISITS_ENV="$num_visits"
             export NUM_PATIENTS_ENV="$num_patients"
@@ -41,7 +42,7 @@ for rep_method in "${REPRESENTATION_METHODS[@]}"; do
                    --error="slurm_output/${JOB_NAME}_err.txt" \
                    --export=ALL \
                    slurm_jobs/world_2_neighbor_analysis/run_world2_analysis.ssub
-              
+
           done
         done
       done
