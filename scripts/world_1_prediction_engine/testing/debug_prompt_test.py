@@ -12,7 +12,7 @@ if project_root not in sys.path:
 
 # --- Imports ---
 from scripts.common.data_loading.load_patient_data import load_patient_data
-from scripts.llm.query_and_response import (
+from scripts.common.llm.query_and_response import (
     setup_prompt_generation,
     generate_prompt,
     force_valid_prediction
