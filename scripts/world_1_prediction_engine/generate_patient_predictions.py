@@ -11,7 +11,7 @@ if project_root not in sys.path:
 
 from scripts.common.config import setup_config, get_global_config
 from scripts.llm.query_and_response import setup_prompt_generation, generate_prediction_output
-from scripts.read_data.load_patient_data import load_patient_data
+from scripts.common.data_loading.load_patient_data import load_patient_data
 
 def main():
     parser = argparse.ArgumentParser()

@@ -11,7 +11,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # --- Imports ---
-from scripts.read_data.load_patient_data import load_patient_data
+from scripts.common.data_loading.load_patient_data import load_patient_data
 from scripts.llm.query_and_response import (
     setup_prompt_generation,
     generate_prompt,

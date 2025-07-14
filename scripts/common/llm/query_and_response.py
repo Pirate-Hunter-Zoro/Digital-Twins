@@ -16,7 +16,7 @@ if project_root not in sys.path:
 from scripts.calculations.compute_nearest_neighbors import get_neighbors
 from scripts.llm.query_llm import query_llm
 from scripts.llm.llm_helper import get_narrative
-from scripts.read_data.load_patient_data import load_patient_data
+from scripts.common.data_loading.load_patient_data import load_patient_data
 from scripts.common.utils import turn_to_sentence
 # --- End of Fix ---
 

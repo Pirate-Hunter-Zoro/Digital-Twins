@@ -15,10 +15,13 @@ if str(project_root) not in sys.path:
 
 from scripts.common.config import setup_config, get_global_config
 from scripts.common.utils import turn_to_sentence
-from scripts.read_data.load_patient_data import load_patient_data
+from scripts.common.data_loading.load_patient_data import load_patient_data
+
 
 def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
-    # ... (this function is perfect, no changes needed!) ...
+    """
+    Generates visit histories for ALL sliding windows of a given length.
+    """
     visit_histories = {}
     config = get_global_config()
     history_window_length = config.num_visits
@@ -70,7 +73,6 @@ def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndar
     return {key: vec for key, vec in zip(all_keys, vectors)}
 
 def main():
-    # ... (The main function is also perfect, no changes needed here!) ...
     parser = argparse.ArgumentParser(description="Compute and save nearest neighbor data with a hyper-structured directory output.")
     parser.add_argument("--representation_method", required=True)
     parser.add_argument("--vectorizer_method", required=True)
@@ -90,6 +92,7 @@ def main():
     )
     config = get_global_config()
 
+    # Build the hyper-structured directories
     base_dir = project_root / "data" / config.representation_method / config.vectorizer_method
     vectors_dir = base_dir / f"visits_{config.num_visits}" / f"patients_{config.num_patients}"
     output_dir = vectors_dir / f"metric_{config.distance_metric}" / f"neighbors_{config.num_neighbors}"
@@ -156,7 +159,6 @@ def main():
     with open(neighbors_path, "wb") as f:
         pickle.dump(neighbors, f)
     print(f"✅ Saved diverse neighbors to {neighbors_path}")
-
 
 if __name__ == "__main__":
     main()
