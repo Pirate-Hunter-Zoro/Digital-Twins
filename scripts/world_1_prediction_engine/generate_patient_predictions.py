@@ -9,7 +9,7 @@ project_root = os.path.abspath(os.path.join(current_script_dir, "..", ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from scripts.config import setup_config, get_global_config
+from scripts.common.config import setup_config, get_global_config
 from scripts.llm.query_and_response import setup_prompt_generation, generate_prediction_output
 from scripts.read_data.load_patient_data import load_patient_data
 

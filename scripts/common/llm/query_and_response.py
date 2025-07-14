@@ -20,7 +20,7 @@ from scripts.read_data.load_patient_data import load_patient_data
 from scripts.common.utils import turn_to_sentence
 # --- End of Fix ---
 
-from scripts.config import get_global_config
+from scripts.common.config import get_global_config
 
 # --- Global Variables ---
 patient_data = None
@@ -92,7 +92,7 @@ def generate_prompt(patient_dict: dict) -> str:
     """
     Generates a prompt string for the LLM based on patient history.
     """
-    from scripts.config import get_global_config
+    from scripts.common.config import get_global_config
     config = get_global_config()
 
     visits = patient_dict["visits"][: config.num_visits]

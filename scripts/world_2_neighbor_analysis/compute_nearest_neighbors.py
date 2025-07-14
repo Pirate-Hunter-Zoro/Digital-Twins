@@ -13,7 +13,7 @@ project_root = current_script_dir.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from scripts.config import setup_config, get_global_config
+from scripts.common.config import setup_config, get_global_config
 from scripts.common.utils import turn_to_sentence
 from scripts.read_data.load_patient_data import load_patient_data
 

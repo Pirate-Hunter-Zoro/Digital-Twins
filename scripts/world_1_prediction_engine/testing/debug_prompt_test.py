@@ -17,7 +17,7 @@ from scripts.llm.query_and_response import (
     generate_prompt,
     force_valid_prediction
 )
-from scripts.config import setup_config
+from scripts.common.config import setup_config
 
 # --- Utility: Convert sets to JSON-serializable lists ---
 def convert_sets_to_lists(obj):

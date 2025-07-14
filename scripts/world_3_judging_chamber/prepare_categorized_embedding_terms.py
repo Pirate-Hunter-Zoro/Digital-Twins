@@ -14,7 +14,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 # --- End of sys.path adjustment ---
 
-from scripts.config import setup_config, get_global_config
+from scripts.common.config import setup_config, get_global_config
 
 # --- Term cleaner ---
 def clean_term(term: str) -> str:

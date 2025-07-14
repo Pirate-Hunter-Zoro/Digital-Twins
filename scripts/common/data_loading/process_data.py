@@ -28,7 +28,7 @@ import json
 import numpy as np
 import multiprocessing
 import math
-import scripts.config as config # Assuming config.py is in 'scripts' directory
+import scripts.common.config as config # Assuming config.py is in 'scripts' directory
 import decimal # For handling Decimal types
 
 

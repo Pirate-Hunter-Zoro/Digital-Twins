@@ -10,7 +10,7 @@ if project_root not in sys.path:
 # --- End of sys.path adjustment ---
 
 from scripts.llm.query_llm import query_llm
-from scripts.config import get_global_config
+from scripts.common.config import get_global_config
 # --- FIX APPLIED: Import from our central utility script to break the loop! ---
 from scripts.common.utils import turn_to_sentence
 
