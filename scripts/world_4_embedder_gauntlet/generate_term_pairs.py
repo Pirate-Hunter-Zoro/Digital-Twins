@@ -1,3 +1,4 @@
+# scripts/world_4_embedder_gauntlet/generate_term_pairs.py (Case-Insensitive SUPER-UPGRADE!)
 import pandas as pd
 import json
 from itertools import combinations
@@ -15,65 +16,38 @@ if project_root not in sys.path:
 # Import our magnificent LLM query function!
 from scripts.common.llm.query_llm import query_llm, get_llm_client
 
-# --- Pairing Functions ---
+# --- Pairing Functions (Now with case-insensitivity!) ---
 
-def create_diagnosis_pairs(diagnosis_file):
-    """Creates code-based pairs for diagnoses."""
-    df = pd.read_csv(diagnosis_file)
-    df.dropna(subset=['Code', 'Description'], inplace=True)
-    all_terms = df['Description'].unique().tolist()
-    code_groups = df.groupby('Code')['Description'].apply(list)
+def create_code_based_pairs(all_terms_list, code_groups, category):
+    """
+    Generic function to create pairs based on shared codes, now with
+    advanced case-insensitive logic! So smart!
+    """
     pairs = []
-    used_terms = set()
+    used_terms_lower = set()
+
     for code, descriptions in code_groups.items():
-        if len(descriptions) > 1:
-            for p in combinations(descriptions, 2):
-                pairs.append({'term': p[0], 'counterpart': p[1], 'category': 'diagnosis', 'type': 'code_based'})
-                used_terms.add(p[0])
-                used_terms.add(p[1])
-    return pairs, used_terms, all_terms
+        # Get unique descriptions, ignoring case
+        unique_descs = list(pd.Series(descriptions).str.lower().unique())
+        
+        # Map lowercased back to an original capitalization
+        desc_map = {d.lower(): d for d in reversed(descriptions)}
+        original_case_descs = [desc_map[d_lower] for d_lower in unique_descs]
 
-def create_procedure_pairs(procedure_file):
-    """Creates code-based pairs for procedures."""
-    df = pd.read_csv(procedure_file)
-    df.dropna(subset=['CPT_Procedure_Code', 'CPT_Procedure_Description'], inplace=True)
-    all_terms = df['CPT_Procedure_Description'].unique().tolist()
-    code_groups = df.groupby('CPT_Procedure_Code')['CPT_Procedure_Description'].apply(list)
-    pairs = []
-    used_terms = set()
-    for code, descriptions in code_groups.items():
-        if len(descriptions) > 1:
-            for p in combinations(descriptions, 2):
-                pairs.append({'term': p[0], 'counterpart': p[1], 'category': 'procedure', 'type': 'code_based'})
-                used_terms.add(p[0])
-                used_terms.add(p[1])
-    return pairs, used_terms, all_terms
-
-def create_medication_pairs(med_freq_file, rxnorm_file):
-    """Creates code-based pairs for medications."""
-    med_df = pd.read_csv(med_freq_file)
-    # --- THIS IS THE FIX! ---
-    rxnorm_df = pd.read_csv(rxnorm_file) # This line was moved here!
-    
-    all_med_terms = med_df['MedSimpleGenericName'].unique().tolist()
-    
-    merged_df = pd.merge(med_df, rxnorm_df, on='MedicationEpicID')
-    filtered_df = merged_df[merged_df['RXNORM_TYPE'].isin(['Ingredient', 'Brand Name', 'Precise Ingredient', 'MED_ONLY'])]
-    code_groups = filtered_df.groupby('RXNORM_CODE')['Name'].unique().apply(list)
-    pairs = []
-    used_terms = set()
-    for code, names in code_groups.items():
-        if len(names) > 1:
-            for p in combinations(names, 2):
-                term1 = ' '.join(p[0].split(' ')[:2])
-                term2 = ' '.join(p[1].split(' ')[:2])
-                if term1.lower() != term2.lower():
-                    pairs.append({'term': p[0], 'counterpart': p[1], 'category': 'medication', 'type': 'code_based'})
-                    used_terms.add(p[0])
-                    used_terms.add(p[1])
-    unique_pairs = [dict(t) for t in {tuple(d.items()) for d in pairs}]
-    return unique_pairs, used_terms, all_med_terms
-
+        if len(original_case_descs) > 1:
+            for p in combinations(original_case_descs, 2):
+                term1_lower = p[0].lower()
+                term2_lower = p[1].lower()
+                
+                # Only create a pair if BOTH terms haven't been used yet
+                if term1_lower not in used_terms_lower and term2_lower not in used_terms_lower:
+                    pairs.append({'term': p[0], 'counterpart': p[1], 'category': category, 'type': 'code_based'})
+                    used_terms_lower.add(term1_lower)
+                    used_terms_lower.add(term2_lower)
+                    
+    # Find all terms that were actually used
+    final_used_terms = {term for pair in pairs for term in [pair['term'], pair['counterpart']]}
+    return pairs, final_used_terms
 
 # --- The LLM-Powered Synonym Invention Machine ---
 
@@ -126,31 +100,45 @@ def generate_llm_pairs_for_lonely_terms(all_terms, used_terms, category_name):
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    current_script_dir = Path(__file__).resolve().parent
-    project_root = current_script_dir.parents[1]
+    project_root = Path(__file__).resolve().parents[2]
     data_dir = project_root / 'data'
-    data_dir.mkdir(parents=True, exist_ok=True)
+    
+    # --- Diagnoses ---
+    print("\n--- Processing Diagnoses ---")
+    diag_df = pd.read_csv(data_dir / 'diagnosis_frequency.csv')
+    diag_df.dropna(subset=['Code', 'Description'], inplace=True)
+    all_diag_terms = diag_df['Description'].unique().tolist()
+    diag_code_groups = diag_df.groupby('Code')['Description'].apply(list)
+    diag_pairs, used_diag_terms = create_code_based_pairs(all_diag_terms, diag_code_groups, 'diagnosis')
 
-    diagnosis_file = data_dir / 'diagnosis_frequency.csv'
-    procedure_file = data_dir / 'procedure_frequency.csv'
-    med_freq_file = data_dir / 'medication_frequency.csv'
-    rxnorm_file = data_dir / 'RXNorm_Table-25_06_17-v1.csv'
-    
-    get_llm_client()
-    
-    print("--- Step 1: Generating all code-based pairs ---")
-    diag_pairs, used_diag, all_diag = create_diagnosis_pairs(diagnosis_file)
-    proc_pairs, used_proc, all_proc = create_procedure_pairs(procedure_file)
-    med_pairs, used_med, all_med = create_medication_pairs(med_freq_file, rxnorm_file)
-    
-    print("\n--- Step 2: Generating LLM-based pairs for ALL lonely terms ---")
-    llm_diag_pairs = generate_llm_pairs_for_lonely_terms(all_diag, used_diag, 'diagnosis')
-    llm_proc_pairs = generate_llm_pairs_for_lonely_terms(all_proc, used_proc, 'procedure')
-    llm_med_pairs = generate_llm_pairs_for_lonely_terms(all_med, used_med, 'medication')
+    # --- Procedures ---
+    print("\n--- Processing Procedures ---")
+    proc_df = pd.read_csv(data_dir / 'procedure_frequency.csv')
+    proc_df.dropna(subset=['CPT_Procedure_Code', 'CPT_Procedure_Description'], inplace=True)
+    all_proc_terms = proc_df['CPT_Procedure_Description'].unique().tolist()
+    proc_code_groups = proc_df.groupby('CPT_Procedure_Code')['CPT_Procedure_Description'].apply(list)
+    proc_pairs, used_proc_terms = create_code_based_pairs(all_proc_terms, proc_code_groups, 'procedure')
+
+    # --- Medications ---
+    print("\n--- Processing Medications ---")
+    med_df = pd.read_csv(data_dir / 'medication_frequency.csv')
+    rxnorm_df = pd.read_csv(data_dir / 'RXNorm_Table-25_06_17-v1.csv')
+    all_med_terms = med_df['MedSimpleGenericName'].unique().tolist()
+    merged_df = pd.merge(med_df, rxnorm_df, on='MedicationEpicID')
+    filtered_df = merged_df[merged_df['RXNORM_TYPE'].isin(['Ingredient', 'Brand Name', 'Precise Ingredient', 'MED_ONLY'])]
+    med_code_groups = filtered_df.groupby('RXNORM_CODE')['Name'].unique().apply(list)
+    med_pairs, used_med_terms = create_code_based_pairs(all_med_terms, med_code_groups, 'medication')
+
+    # --- LLM Generation for Lonely Terms ---
+    print("\n--- Generating LLM pairs for all lonely terms ---")
+    get_llm_client() # Initialize the client once!
+    llm_diag_pairs = generate_llm_pairs_for_lonely_terms(all_diag_terms, used_diag_terms, 'diagnosis')
+    llm_proc_pairs = generate_llm_pairs_for_lonely_terms(all_proc_terms, used_proc_terms, 'procedure')
+    llm_med_pairs = generate_llm_pairs_for_lonely_terms(all_med_terms, used_med_terms, 'medication')
 
     all_pairs = diag_pairs + proc_pairs + med_pairs + llm_diag_pairs + llm_proc_pairs + llm_med_pairs
     
-    output_filename = data_dir / 'term_pairs_fully_generated.json'
+    output_filename = data_dir / 'term_pairs_final_clean.json'
     with open(output_filename, 'w') as f:
         json.dump(all_pairs, f, indent=4)
         
@@ -160,4 +148,4 @@ if __name__ == "__main__":
     print(f"Medication Pairs : {len(med_pairs)} (code) + {len(llm_med_pairs)} (LLM)")
     print(f"--------------------")
     print(f"TOTAL Pairs      : {len(all_pairs)}")
-    print(f"\nALL DONE! All pairs saved to {output_filename}! Now the experiment is complete and magnificent!")
+    print(f"\nALL DONE! The final, clean dataset is saved to {output_filename}!")
