@@ -16,7 +16,7 @@ BATCH_SIZES=(1000)
 
 # ✨ NEW! Hardware specifications from Dale the Mentor! ✨
 GPU_COUNTS=(1)
-CPUS_PER_TASK=(36)
+CPUS_PER_TASK=(18)
 
 
 # --- Loop through all parameter combinations and launch jobs ---
