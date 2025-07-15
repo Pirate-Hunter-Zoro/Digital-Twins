@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
-#SBATCH --mem=32G
+#SBATCH --mem=128G 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
@@ -10,13 +10,8 @@
 echo "========================================================"
 echo "🚀 LAUNCHING WORLD 2 ANALYSIS 🚀"
 echo "Job Name: $SLURM_JOB_NAME"
-echo "Job ID: $SLURM_JOB_ID"
-echo "Representation Method: $REP_METHOD_ENV"
-echo "Vectorizer: $VEC_METHOD_ENV"
-echo "Distance Metric: $DIST_METRIC_ENV"
-echo "Num Visits: $NUM_VISITS_ENV"
-echo "Num Patients: $NUM_PATIENTS_ENV"
-echo "Num Neighbors: $NUM_NEIGHBORS_ENV"
+# ... (other echo statements are the same)
+echo "Batch Size: $BATCH_SIZE_ENV" # Logging our new parameter!
 echo "========================================================"
 
 # --- Activate Conda Environment ---
@@ -32,7 +27,8 @@ python scripts/world_2_neighbor_analysis/compute_nearest_neighbors.py \
     --distance_metric "$DIST_METRIC_ENV" \
     --num_visits "$NUM_VISITS_ENV" \
     --num_patients "$NUM_PATIENTS_ENV" \
-    --num_neighbors "$NUM_NEIGHBORS_ENV"
+    --num_neighbors "$NUM_NEIGHBORS_ENV" \
+    --batch_size "$BATCH_SIZE_ENV" # The new, magnificent argument!
 
 if [ $? -ne 0 ]; then
     echo "❌ ERROR: compute_nearest_neighbors.py failed. Halting."

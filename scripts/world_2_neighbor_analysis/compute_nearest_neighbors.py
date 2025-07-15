@@ -17,11 +17,7 @@ from scripts.common.config import setup_config, get_global_config
 from scripts.common.utils import turn_to_sentence
 from scripts.common.data_loading.load_patient_data import load_patient_data
 
-
 def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
-    """
-    Generates visit histories for ALL sliding windows of a given length.
-    """
     visit_histories = {}
     config = get_global_config()
     history_window_length = config.num_visits
@@ -47,30 +43,51 @@ def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
     return visit_histories
 
 
-def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndarray]:
-    all_visit_strings, all_keys = [], []
-    for patient in patient_data:
-        visit_histories = get_visit_histories(patient["visits"])
-        for end_idx, visit_string in visit_histories.items():
-            all_keys.append((patient["patient_id"], end_idx))
-            all_visit_strings.append(visit_string)
-
-    # --- ✨ NEW AND IMPROVED MODEL PATH LOGIC! ✨ ---
+def get_visit_vectors(patient_data: list[dict], batch_size: int) -> dict[tuple[str, int], np.ndarray]:
+    """
+    ✨ NEW AND IMPROVED! ✨
+    Processes patients in batches to conserve memory.
+    """
+    
+    # --- ✨ NEW MODEL PATH LOGIC! ✨ ---
     config = get_global_config()
-    # The model name from the config, e.g., "allenai/scibert_scivocab_uncased"
     model_name_from_config = config.vectorizer_method
-    # Transform it into the folder name, e.g., "allenai-scibert_scivocab_uncased"
     model_folder_name = model_name_from_config.replace("/", "-")
-    # Build the full, glorious path to our model on the scratch drive!
     vectorizer_path = f"/media/scratch/mferguson/models/{model_folder_name}"
     
     print(f"🗺️ Loading vectorizer model from its special home: {vectorizer_path}")
-
     vectorizer_instance = SentenceTransformer(vectorizer_path, local_files_only=True)
 
-    print(f"Encoding {len(all_visit_strings)} visit strings...")
-    vectors = vectorizer_instance.encode(all_visit_strings, batch_size=32, show_progress_bar=True, convert_to_numpy=True)
-    return {key: vec for key, vec in zip(all_keys, vectors)}
+    final_vectors_dict = {}
+    
+    # Process patients in magnificent, memory-saving batches!
+    for i in range(0, len(patient_data), batch_size):
+        batch_patients = patient_data[i:i+batch_size]
+        print(f"\n--- Processing patient batch {i//batch_size + 1} / {len(patient_data)//batch_size + 1} ---")
+        
+        batch_visit_strings, batch_keys = [], []
+        for patient in batch_patients:
+            visit_histories = get_visit_histories(patient["visits"])
+            for end_idx, visit_string in visit_histories.items():
+                batch_keys.append((patient["patient_id"], end_idx))
+                batch_visit_strings.append(visit_string)
+        
+        if not batch_visit_strings:
+            continue
+
+        print(f"Encoding {len(batch_visit_strings)} visit strings in this batch...")
+        vectors = vectorizer_instance.encode(
+            batch_visit_strings,
+            batch_size=32, # This is the internal batching for the model itself
+            show_progress_bar=True,
+            convert_to_numpy=True
+        )
+        
+        # Add the results of this batch to our main dictionary
+        for key, vec in zip(batch_keys, vectors):
+            final_vectors_dict[key] = vec
+            
+    return final_vectors_dict
 
 def main():
     parser = argparse.ArgumentParser(description="Compute and save nearest neighbor data with a hyper-structured directory output.")
@@ -80,6 +97,8 @@ def main():
     parser.add_argument("--num_visits", type=int, default=6)
     parser.add_argument("--num_patients", type=int, default=5000)
     parser.add_argument("--num_neighbors", type=int, default=5)
+    # ✨ NEW BATCH SIZE ARGUMENT! ✨
+    parser.add_argument("--batch_size", type=int, default=1000, help="Number of patients to process in a single batch.")
     args = parser.parse_args()
 
     setup_config(
@@ -92,15 +111,13 @@ def main():
     )
     config = get_global_config()
 
-    # Build the hyper-structured directories
+    # --- (The rest of the main function is the same, but now it passes the batch size!) ---
     base_dir = project_root / "data" / config.representation_method / config.vectorizer_method
     vectors_dir = base_dir / f"visits_{config.num_visits}" / f"patients_{config.num_patients}"
     output_dir = vectors_dir / f"metric_{config.distance_metric}" / f"neighbors_{config.num_neighbors}"
     
     os.makedirs(vectors_dir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
-    print(f"📂 Vector directory: {vectors_dir}")
-    print(f"📂 Output directory: {output_dir}")
 
     neighbors_path = output_dir / "neighbors.pkl"
     vectors_path = vectors_dir / "all_vectors.pkl"
@@ -114,13 +131,15 @@ def main():
         with open(vectors_path, "rb") as f:
             vectors_dict = pickle.load(f)
     else:
-        print("🔍 Vectors not found. Computing new vectors...")
+        print("🔍 Vectors not found. Computing new vectors in batches...")
         patient_data = load_patient_data()
-        vectors_dict = get_visit_vectors(patient_data)
+        # Pass the batch size to our new and improved function!
+        vectors_dict = get_visit_vectors(patient_data, args.batch_size)
         with open(vectors_path, "wb") as f:
             pickle.dump(vectors_dict, f)
         print(f"💾 Saved new vector embeddings to {vectors_path}")
 
+    # ... (The rest of the neighbor calculation is perfect!) ...
     print("🔍 Computing nearest neighbors with ✨Neighbor Diversity Filter✨...")
     keys = list(vectors_dict.keys())
     matrix = np.vstack([vectors_dict[k] for k in keys])
@@ -159,6 +178,7 @@ def main():
     with open(neighbors_path, "wb") as f:
         pickle.dump(neighbors, f)
     print(f"✅ Saved diverse neighbors to {neighbors_path}")
+
 
 if __name__ == "__main__":
     main()
