@@ -19,24 +19,28 @@ def load_legacy_model(model_path, is_word2vec):
     """Loads a GloVe or Word2Vec model."""
     print(f"-> Loading legacy model from {model_path}...")
     binary = is_word2vec
-    model = KeyedVectors.load_word2vec_format(model_path, binary=binary)
-    print("-> Model loaded!")
-    return model
+    try:
+        model = KeyedVectors.load_word2vec_format(model_path, binary=binary)
+        print("-> Model loaded!")
+        return model
+    except Exception as e:
+        print(f"❌ ERROR: Failed to load model {model_path}. Error: {e}")
+        return None
 
 def calculate_average_similarity_legacy(model, sample_size=300):
     """Calculates baseline similarity for legacy models."""
     vocab = list(model.index_to_key)
     if len(vocab) < sample_size:
         sample_size = len(vocab)
-        
+
     print(f"  - Taking a random sample of {sample_size} terms for baseline similarity...")
     sample_terms = random.sample(vocab, sample_size)
-    
+
     embeddings = np.array([model[term] for term in sample_terms])
     sim_matrix = cosine_similarity(embeddings)
     upper_triangle_indices = np.triu_indices_from(sim_matrix, k=1)
     avg_sim = np.mean(sim_matrix[upper_triangle_indices])
-    
+
     print(f"  - Calculated baseline average similarity: {avg_sim:.4f}")
     return avg_sim
 
@@ -47,24 +51,36 @@ def main():
     parser.add_argument("--is_word2vec", action="store_true", help="Flag if the model is in Word2Vec binary format.")
     args = parser.parse_args()
 
+    # --- ✨ NEW: Pre-computation Check ✨ ---
+    output_dir = project_root / "data" / "normalized_embeddings_by_category" / args.model_name
+    output_check_path = output_dir / "procedure_normalized_scores.json"
+
+    if os.path.exists(output_check_path):
+        print(f"✅ Hooray! Normalized legacy results for {args.model_name} already exist at {output_check_path}. Skipping!")
+        return
+
+    print(f"🚀 Starting NORMALIZED legacy embedding for model: {args.model_name}")
+    os.makedirs(output_dir, exist_ok=True)
+
     # --- Path setup ---
     data_dir = project_root / "data"
     pairs_path = data_dir / "term_pairs_by_category.json"
-    output_dir = data_dir / "normalized_embeddings_by_category" / args.model_name
-    os.makedirs(output_dir, exist_ok=True)
 
     # --- Load Model and Term Pairs ---
     model = load_legacy_model(args.model_path, args.is_word2vec)
+    if model is None:
+        sys.exit(1)
+        
     with open(pairs_path, 'r') as f:
         term_pairs_by_category = json.load(f)
 
     # --- Calculate Baseline Similarity ---
     avg_cos_sim = calculate_average_similarity_legacy(model)
-    
+
     # --- Process Each Category ---
     for category, pairs in term_pairs_by_category.items():
         print(f"\n--- Processing category: {category} ---")
-        
+
         results_data = []
         for t1, t2 in pairs:
             if t1 in model and t2 in model:
@@ -85,7 +101,7 @@ def main():
             json.dump(results_data, f, indent=2)
         print(f"✅ Saved normalized scores for {category} to {category_output_path}")
 
-    print("\n🎉 Glorious success! All legacy models processed with the new metric!")
+    print(f"\n🎉 Glorious success! All categories for {args.model_name} have been processed!")
 
 if __name__ == "__main__":
     main()

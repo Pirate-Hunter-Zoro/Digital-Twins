@@ -35,6 +35,11 @@ def main():
     # --- Path setup ---
     data_dir = project_root / "data"
     output_path = data_dir / "term_pairs_by_category.json"
+
+    # ✨ NEW: Check for existing output to avoid re-computation! ✨
+    if os.path.exists(output_path):
+        print(f"✅ Hooray! Term pairs file already exists at {output_path}. Nothing to do here!")
+        return
     
     # --- ✨ NEW: Point to the CSV frequency files! ✨ ---
     frequency_files = {

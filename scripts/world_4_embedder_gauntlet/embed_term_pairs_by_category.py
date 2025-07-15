@@ -1,60 +1,85 @@
 import os
 import sys
-import json
-import csv
+import pandas as pd
 import argparse
-from sentence_transformers import SentenceTransformer, util
-from collections import defaultdict
+from pathlib import Path
+from sentence_transformers import SentenceTransformer
 
-# --- Path Setup ---
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# --- Dynamic sys.path adjustment ---
+current_script_dir = Path(__file__).resolve().parent
+project_root = current_script_dir.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-# === Argument parsing ===
-parser = argparse.ArgumentParser()
-parser.add_argument("--model", type=str, required=True, help="Model name from HuggingFace Hub")
-args = parser.parse_args()
-model_name = args.model
-print(f"🔍 Let the tournament begin for model: {model_name}!")
+from scripts.common.config import setup_config, get_global_config
 
-# === Load categorized term pairs ===
-term_pairs_path = os.path.join(project_root, "data", "term_pairs_categorized.json")
-with open(term_pairs_path, "r") as f:
-    all_pairs = json.load(f)
+def main():
+    parser = argparse.ArgumentParser(description="Embed term pairs and calculate similarity for a given model.")
+    parser.add_argument("--model", type=str, required=True, help="Name of the SentenceTransformer model to use.")
+    args = parser.parse_args()
 
-# --- Sort pairs into their tournament brackets! ---
-categorized_pairs = defaultdict(list)
-for pair in all_pairs:
-    categorized_pairs[pair['category']].append(pair)
+    # --- ✨ NEW: Pre-computation Check ✨ ---
+    # We'll check if the output for the LAST category already exists.
+    # If it does, we can assume the whole script has run for this model.
+    model_name_safe = args.model.replace("/", "-")
+    output_check_path = project_root / "data" / "embeddings_by_category" / "procedure" / f"{model_name_safe}.csv"
 
-# === Load the model ===
-sanitized_model_name = model_name.replace("/", "-")
-local_model_path = f"/media/scratch/mferguson/models/{sanitized_model_name}"
-print(f"📦 Loading the contender from: {local_model_path}")
-model = SentenceTransformer(local_model_path)
+    if os.path.exists(output_check_path):
+        print(f"✅ Hooray! Results for {args.model} already exist at {output_check_path}. Skipping!")
+        return
 
-# === Run the tournament for each category! ===
-for category, pairs in categorized_pairs.items():
-    print(f"\n--- 🏟️  Starting the '{category}' category tournament! ({len(pairs)} pairs) 🏟️  ---")
-    
-    output_dir = os.path.join(project_root, "data", "embeddings_by_category", category)
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, sanitized_model_name + ".csv")
+    print(f"🚀 Starting embedding process for model: {args.model}")
 
-    with open(output_path, 'w', newline='', encoding='utf-8') as outfile:
-        writer = csv.writer(outfile)
-        writer.writerow(['term', 'counterpart', 'cosine_similarity', 'model'])
+    setup_config(vectorizer_method=args.model)
+    config = get_global_config()
 
-        for pair in pairs:
-            term = pair["term"]
-            counterpart = pair["counterpart"]
-            term_embedding = model.encode(term, convert_to_tensor=True)
-            counterpart_embedding = model.encode(counterpart, convert_to_tensor=True)
-            cosine_sim = util.cos_sim(term_embedding, counterpart_embedding).item()
-            writer.writerow([term, counterpart, cosine_sim, model_name])
-            
-    print(f"✅ The '{category}' tournament is complete! Results saved to {output_path}")
+    # --- Path setup ---
+    data_dir = project_root / "data"
+    pairs_path = data_dir / "term_pairs_by_category.json"
+    output_base_dir = data_dir / "embeddings_by_category"
 
-print("\n🎉 AHAHAHA! All tournaments are complete for this model! Magnificent!")
+    # --- Load Model ---
+    model_path = f"/media/scratch/mferguson/models/{model_name_safe}"
+    print(f"🗺️ Loading model from: {model_path}")
+    model = SentenceTransformer(model_path, local_files_only=True)
+
+    # --- Load Term Pairs ---
+    print(f"📂 Loading term pairs from: {pairs_path}")
+    with open(pairs_path, 'r') as f:
+        term_pairs_by_category = json.load(f)
+
+    # --- Process each category ---
+    for category, pairs in term_pairs_by_category.items():
+        print(f"\n--- Processing category: {category} ---")
+        if not pairs:
+            print("No pairs to process. Skipping.")
+            continue
+
+        output_dir = output_base_dir / category
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = output_dir / f"{model_name_safe}.csv"
+
+        terms1, terms2 = zip(*pairs)
+
+        unique_terms = sorted(list(set(terms1 + terms2)))
+        print(f"Found {len(unique_terms)} unique terms to embed.")
+
+        embeddings = model.encode(unique_terms, show_progress_bar=True, batch_size=128)
+        embedding_map = {term: emb for term, emb in zip(unique_terms, embeddings)}
+
+        results_data = []
+        for t1, t2 in pairs:
+            if t1 in embedding_map and t2 in embedding_map:
+                e1 = embedding_map[t1]
+                e2 = embedding_map[t2]
+                similarity = SentenceTransformer.util.cos_sim(e1, e2).item()
+                results_data.append({"term_1": t1, "term_2": t2, "cosine_similarity": similarity})
+
+        results_df = pd.DataFrame(results_data)
+        results_df.to_csv(output_path, index=False)
+        print(f"✅ Saved similarity scores for {category} to {output_path}")
+
+    print("\n🎉 Glorious success! All categories have been processed!")
+
+if __name__ == "__main__":
+    main()

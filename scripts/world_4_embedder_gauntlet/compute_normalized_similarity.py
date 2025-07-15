@@ -29,10 +29,7 @@ def calculate_average_similarity(model, vocabulary, sample_size=300):
 
     embeddings = model.encode(sample_terms, show_progress_bar=False, batch_size=128)
 
-    # Calculate all-vs-all similarity matrix
     sim_matrix = cosine_similarity(embeddings)
-
-    # Get the upper triangle of the matrix (without the diagonal) to avoid duplicates and self-similarity
     upper_triangle_indices = np.triu_indices_from(sim_matrix, k=1)
     all_sims = sim_matrix[upper_triangle_indices]
 
@@ -45,14 +42,22 @@ def main():
     parser.add_argument("--model", type=str, required=True, help="Name of the SentenceTransformer model to use.")
     args = parser.parse_args()
 
+    # --- ✨ NEW: Pre-computation Check ✨ ---
+    model_name_safe = args.model.replace("/", "-")
+    output_dir = project_root / "data" / "normalized_embeddings_by_category" / model_name_safe
+    output_check_path = output_dir / "procedure_normalized_scores.json"
+
+    if os.path.exists(output_check_path):
+        print(f"✅ Hooray! Normalized results for {args.model} already exist at {output_check_path}. Skipping!")
+        return
+
+    print(f"🚀 Starting NORMALIZED embedding for model: {args.model}")
+    os.makedirs(output_dir, exist_ok=True)
+
+
     # --- Path setup ---
     data_dir = project_root / "data"
     pairs_path = data_dir / "term_pairs_by_category.json"
-
-    model_name_safe = args.model.replace("/", "-")
-    # A new home for our new metric!
-    output_dir = data_dir / "normalized_embeddings_by_category" / model_name_safe
-    os.makedirs(output_dir, exist_ok=True)
 
     # --- Load Model ---
     model_path = f"/media/scratch/mferguson/models/{model_name_safe}"
@@ -92,7 +97,6 @@ def main():
             if e1 is None or e2 is None:
                 continue
             cos_sim = cosine_similarity(e1.reshape(1, -1), e2.reshape(1, -1))[0][0]
-            # The new metric calculation!
             norm_cos_sim = (cos_sim - avg_cos_sim) / avg_cos_sim if avg_cos_sim != 0 else 0
             results_data.append({
                 "term_1": t1,
