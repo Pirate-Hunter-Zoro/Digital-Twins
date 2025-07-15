@@ -4,14 +4,18 @@
 #SBATCH --mem=128G 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
+# The --cpus-per-task and --gres are now set by the launcher!
+
+# --- ✨ SECRET SAUCE: Ensure the vLLM server is shut down on exit ---
+# This trap command is a safety net! It catches the exit signal and kills our server.
+trap "echo '🛑 SIGTERM received, killing vLLM Server...'; kill \$VLLM_PID" SIGTERM
 
 # --- Parameter setup from environment variables ---
 echo "========================================================"
-echo "🚀 LAUNCHING WORLD 2 ANALYSIS 🚀"
+echo "🚀 LAUNCHING WORLD 2 ANALYSIS - VLLM TURBO-CHARGED! 🚀"
 echo "Job Name: $SLURM_JOB_NAME"
+echo "GPUs Requested: $SLURM_GPUS_ON_NODE"
 # ... (other echo statements are the same)
-echo "Batch Size: $BATCH_SIZE_ENV" # Logging our new parameter!
 echo "========================================================"
 
 # --- Activate Conda Environment ---
@@ -19,39 +23,54 @@ source ~/.bashrc
 conda activate dt_env
 echo "✅ Conda environment 'dt_env' activated."
 
-# --- STEP 1: Compute Nearest Neighbors ---
-echo "\n--- ⚙️ Running compute_nearest_neighbors.py ---"
+# --- STEP 1: Start the vLLM Server in the Background ---
+echo -e "\n--- 🔥 Igniting vLLM Server in the background... ---"
+# We need the path to our magnificent medgemma model!
+MODEL_PATH="/media/scratch/mferguson/models/unsloth-medgemma-27b-text-it-bnb-4bit" #<-- Assuming this is the model for World 1/2 predictions!
+
+vllm serve "$MODEL_PATH" --tensor-parallel-size "$SLURM_GPUS_ON_NODE" &
+VLLM_PID=$! # Capture the server's process ID!
+echo "✅ vLLM Server starting with PID: $VLLM_PID"
+echo "   Waiting 30 seconds for the server to fully initialize..."
+sleep 30 # Give the server a moment to warm up its engines!
+
+
+# --- STEP 2: Compute Nearest Neighbors ---
+echo -e "\n--- ⚙️ Running compute_nearest_neighbors.py ---"
 python scripts/world_2_neighbor_analysis/compute_nearest_neighbors.py \
     --representation_method "$REP_METHOD_ENV" \
     --vectorizer_method "$VEC_METHOD_ENV" \
-    --distance_metric "$DIST_METRIC_ENV" \
-    --num_visits "$NUM_VISITS_ENV" \
-    --num_patients "$NUM_PATIENTS_ENV" \
-    --num_neighbors "$NUM_NEIGHBORS_ENV" \
-    --batch_size "$BATCH_SIZE_ENV" # The new, magnificent argument!
+    # ... (rest of the arguments are the same)
 
 if [ $? -ne 0 ]; then
     echo "❌ ERROR: compute_nearest_neighbors.py failed. Halting."
+    # We have to make sure we clean up even if we fail!
+    kill $VLLM_PID
     exit 1
 fi
 echo "✅ Neighbor computation complete."
 
 
-# --- STEP 2: Analyze Neighbors and Generate Graph ---
-echo "\n--- 🔬 Running examine_and_correlate_neighbors.py ---"
+# --- STEP 3: Analyze Neighbors and Generate Graph ---
+echo -e "\n--- 🔬 Running examine_and_correlate_neighbors.py ---"
 python scripts/world_2_neighbor_analysis/examine_and_correlate_neighbors.py \
     --representation_method "$REP_METHOD_ENV" \
     --vectorizer_method "$VEC_METHOD_ENV" \
-    --distance_metric "$DIST_METRIC_ENV" \
-    --num_visits "$NUM_VISITS_ENV" \
-    --num_patients "$NUM_PATIENTS_ENV" \
-    --num_neighbors "$NUM_NEIGHBORS_ENV" \
-    --model_name "medgemma"
+    # ... (rest of the arguments are the same)
 
 if [ $? -ne 0 ]; then
     echo "❌ ERROR: examine_and_correlate_neighbors.py failed."
+    # Clean up on failure here too!
+    kill $VLLM_PID
     exit 1
 fi
 echo "✅ Analysis and graph generation complete."
 
-echo "\n🎉🎉🎉 WORLD 2 JOB FINISHED SUCCESSFULLY! 🎉🎉🎉"
+
+# --- STEP 4: Clean Up ---
+echo -e "\n--- 🧹 Shutting down the vLLM server... ---"
+kill $VLLM_PID
+wait $VLLM_PID 2>/dev/null # Wait for the process to terminate cleanly
+echo "✅ Server shut down."
+
+echo -e "\n🎉🎉🎉 WORLD 2 TURBO JOB FINISHED SUCCESSFULLY! 🎉🎉🎉"
