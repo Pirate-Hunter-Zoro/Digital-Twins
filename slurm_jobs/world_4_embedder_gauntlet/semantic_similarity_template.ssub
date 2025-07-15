@@ -1,22 +1,9 @@
 #!/bin/bash
-
-#SBATCH --job-name=semantic_similarity
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-
-# --- THIS IS THE NEW, SUPER-SMART PART! ---
-# The absolute, unchanging, forever-home for our logs!
-LOG_DIR="/home/librad.laureateinstitute.org/mferguson/Digital-Twins/slurm_jobs/semantic_similarity/logs"
-# We'll still ask it to create the directory, just in case!
-mkdir -p "$LOG_DIR"
-# We tell Slurm the EXACT address to send the mail!
-#SBATCH --output=${LOG_DIR}/%x-%A.out
-#SBATCH --error=${LOG_DIR}/%x-%A.err
-
+#SBATCH --mem=128G
 
 # --- Safety First! ---
 if [ "$#" -ne 1 ]; then
@@ -34,13 +21,14 @@ set -e
 
 # --- Get our bearings! ---
 PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
-PYTHON_SCRIPT="$PROJECT_ROOT/scripts/semantic_similarity/embed_term_pairs.py"
+# --- ✨ FIXED: Pointing to the correct, magnificent script! ---
+PYTHON_SCRIPT="$PROJECT_ROOT/scripts/world_4_embedder_gauntlet/embed_term_pairs_by_category.py"
 
 echo "========================================================"
 echo "Job ID: $SLURM_JOB_ID"
 echo "Running on host: $(hostname)"
 echo "Model Name: ${MODEL_NAME}"
-echo "Log files will be sent to: ${LOG_DIR}"
+echo "GPUs available: $CUDA_VISIBLE_DEVICES"
 echo "========================================================"
 
 # --- EXECUTE! ---

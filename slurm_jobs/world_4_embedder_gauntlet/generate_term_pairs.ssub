@@ -3,17 +3,19 @@
 #SBATCH --partition=c3_accel
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --gpus-per-node=2  # Requesting 2 GPUs for more power!
+#SBATCH --cpus-per-task=36 # More CPUs!
+#SBATCH --mem=128G         # More Memory!
 #SBATCH --time=7-00:00:00
 #SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_out.txt
 #SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_err.txt
 
+# --- ✨ NEW: Safety trap to ensure cleanup! ---
+trap "echo '🛑 SIGTERM received, killing vLLM Server...'; kill \$VLLM_PID" SIGTERM
+
 echo "🚀 Engaging ZOMBIE-PROOF Protocol! 🚀"
 
 # --- ZOMBIE-BUSTING PRE-FLIGHT CHECK! ---
-# This command finds and eliminates any old vllm processes you own, just in case!
 echo "Busting any zombie processes from previous runs..."
 killall -q -u mferguson vllm || echo "No zombies found. Good!"
 
@@ -23,9 +25,11 @@ conda activate dt_env
 module load CUDA/12.5.0
 
 # --- The Magnificent Machine ---
-echo "🧠 Firing up a NEW vLLM server..."
+echo "🧠 Firing up a NEW vLLM server with Tensor Parallelism!"
+# ✨ NEW: Using the number of requested GPUs for tensor parallel size!
 vllm serve /media/scratch/mferguson/models/unsloth-medgemma-27b-text-it-bnb-4bit \
   --served-model-name medgemma \
+  --tensor-parallel-size "$SLURM_GPUS_ON_NODE" \
   --dtype float16 \
   --gpu-memory-utilization 0.9 \
   --max-model-len 4096 &
@@ -40,6 +44,6 @@ echo "✅ Synonym Invention Machine has finished its work!"
 
 echo "🧹 Shutting down the vLLM server (PID: $VLLM_PID)."
 kill $VLLM_PID
-wait $VLLM_PID
+wait $VLLM_PID 2>/dev/null
 
 echo "🎉 AHAHAHA! VICTORY! The lab is clean, the machine is perfect, and the zombies are busted!"

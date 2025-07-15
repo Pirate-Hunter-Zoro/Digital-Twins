@@ -1,0 +1,42 @@
+#!/bin/bash
+#SBATCH --partition=c3_accel
+#SBATCH --time=7-00:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=16 # These models are CPU-bound, so let's give them some cores!
+#SBATCH --mem=128G
+
+echo "========================================================"
+echo "🚀 LAUNCHING LEGACY GAUNTLET 🚀"
+echo "Job Name: $SLURM_JOB_NAME"
+echo "Model Name: $MODEL_NAME_ENV"
+echo "Model Path: $MODEL_PATH_ENV"
+echo "Is Word2Vec?: $IS_WORD2VEC_ENV"
+echo "========================================================"
+
+# --- Activate our glorious environment! ---
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate dt_env
+set -e
+
+# --- Get our bearings! ---
+PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
+PYTHON_SCRIPT="$PROJECT_ROOT/scripts/world_4_embedder_gauntlet/embed_term_pairs_by_category_legacy.py"
+TERM_PAIRS_FILE="$PROJECT_ROOT/data/term_pairs_by_category.json"
+OUTPUT_DIR="$PROJECT_ROOT/data/embeddings_by_category"
+
+# --- Conditionally add the --is_word2vec flag ---
+W2V_FLAG=""
+if [ "$IS_WORD2VEC_ENV" = "true" ]; then
+    W2V_FLAG="--is_word2vec"
+fi
+
+# --- EXECUTE! ---
+python "$PYTHON_SCRIPT" \
+    --model_path "$MODEL_PATH_ENV" \
+    --model_name "$MODEL_NAME_ENV" \
+    --term_pairs_file "$TERM_PAIRS_FILE" \
+    --output_dir "$OUTPUT_DIR" \
+    $W2V_FLAG
+
+echo "🎉 Glorious success! Legacy job for ${MODEL_NAME_ENV} is complete!"
