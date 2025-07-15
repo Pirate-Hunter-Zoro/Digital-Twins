@@ -1,151 +1,116 @@
-# scripts/world_4_embedder_gauntlet/generate_term_pairs.py (Case-Insensitive SUPER-UPGRADE!)
-import pandas as pd
-import json
-from itertools import combinations
-from pathlib import Path
-import time
 import os
 import sys
+import json
+import pandas as pd
+from collections import defaultdict
+from itertools import combinations
+from pathlib import Path
 
-# --- Path Setup ---
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_script_dir, '..', '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# --- Dynamic sys.path adjustment ---
+current_script_dir = Path(__file__).resolve().parent
+project_root = current_script_dir.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-# Import our magnificent LLM query function!
-from scripts.common.llm.query_llm import query_llm, get_llm_client
+from scripts.common.llm.query_llm import query_llm
 
-# --- Pairing Functions (Now with case-insensitivity!) ---
-
-def create_code_based_pairs(all_terms_list, code_groups, category):
+def get_synonym_from_llm(term: str, category: str) -> str:
     """
-    Generic function to create pairs based on shared codes, now with
-    advanced case-insensitive logic! So smart!
+    Uses an LLM to generate a single, plausible synonym for a given medical term.
     """
-    pairs = []
-    used_terms_lower = set()
+    prompt = f"""
+    You are a medical terminologist. Provide a single, common, and plausible alternative name or synonym for the following medical {category}.
+    Do not use the original term in your answer. Provide only the synonym.
 
-    for code, descriptions in code_groups.items():
-        # Get unique descriptions, ignoring case
-        unique_descs = list(pd.Series(descriptions).str.lower().unique())
-        
-        # Map lowercased back to an original capitalization
-        desc_map = {d.lower(): d for d in reversed(descriptions)}
-        original_case_descs = [desc_map[d_lower] for d_lower in unique_descs]
-
-        if len(original_case_descs) > 1:
-            for p in combinations(original_case_descs, 2):
-                term1_lower = p[0].lower()
-                term2_lower = p[1].lower()
-                
-                # Only create a pair if BOTH terms haven't been used yet
-                if term1_lower not in used_terms_lower and term2_lower not in used_terms_lower:
-                    pairs.append({'term': p[0], 'counterpart': p[1], 'category': category, 'type': 'code_based'})
-                    used_terms_lower.add(term1_lower)
-                    used_terms_lower.add(term2_lower)
-                    
-    # Find all terms that were actually used
-    final_used_terms = {term for pair in pairs for term in [pair['term'], pair['counterpart']]}
-    return pairs, final_used_terms
-
-# --- The LLM-Powered Synonym Invention Machine ---
-
-def generate_llm_pairs_for_lonely_terms(all_terms, used_terms, category_name):
+    Term: "{term}"
+    Synonym:
     """
-    For lonely terms in ANY category, ask our big LLM friend to invent a new friend!
-    """
-    lonely_terms = sorted(list(set(all_terms) - used_terms))
-    if not lonely_terms:
-        return []
+    synonym = query_llm(prompt, max_tokens=50)
+    # Clean up the response to ensure it's just the term
+    return synonym.strip().replace('"', '')
 
-    print(f"🤖 Found {len(lonely_terms)} lonely '{category_name}' terms. Powering up the Synonym Invention Machine!")
+def main():
+    print("--- 🚀 Kicking off the Synonym Invention Machine! 🚀 ---")
+
+    # --- Path setup ---
+    data_dir = project_root / "data"
+    output_path = data_dir / "term_pairs_by_category.json"
     
-    new_pairs = []
-    cache_file = Path(f"data/llm_synonym_cache_{category_name}.json")
+    # Define input frequency files
+    frequency_files = {
+        "diagnosis": data_dir / "diagnosis_concept_counts.json",
+        "procedure": data_dir / "procedure_concept_counts.json",
+        "medication": data_dir / "medication_concept_counts.json",
+    }
+
+    all_pairs = defaultdict(list)
     
-    if cache_file.exists():
-        with open(cache_file, 'r') as f:
-            cache = json.load(f)
-    else:
-        cache = {}
+    for category, file_path in frequency_files.items():
+        print(f"\n--- Processing category: {category} ---")
+        with open(file_path, 'r') as f:
+            concept_data = json.load(f)
+
+        # Group terms by their medical code, now case-insensitively!
+        code_to_terms = defaultdict(set)
+        for item in concept_data:
+            code = item.get("code")
+            # ✨ The Magnificent Fix! Convert term to lowercase! ✨
+            term = item.get("term", "").lower()
+            if code and term:
+                code_to_terms[code].add(term)
+
+        print(f"Found {len(code_to_terms)} unique codes for {category}.")
         
-    for i, term in enumerate(lonely_terms):
-        print(f"  ({i+1}/{len(lonely_terms)}) Finding a friend for: '{term}'")
+        # --- Generate pairs from codes ---
+        code_based_pairs = set()
+        for code, terms in code_to_terms.items():
+            if len(terms) > 1:
+                # Create all possible pairs of unique terms for a given code
+                for t1, t2 in combinations(sorted(list(terms)), 2):
+                    # Add the pair in a consistent order to avoid duplicates
+                    code_based_pairs.add(tuple(sorted((t1, t2))))
+
+        all_pairs[category].extend(list(code_based_pairs))
+        print(f"Generated {len(code_based_pairs)} pairs based on shared medical codes.")
+
+        # --- Generate LLM-augmented pairs ---
+        terms_in_pairs = {term for pair in code_based_pairs for term in pair}
         
-        if term in cache:
-            counterpart = cache[term]
-            print(f"    -> Found in cache: '{counterpart}'")
-        else:
-            prompt = (
-                f"You are a medical terminologist. Your task is to provide a single, common clinical synonym "
-                f"or a slightly rephrased version of the following medical {category_name} term. "
-                "Do not explain your reasoning. Just provide the alternative term.\n\n"
-                f"TERM: \"{term}\"\n\n"
-                "SYNONYM:"
-            )
-            counterpart = query_llm(prompt, max_tokens=50, temperature=0.5).strip().replace('"', '')
-            cache[term] = counterpart
-            print(f"    -> LLM generated: '{counterpart}'")
-            time.sleep(1)
+        # Find all unique terms that were left out
+        all_unique_terms = {item.get("term", "").lower() for item in concept_data if item.get("term")}
+        lonely_terms = all_unique_terms - terms_in_pairs
+        
+        print(f"Found {len(lonely_terms)} lonely terms. Asking the LLM for synonyms...")
+        
+        llm_pairs_generated = 0
+        for term in lonely_terms:
+            try:
+                synonym = get_synonym_from_llm(term, category).lower()
+                # Ensure synonym is not empty and is different from the original term
+                if synonym and synonym != term:
+                    new_pair = tuple(sorted((term, synonym)))
+                    all_pairs[category].append(new_pair)
+                    llm_pairs_generated += 1
+                    if llm_pairs_generated % 20 == 0:
+                        print(f"  - Generated {llm_pairs_generated} pairs with the LLM...")
+            except Exception as e:
+                print(f"  - Could not generate synonym for '{term}': {e}")
+                continue
+        print(f"Generated a total of {llm_pairs_generated} LLM-augmented pairs for {category}.")
 
-        if counterpart and counterpart.lower() != term.lower():
-            new_pairs.append({'term': term, 'counterpart': counterpart, 'category': category_name, 'type': 'llm_generated'})
 
-    with open(cache_file, 'w') as f:
-        json.dump(cache, f, indent=2)
+    # --- Save the final, de-duplicated list of pairs ---
+    final_output = {}
+    for category, pairs_list in all_pairs.items():
+        # Use a set to ensure all pairs are unique!
+        final_output[category] = sorted(list(set(pairs_list)))
+        print(f"Total unique pairs for {category}: {len(final_output[category])}")
 
-    print(f"✨ Created {len(new_pairs)} new LLM-generated '{category_name}' pairs!")
-    return new_pairs
+    print(f"\n💾 Saving all pairs to: {output_path}")
+    with open(output_path, "w") as f:
+        json.dump(final_output, f, indent=2)
+        
+    print("\n🎉 Glorious success! All term pairs have been generated!")
 
-# --- Main Execution ---
 if __name__ == "__main__":
-    project_root = Path(__file__).resolve().parents[2]
-    data_dir = project_root / 'data'
-    
-    # --- Diagnoses ---
-    print("\n--- Processing Diagnoses ---")
-    diag_df = pd.read_csv(data_dir / 'diagnosis_frequency.csv')
-    diag_df.dropna(subset=['Code', 'Description'], inplace=True)
-    all_diag_terms = diag_df['Description'].unique().tolist()
-    diag_code_groups = diag_df.groupby('Code')['Description'].apply(list)
-    diag_pairs, used_diag_terms = create_code_based_pairs(all_diag_terms, diag_code_groups, 'diagnosis')
-
-    # --- Procedures ---
-    print("\n--- Processing Procedures ---")
-    proc_df = pd.read_csv(data_dir / 'procedure_frequency.csv')
-    proc_df.dropna(subset=['CPT_Procedure_Code', 'CPT_Procedure_Description'], inplace=True)
-    all_proc_terms = proc_df['CPT_Procedure_Description'].unique().tolist()
-    proc_code_groups = proc_df.groupby('CPT_Procedure_Code')['CPT_Procedure_Description'].apply(list)
-    proc_pairs, used_proc_terms = create_code_based_pairs(all_proc_terms, proc_code_groups, 'procedure')
-
-    # --- Medications ---
-    print("\n--- Processing Medications ---")
-    med_df = pd.read_csv(data_dir / 'medication_frequency.csv')
-    rxnorm_df = pd.read_csv(data_dir / 'RXNorm_Table-25_06_17-v1.csv')
-    all_med_terms = med_df['MedSimpleGenericName'].unique().tolist()
-    merged_df = pd.merge(med_df, rxnorm_df, on='MedicationEpicID')
-    filtered_df = merged_df[merged_df['RXNORM_TYPE'].isin(['Ingredient', 'Brand Name', 'Precise Ingredient', 'MED_ONLY'])]
-    med_code_groups = filtered_df.groupby('RXNORM_CODE')['Name'].unique().apply(list)
-    med_pairs, used_med_terms = create_code_based_pairs(all_med_terms, med_code_groups, 'medication')
-
-    # --- LLM Generation for Lonely Terms ---
-    print("\n--- Generating LLM pairs for all lonely terms ---")
-    get_llm_client() # Initialize the client once!
-    llm_diag_pairs = generate_llm_pairs_for_lonely_terms(all_diag_terms, used_diag_terms, 'diagnosis')
-    llm_proc_pairs = generate_llm_pairs_for_lonely_terms(all_proc_terms, used_proc_terms, 'procedure')
-    llm_med_pairs = generate_llm_pairs_for_lonely_terms(all_med_terms, used_med_terms, 'medication')
-
-    all_pairs = diag_pairs + proc_pairs + med_pairs + llm_diag_pairs + llm_proc_pairs + llm_med_pairs
-    
-    output_filename = data_dir / 'term_pairs_final_clean.json'
-    with open(output_filename, 'w') as f:
-        json.dump(all_pairs, f, indent=4)
-        
-    print(f"\n--- Grand Summary ---")
-    print(f"Diagnosis Pairs  : {len(diag_pairs)} (code) + {len(llm_diag_pairs)} (LLM)")
-    print(f"Procedure Pairs  : {len(proc_pairs)} (code) + {len(llm_proc_pairs)} (LLM)")
-    print(f"Medication Pairs : {len(med_pairs)} (code) + {len(llm_med_pairs)} (LLM)")
-    print(f"--------------------")
-    print(f"TOTAL Pairs      : {len(all_pairs)}")
-    print(f"\nALL DONE! The final, clean dataset is saved to {output_filename}!")
+    main()
