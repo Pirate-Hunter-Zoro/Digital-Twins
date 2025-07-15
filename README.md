@@ -39,9 +39,10 @@ Our research is divided into four interconnected worlds, each building upon the 
 
 ### **World 4: The Embedder Gauntlet** ⚙️
 
-* **Goal**: A grand tournament to find the best embedding models for understanding medical language.
+* **Goal**: A grand tournament to find the best embedding models for understanding medical language. We now compute two magnificent metrics: standard **cosine similarity** and a **normalized similarity score** for a more rigorous comparison.
 * **Key Scripts**: `scripts/world_4_embedder_gauntlet/`
-* **Status**: Phase 1 (Pair Generation and Tournaments) is complete! The champion model is **`allenai/scibert_scivocab_uncased`**.
+* **Launcher**: `slurm_jobs/world_4_embedder_gauntlet/launch_full_gauntlet.sh`
+* **Status**: Ready for launch!
 
 ## 🔧 Setup & Installation
 
@@ -66,14 +67,23 @@ pip install -r requirements.txt
 
   * **Hugging Face:** For some of our magnificent gated models.
     1.  Create an Access Token in your Hugging Face account settings.
-    2.  Create a `.env` file in the root of this project and add your token: `HUGGINGFACE_TOKEN=hf_YourSuperSecretKeyGoesHere`
+    2.  Add `export HF_HOME="/media/scratch/mferguson/huggingface"` to your `~/.bashrc` file to ensure models download to your scratch space.
 
 ## 💥 Usage: Running the Machine\!
 
 The project is designed as a sequence of experiments.
 
 1.  **Setup**: Run the model download scripts in `slurm_jobs/setup/`. This will download all the necessary sentence-transformer models to your scratch directory.
-2.  **World 2 - Run Analysis**: Run the neighbor quality analysis by executing the launcher script: `bash slurm_jobs/world_2_neighbor_analysis/launch_world2_grid.sh`. This script will first run `compute_nearest_neighbors.py` to generate the data, followed by `examine_and_correlate_neighbors.py` to analyze it and produce our beautiful graphs\!
-3.  **Continue the Workflow**: Once we have the results from World 2, we'll proceed with the experiments for World 1, and finally World 3\!
+2.  **World 4 - Run Full Gauntlet**: The entire World 4 workflow, from generating term pairs to calculating both similarity metrics and plotting the final results, can now be launched with a single command\!
+    ```bash
+    bash slurm_jobs/world_4_embedder_gauntlet/launch_full_gauntlet.sh
+    ```
+    This magnificent "Meta-Launcher" will automatically handle the dependency chain:
+      * First, it runs the `generate_term_pairs.ssub` job.
+      * Once that succeeds, it will automatically launch the jobs for **both** the standard and normalized similarity calculations for all modern and legacy models.
+      * Finally, once all calculations are done, it will launch the plotting jobs.
+      * It also creates a handy `cancel_gauntlet.sh` script that can be used to stop all submitted jobs in case of an emergency\!
+3.  **World 2 - Run Analysis**: Once you have your results from World 4, you can run the neighbor quality analysis by executing its launcher script.
+4.  **Continue the Workflow**: Proceed with the experiments for World 1, and finally World 3\!
 
 Let the SCIENCE begin\!
