@@ -6,3 +6,4 @@ models/
 Metadata/
 *.out
 slurm_output/
+cancel_gauntlet.sh
