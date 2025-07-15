@@ -1,0 +1,25 @@
+#!/bin/bash
+#SBATCH --partition=c3_accel
+#SBATCH --time=7-00:00:00
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
+
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate dt_env
+set -e
+
+PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
+# It calls our new legacy script!
+PYTHON_SCRIPT="$PROJECT_ROOT/scripts/world_4_embedder_gauntlet/compute_normalized_similarity_legacy.py"
+
+# Conditionally add the --is_word2vec flag
+W2V_FLAG=""
+if [ "$IS_WORD2VEC_ENV" = "true" ]; then
+    W2V_FLAG="--is_word2vec"
+fi
+
+echo "Running NORMALIZED legacy similarity for ${MODEL_NAME_ENV}"
+python "$PYTHON_SCRIPT" \
+    --model_path "$MODEL_PATH_ENV" \
+    --model_name "$MODEL_NAME_ENV" \
+    $W2V_FLAG

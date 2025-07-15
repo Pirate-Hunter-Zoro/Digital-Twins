@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH --partition=c3_accel
+#SBATCH --job-name=plot_cosine_sim
+#SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/plot_cosine_sim_out.txt
+#SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/plot_cosine_sim_err.txt
+#SBATCH --time=01:00:00 # Plotting is fast, so 1 hour is plenty!
+#SBATCH --mem=16G
+#SBATCH --cpus-per-task=4
+
+# --- Activate our glorious environment! ---
+source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
+conda activate dt_env
+set -e
+
+# --- Get our bearings! ---
+PROJECT_ROOT="/home/librad.laureateinstitute.org/mferguson/Digital-Twins"
+PYTHON_SCRIPT="$PROJECT_ROOT/scripts/world_4_embedder_gauntlet/plot_similarity_distributions_by_category.py"
+
+echo "========================================================"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Running on host: $(hostname)"
+echo "🎨 Unleashing the plotting machine!"
+echo "========================================================"
+
+# --- EXECUTE! ---
+python "$PYTHON_SCRIPT"
+
+echo "🎉 Glorious success! All cosine similarity plots have been created!"
