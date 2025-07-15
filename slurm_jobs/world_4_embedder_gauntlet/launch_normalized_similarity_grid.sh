@@ -16,7 +16,7 @@ for model_name in "${MODELS[@]}"; do
     sbatch --job-name="$JOB_NAME" \
            --output="${LOG_DIR}/${JOB_NAME}_out.txt" \
            --error="${LOG_DIR}/${JOB_NAME}_err.txt" \
-           --gres=gpu:2 \
-           --cpus-per-task=36 \
+           --gres=gpu:"$GPU_COUNT_ENV" \
+           --cpus-per-task="$CPU_COUNT_ENV" \
            "$SBATCH_TEMPLATE_PATH" "$model_name"
 done

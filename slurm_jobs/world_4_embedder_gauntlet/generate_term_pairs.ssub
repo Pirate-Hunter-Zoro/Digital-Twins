@@ -3,9 +3,7 @@
 #SBATCH --partition=c3_accel
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=2  # Requesting 2 GPUs for more power!
-#SBATCH --cpus-per-task=36 # More CPUs!
-#SBATCH --mem=128G         # More Memory!
+#SBATCH --mem=128G         
 #SBATCH --time=7-00:00:00
 #SBATCH --output=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_out.txt
 #SBATCH --error=slurm_jobs/world_4_embedder_gauntlet/logs/gen_pairs_err.txt
