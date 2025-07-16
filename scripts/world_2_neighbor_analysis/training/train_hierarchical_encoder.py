@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 
 # --- Dynamic sys.path adjustment! ---
 current_script_dir = Path(__file__).resolve().parent
-project_root = current_script_dir.parents[3] # Adjust path based on new location
+project_root = current_script_dir.parents[2] # Adjust path based on new location
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
@@ -19,7 +19,6 @@ if str(project_root) not in sys.path:
 from scripts.common.config import setup_config, get_global_config
 from scripts.common.data_loading.load_patient_data import load_patient_data
 from scripts.common.utils import clean_term
-# NOTE: We're copying the Encoder class here, but it should live in a common models file!
 from scripts.world_2_neighbor_analysis.compute_nearest_neighbors import HierarchicalPatientEncoder, get_visit_term_lists
 
 # --- A NEW INVENTION! The Full Prediction Model! ---
