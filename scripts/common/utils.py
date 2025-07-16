@@ -1,3 +1,5 @@
+# scripts/common/utils.py (Now with a safety net!)
+
 import sys
 import os
 import re
@@ -53,6 +55,12 @@ def clean_term(term: str) -> str:
     Cleans a medical term string for embedding.
     This is our magnificent, centralized term-scrubber!
     """
+    # --- THE MAGNIFICENT FIX! ---
+    # If the term is None, we just return an empty string and stop!
+    if term is None:
+        return ""
+    # ---------------------------
+
     term = term.lower().strip()
     term = term.replace('"', '').replace("'", '')
     term = re.sub(r"^\\+|\\+$", "", term)
