@@ -2,9 +2,10 @@ import sys
 import os
 import argparse
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pickle
 from pathlib import Path
+import torch
+import torch.nn as nn
 from sentence_transformers import SentenceTransformer
 
 # --- Dynamic sys.path adjustment ---
@@ -14,10 +15,16 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from scripts.common.config import setup_config, get_global_config
-from scripts.common.utils import turn_to_sentence
 from scripts.common.data_loading.load_patient_data import load_patient_data
+from scripts.common.utils import clean_term
+from scripts.common.models.hierarchical_encoder import HierarchicalPatientEncoder
 
-def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
+def get_visit_term_lists(patient_visits: list[dict]) -> dict[int, list[str]]:
+    """
+    Now, instead of one long sentence, this gives us a list of all the cleaned
+    medical terms for each visit! PERFECT for our new encoder!
+    A list of lists - each inner list is a vist where all the observed terms are shoved in.
+    """
     visit_histories = {}
     config = get_global_config()
     history_window_length = config.num_visits
@@ -26,67 +33,72 @@ def get_visit_histories(patient_visits: list[dict]) -> dict[int, str]:
         relevant_visits = patient_visits[i : i + history_window_length]
         end_idx = i + history_window_length - 1
 
-        if config.representation_method == "visit_sentence":
-            history_string = " | ".join(turn_to_sentence(visit) for visit in relevant_visits)
-        elif config.representation_method == "bag_of_codes":
-            all_codes = []
-            for visit in relevant_visits:
-                all_codes.extend([d.get("Diagnosis_Name") for d in visit.get("diagnoses", []) if d.get("Diagnosis_Name")])
-                all_codes.extend([m.get("MedSimpleGenericName") for m in visit.get("medications", []) if m.get("MedSimpleGenericName")])
-                all_codes.extend([p.get("CPT_Procedure_Description") for p in visit.get("treatments", []) if p.get("CPT_Procedure_Description")])
-            history_string = " ".join(filter(None, all_codes))
-        else:
-            raise ValueError(f"Unknown representation method: {config.representation_method}")
-
-        visit_histories[end_idx] = history_string
+        # This will now be a list of lists!
+        history_term_lists = []
+        for visit in relevant_visits:
+            visit_terms = []
+            visit_terms.extend([clean_term(d.get("Diagnosis_Name", "")) for d in visit.get("diagnoses", [])])
+            visit_terms.extend([clean_term(m.get("MedSimpleGenericName", "")) for m in visit.get("medications", [])])
+            visit_terms.extend([clean_term(p.get("CPT_Procedure_Description", "")) for p in visit.get("treatments", [])])
+            history_term_lists.append([term for term in visit_terms if term])
+        
+        visit_histories[end_idx] = history_term_lists
         
     return visit_histories
 
-
-def get_visit_vectors(patient_data: list[dict], batch_size: int) -> dict[tuple[str, int], np.ndarray]:
-    """
-    ✨ NEW AND IMPROVED! ✨
-    Processes patients in batches to conserve memory.
-    """
-    
-    # --- ✨ NEW MODEL PATH LOGIC! ✨ ---
+# --- THE MAIN FUNCTION, NOW WITH OUR NEW ENGINE! ---
+def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndarray]:
     config = get_global_config()
-    model_name_from_config = config.vectorizer_method
-    model_folder_name = model_name_from_config.replace("/", "-")
-    vectorizer_path = f"/media/scratch/mferguson/models/{model_folder_name}"
+    VECTORIZER_METHOD = config.vectorizer_method
     
-    print(f"🗺️ Loading vectorizer model from its special home: {vectorizer_path}")
-    vectorizer_instance = SentenceTransformer(vectorizer_path, local_files_only=True)
+    # --- Path to our beautiful, trained model! ---
+    trained_encoder_path = project_root / "data" / "models" / "hierarchical_encoder_trained.pth"
+    if not trained_encoder_path.exists():
+        raise FileNotFoundError(f"OH NO! The trained encoder was not found at {trained_encoder_path}. Please run the training script first!")
+
+    print(f"🗺️ Loading base term vectorizer model...")
+    term_vectorizer = SentenceTransformer(f"/media/scratch/mferguson/models/{VECTORIZER_METHOD.replace('/', '-')}")
+
+    print(f"🧠 Loading the TRAINED Hierarchical Patient Encoder from {trained_encoder_path}...")
+    term_embedding_dim = term_vectorizer.get_sentence_embedding_dimension()
+    # Initialize the model structure
+    patient_encoder = HierarchicalPatientEncoder(
+        term_embedding_dim=term_embedding_dim, 
+        visit_hidden_dim=128, 
+        patient_hidden_dim=256 
+    )
+    # LOAD THE TRAINED WEIGHTS! This is the magic!
+    patient_encoder.load_state_dict(torch.load(trained_encoder_path))
+    patient_encoder.eval() # Set the model to evaluation mode! Very important!
 
     final_vectors_dict = {}
     
-    # Process patients in magnificent, memory-saving batches!
-    for i in range(0, len(patient_data), batch_size):
-        batch_patients = patient_data[i:i+batch_size]
-        print(f"\n--- Processing patient batch {i//batch_size + 1} / {len(patient_data)//batch_size + 1} ---")
+    print("\n--- ⚙️ Processing Patients with the New Hierarchical Engine! ---")
+    for patient in patient_data:
+        patient_id = patient["patient_id"]
         
-        batch_visit_strings, batch_keys = [], []
-        for patient in batch_patients:
-            visit_histories = get_visit_histories(patient["visits"])
-            for end_idx, visit_string in visit_histories.items():
-                batch_keys.append((patient["patient_id"], end_idx))
-                batch_visit_strings.append(visit_string)
+        # 1. Get the patient's history as a dictionary of {end_idx: [[visit1_terms], [visit2_terms], ...]}
+        history_as_list_of_lists = get_visit_term_lists(patient["visits"])
         
-        if not batch_visit_strings:
-            continue
-
-        print(f"Encoding {len(batch_visit_strings)} visit strings in this batch...")
-        vectors = vectorizer_instance.encode(
-            batch_visit_strings,
-            batch_size=32, # This is the internal batching for the model itself
-            show_progress_bar=True,
-            convert_to_numpy=True
-        )
-        
-        # Add the results of this batch to our main dictionary
-        for key, vec in zip(batch_keys, vectors):
-            final_vectors_dict[key] = vec
+        for end_idx, trajectory_term_lists in history_as_list_of_lists.items():
             
+            # 2. Convert each visit's term list into a tensor of embeddings
+            trajectory_to_encode = []
+            with torch.no_grad():
+                for visit_term_list in trajectory_term_lists:
+                    if visit_term_list:
+                        term_embeddings_tensor = term_vectorizer.encode(visit_term_list, convert_to_tensor=True)
+                        trajectory_to_encode.append(term_embeddings_tensor)
+            
+            if not trajectory_to_encode: continue
+
+            # 3. Feed the FULL list of visit tensors into our new model!
+            with torch.no_grad():
+                patient_vector_tensor = patient_encoder(trajectory_to_encode)
+            
+            if patient_vector_tensor is not None:
+                final_vectors_dict[(patient_id, end_idx)] = patient_vector_tensor.cpu().numpy()
+
     return final_vectors_dict
 
 def main():

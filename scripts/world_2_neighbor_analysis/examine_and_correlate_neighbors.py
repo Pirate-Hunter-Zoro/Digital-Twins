@@ -72,18 +72,20 @@ def compute_mahalanobis_distance_to_group(patient_vec, neighbor_vecs):
         return float('nan')
 
 def main():
+    # We add this magnificent argument parser!
     import argparse
-    parser = argparse.ArgumentParser(description="Analyze neighbor relevance using Mahalanobis distance and LLM scoring.")
-    parser.add_argument("--representation_method", required=True)
+    parser = argparse.ArgumentParser(description="Analyze neighbor relevance.")
+    parser.add_argument("--representation_method", default="visit_sentence")
     parser.add_argument("--vectorizer_method", required=True)
-    parser.add_argument("--distance_metric", default="euclidean")
+    parser.add_argument("--distance_metric", default="cosine")
     parser.add_argument("--num_visits", type=int, default=6)
     parser.add_argument("--num_patients", type=int, default=5000)
     parser.add_argument("--num_neighbors", type=int, default=5)
     parser.add_argument("--model_name", type=str, default="medgemma")
-    parser.add_argument("--max_patients_to_process", type=int, default=500, help="Maximum number of new patients to process in this run.")
+    parser.add_argument("--max_patients_to_process", type=int, default=500)
     args = parser.parse_args()
 
+    # And we use the args to set up the config!
     setup_config(
         representation_method=args.representation_method,
         vectorizer_method=args.vectorizer_method,

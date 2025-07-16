@@ -20,7 +20,7 @@ if str(project_root) not in sys.path:
 from scripts.common.data_loading.load_patient_data import load_patient_data
 from scripts.common.llm.llm_helper import get_narrative, get_relevance_score
 from scripts.world_2_neighbor_analysis.compute_nearest_neighbors import get_visit_histories
-from scripts.common.config import setup_config # <-- We need to import our setup tool!
+from scripts.common.config import setup_config
 
 def get_icd10_chapter(code: str) -> Union[str, None]:
     if not isinstance(code, str) or not code:
@@ -41,29 +41,26 @@ def get_icd10_chapter(code: str) -> Union[str, None]:
     }
     return chapter_map.get(first_char, 'Other')
 
+
 def main():
-    print("🤖✨ Firing up the Patient-Bucket-Inator 3000! ✨🤖")
+    print("🤖⚡️ Activating the Calibration-Station 5000 (Similarity Edition)! ⚡️🤖")
 
     # --- Configuration & Path Setup ---
     NUM_PAIRS_PER_CATEGORY = 5
     TOTAL_DISSIMILAR_PAIRS = 50
     VECTORIZER_METHOD = "allenai/scibert_scivocab_uncased"
-    NUM_VISITS = 6 # We need this for the config!
+    NUM_VISITS = 6
 
-    # ***************************************************************
-    # *** THE MAGNIFICENT, POWER-GIVING FIX! AHAHA! ***
-    # ***************************************************************
+    # --- THE POWER-UP SEQUENCE! ---
     print("⚡️ Initializing global configuration... POWER ON!")
     setup_config(
         representation_method="visit_sentence",
         vectorizer_method=VECTORIZER_METHOD,
-        distance_metric="cosine", # Using cosine as planned!
+        distance_metric="cosine", # We're using similarity, but this keeps the config consistent!
         num_visits=NUM_VISITS,
-        num_patients=0, # Not needed for this script
-        num_neighbors=0 # Not needed for this script
+        num_patients=0,
+        num_neighbors=0
     )
-    # ***************************************************************
-    # ***************************************************************
 
     data_dir = project_root / "data"
     bucket_path = data_dir / "patient_buckets_for_sanity_check.json"
@@ -90,7 +87,7 @@ def main():
     print("\n--- 👯‍♀️ Creating SIMILAR patient pairs... ---")
     for chapter, patient_ids in patient_buckets.items():
         if len(patient_ids) >= 2:
-            sample_ids = random.sample(patient_ids, min(len(patient_ids), NUM_PAIRS_PER_CATEGORY * 2))
+            sample_ids = random.sample(list(patient_ids), min(len(patient_ids), NUM_PAIRS_PER_CATEGORY * 2))
             for p1_id, p2_id in combinations(sample_ids, 2):
                 if len(sanity_pairs["similar"]) < (len(patient_buckets) * NUM_PAIRS_PER_CATEGORY):
                     sanity_pairs["similar"].append((p1_id, p2_id))
@@ -112,7 +109,7 @@ def main():
     results = []
     all_pairs = sanity_pairs["similar"] + sanity_pairs["dissimilar"]
 
-    print("\n--- 🔬 Analyzing pairs... This might take a little while! ---")
+    print("\n--- 🔬 Analyzing pairs... ---")
     for i, (p1_id, p2_id) in enumerate(all_pairs):
         pair_type = "similar" if i < len(sanity_pairs["similar"]) else "dissimilar"
         print(f"  -> Processing {pair_type} pair {i+1}/{len(all_pairs)}: ({p1_id}, {p2_id})")
@@ -131,21 +128,23 @@ def main():
             continue
 
         llm_score = get_relevance_score(p1_narrative, p2_narrative)
-        cosine_dist = 1 - util.pytorch_cos_sim(p1_vec, p2_vec).item()
+        # --- THE BIG CHANGE! ---
+        cosine_sim = util.pytorch_cos_sim(p1_vec, p2_vec).item() # We are now calculating SIMILARITY!
 
         results.append({
             "pair_type": pair_type,
             "patient_1": p1_id,
             "patient_2": p2_id,
             "llm_relevance_score": llm_score,
-            "cosine_distance": cosine_dist
+            "cosine_similarity": cosine_sim # And saving it with the correct name!
         })
 
     print(f"\n💾 Saving all {len(results)} calibration results to: {output_path}")
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)
 
-    print("\n🎉 The Calibration-Station is finished! We have new data to plot and analyze!")
+    print("\n🎉 The Calibration-Station is finished!")
+
 
 if __name__ == "__main__":
     main()
