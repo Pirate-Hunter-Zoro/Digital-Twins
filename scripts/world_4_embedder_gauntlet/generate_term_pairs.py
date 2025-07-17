@@ -5,6 +5,8 @@ import pandas as pd
 from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
+import re
+import requests
 
 # --- Dynamic sys.path adjustment ---
 current_script_dir = Path(__file__).resolve().parent
@@ -12,22 +14,54 @@ project_root = current_script_dir.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from scripts.common.llm.query_llm import query_llm
+from scripts.common.utils import clean_term
 
-def get_synonym_from_llm(term: str, category: str) -> str:
+def get_synonym_from_api(term: str, category: str) -> str:
     """
-    Uses an LLM to generate a single, plausible synonym for a given medical term.
+    Queries the Free Dictionary API to find a common synonym for a given medical term.
     """
-    prompt = f"""
-    You are a medical terminologist. Provide a single, common, and plausible alternative name or synonym for the following medical {category}.
-    Do not use the original term in your answer. Provide only the synonym.
+    cleaned_term = clean_term(term)
+    if not cleaned_term:
+        return ""
 
-    Term: "{term}"
-    Synonym:
-    """
-    synonym = query_llm(prompt, max_tokens=50)
-    # Clean up the response to ensure it's just the term
-    return synonym.strip().replace('"', '')
+    api_url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{cleaned_term}"
+    
+    print(f"Querying Free Dictionary API for '{cleaned_term}' (category: {category})...")
+    
+    try:
+        response = requests.get(api_url, timeout=10) # Set a timeout so we don't wait forever!
+        response.raise_for_status() # This will raise an HTTPError for bad responses (4xx or 5xx)
+        data = response.json()
+
+        # The API response is a list of dictionaries. We need to navigate it carefully.
+        # It looks like each entry might have multiple meanings, and each meaning might have synonyms.
+        
+        # Let's search through all meanings for all entries
+        for entry in data:
+            if "meanings" in entry:
+                for meaning in entry["meanings"]:
+                    if "definitions" in meaning:
+                        for definition in meaning["definitions"]:
+                            if "synonyms" in definition and definition["synonyms"]:
+                                # We found synonyms! Pick the first one that isn't the original term
+                                for synonym_candidate in definition["synonyms"]:
+                                    cleaned_synonym = clean_term(synonym_candidate)
+                                    if cleaned_synonym and cleaned_synonym != cleaned_term and len(cleaned_synonym.split()) < 5:
+                                        print(f"  ✨ Found synonym: {cleaned_synonym}")
+                                        return cleaned_synonym
+        
+        print(f"  No direct synonym found for '{cleaned_term}' in API response.")
+        return "" # No suitable synonym found
+
+    except requests.exceptions.RequestException as e:
+        print(f"  ⚠️ API request failed for '{cleaned_term}': {e}")
+        return "" # Return empty string on request failure
+    except json.JSONDecodeError:
+        print(f"  ⚠️ Failed to decode JSON from API response for '{cleaned_term}'.")
+        return "" # Return empty string if response is not valid JSON
+    except Exception as e:
+        print(f"  ❌ An unexpected error occurred for '{cleaned_term}': {e}")
+        return "" # Catch any other unexpected errors
 
 def main():
     print("--- 🚀 Kicking off the Synonym Invention Machine V3.0! 🚀 ---")
@@ -116,7 +150,7 @@ def main():
         llm_pairs_generated = 0
         for term in lonely_terms:
             try:
-                synonym = get_synonym_from_llm(term, category).lower()
+                synonym = get_synonym_from_api(term, category).lower()
                 if synonym and synonym != term:
                     new_pair = tuple(sorted((term, synonym)))
                     all_pairs[category].append(new_pair)
