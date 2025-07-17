@@ -24,13 +24,14 @@ Our research is divided into four interconnected worlds, each building upon the 
 
 ### **World 2: The Neighbor Quality Control Hub** 🔬
 
-  * **Goal**: To build and validate a powerful, custom embedding model that understands patient trajectories over time. The ultimate goal is to use this trained model to find clinically relevant "neighbors" (similar patients).
+  * **Goal**: To build, train, and validate a powerful, custom hierarchical embedding model that understands patient trajectories over time. The ultimate goal is to use this trained model to find both the nearest (most similar) and farthest (most dissimilar) patients to test our similarity metrics comprehensively.
   * **Key Scripts**:
       * `scripts/world_2_neighbor_analysis/training/train_hierarchical_encoder.py`: The Training Gymnasium\! This script builds and trains our new, custom `HierarchicalPatientEncoder` model on the extrinsic task of predicting 30-day readmission. This is a crucial first step.
-      * `scripts/world_2_neighbor_analysis/compute_nearest_neighbors.py`: The Neighbor Discovery Machine\! After being trained, our new hierarchical encoder is used here to generate smart, time-aware patient vectors and find their nearest neighbors.
-      * `scripts/world_2_neighbor_analysis/examine_and_correlate_neighbors.py`: The Quality Control-inator\! This script analyzes the neighbors found by our new model, calculating their cosine similarity and an LLM-based relevance score to see if they align.
+      * `scripts/world_2_neighbor_analysis/compute_nearest_neighbors.py`: The Flexible Behemoth\! After the encoder is trained, this machine generates smart, time-aware vectors for all patient histories. It then calculates the similarity to every other patient and saves the **entire ranked list** of neighbors, from nearest to farthest, for maximum flexibility.
+      * `scripts/world_2_neighbor_analysis/examine_and_correlate_neighbors.py`: The Quality Control-inator\! This script loads the full ranked lists of neighbors and intelligently analyzes the **k-nearest** vs. the **k-farthest** pairs. It compares their vector similarity to an LLM-judged clinical similarity score to see if our metrics work across the full spectrum of patient relationships.
+      * `scripts/world_2_neighbor_analysis/plot_individual_patient_correlations.py`: The Multi-Scope Inspector\! This machine creates a grid of plots to visualize the correlation results for a few individual patients, helping us understand if patterns are consistent or patient-specific.
   * **Launcher**: `slurm_jobs/world_2_neighbor_analysis/launch_world2_pipeline_grid.sh`
-  * **Status**: **ACTIVE\!** We have designed a new, automated, three-stage pipeline to train our custom model, compute neighbors, and analyze the results.
+  * **Status**: **ACTIVE\!** We have designed a new, automated, multi-stage pipeline to train our custom model, compute all neighbors, and perform multiple layers of analysis.
 
 ### **World 3: The Judging Chamber** ⚖️
 
@@ -73,10 +74,11 @@ The project is designed as a sequence of experiments that build on each other.
     ```bash
     bash slurm_jobs/world_4_embedder_gauntlet/launch_full_gauntlet.sh
     ```
-3.  **World 2 - Run Full Analysis Pipeline**: Once you have a champion vectorizer from World 4, you can run the entire World 2 pipeline with a single command. This script will automatically handle the three-stage process in the correct order:
+3.  **World 2 - Run Full Analysis Pipeline**: Once you have a champion vectorizer from World 4, you can run the entire World 2 pipeline with a single command. This script will automatically handle the multi-stage process in the correct order:
     1.  Train the custom `HierarchicalPatientEncoder`.
-    2.  Use the trained encoder to compute nearest neighbors.
-    3.  Examine the neighbors and generate correlation plots.
+    2.  Use the trained encoder to compute and save the full ranked list of neighbors for every patient.
+    3.  Examine the k-nearest and k-farthest neighbors and generate correlation plots.
+    4.  Generate detailed plots for individual patient neighborhoods.
     <!-- end list -->
     ```bash
     bash slurm_jobs/world_2_neighbor_analysis/launch_world2_pipeline_grid.sh
