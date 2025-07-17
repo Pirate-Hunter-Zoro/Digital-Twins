@@ -16,35 +16,8 @@ if str(project_root) not in sys.path:
 
 from scripts.common.config import setup_config, get_global_config
 from scripts.common.data_loading.load_patient_data import load_patient_data
-from scripts.common.utils import clean_term
+from scripts.common.utils import clean_term, get_visit_term_lists
 from scripts.common.models.hierarchical_encoder import HierarchicalPatientEncoder
-
-def get_visit_term_lists(patient_visits: list[dict]) -> dict[int, list[str]]:
-    """
-    Now, instead of one long sentence, this gives us a list of all the cleaned
-    medical terms for each visit! PERFECT for our new encoder!
-    A list of lists - each inner list is a vist where all the observed terms are shoved in.
-    """
-    visit_histories = {}
-    config = get_global_config()
-    history_window_length = config.num_visits
-
-    for i in range(len(patient_visits) - history_window_length + 1):
-        relevant_visits = patient_visits[i : i + history_window_length]
-        end_idx = i + history_window_length - 1
-
-        # This will now be a list of lists!
-        history_term_lists = []
-        for visit in relevant_visits:
-            visit_terms = []
-            visit_terms.extend([clean_term(d.get("Diagnosis_Name", "")) for d in visit.get("diagnoses", [])])
-            visit_terms.extend([clean_term(m.get("MedSimpleGenericName", "")) for m in visit.get("medications", [])])
-            visit_terms.extend([clean_term(p.get("CPT_Procedure_Description", "")) for p in visit.get("treatments", [])])
-            history_term_lists.append([term for term in visit_terms if term])
-        
-        visit_histories[end_idx] = history_term_lists
-        
-    return visit_histories
 
 # --- THE MAIN FUNCTION, NOW WITH OUR NEW ENGINE! ---
 def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndarray]:

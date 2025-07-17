@@ -79,3 +79,30 @@ def clean_term(term: str) -> str:
         term = re.sub(noise, "", term)
 
     return re.sub(r"\s+", " ", term).strip()
+
+def get_visit_term_lists(patient_visits: list[dict]) -> dict[int, list[str]]:
+    """
+    Now, instead of one long sentence, this gives us a list of all the cleaned
+    medical terms for each visit! PERFECT for our new encoder!
+    A list of lists - each inner list is a vist where all the observed terms are shoved in.
+    """
+    visit_histories = {}
+    config = get_global_config()
+    history_window_length = config.num_visits
+
+    for i in range(len(patient_visits) - history_window_length + 1):
+        relevant_visits = patient_visits[i : i + history_window_length]
+        end_idx = i + history_window_length - 1
+
+        # This will now be a list of lists!
+        history_term_lists = []
+        for visit in relevant_visits:
+            visit_terms = []
+            visit_terms.extend([clean_term(d.get("Diagnosis_Name", "")) for d in visit.get("diagnoses", [])])
+            visit_terms.extend([clean_term(m.get("MedSimpleGenericName", "")) for m in visit.get("medications", [])])
+            visit_terms.extend([clean_term(p.get("CPT_Procedure_Description", "")) for p in visit.get("treatments", [])])
+            history_term_lists.append([term for term in visit_terms if term])
+        
+        visit_histories[end_idx] = history_term_lists
+        
+    return visit_histories
