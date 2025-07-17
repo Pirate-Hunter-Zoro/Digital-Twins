@@ -19,7 +19,7 @@ if str(project_root) not in sys.path:
 
 from scripts.common.data_loading.load_patient_data import load_patient_data
 from scripts.common.llm.llm_helper import get_narrative, get_relevance_score
-from scripts.world_2_neighbor_analysis.compute_nearest_neighbors import get_visit_histories
+from scripts.world_2_neighbor_analysis.compute_neighbors import get_visit_histories
 from scripts.common.config import setup_config
 
 def get_icd10_chapter(code: str) -> Union[str, None]:

@@ -32,9 +32,9 @@ conda activate dt_env
 cd /mnt/dell_storage/homefolders/librad.laureateinstitute.org/mferguson/Digital-Twins
 
 # === 🧠 Run NN Calculation ===
-echo "$(date): Running compute_nearest_neighbors.py..." | tee -a "$OUT_LOG"
+echo "$(date): Running compute_neighbors.py..." | tee -a "$OUT_LOG"
 
-$CONDA_PREFIX/bin/python scripts/calculations/compute_nearest_neighbors.py \
+$CONDA_PREFIX/bin/python scripts/calculations/compute_neighbors.py \
   --representation_method "$REP" \
   --vectorizer_method "$VEC" \
   --distance_metric "$DIST" \

@@ -68,12 +68,25 @@ def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndar
     return final_vectors_dict
 
 def main():
+    # We're adding all the expected arguments right here!
     parser = argparse.ArgumentParser(description="Compute and save ALL ranked neighbors using the hierarchical encoder.")
+    parser.add_argument("--representation_method", default="visit_sentence")
     parser.add_argument("--vectorizer_method", required=True)
+    parser.add_argument("--distance_metric", default="cosine")
     parser.add_argument("--num_visits", type=int, default=6)
+    parser.add_argument("--num_patients", type=int, default=5000)
+    parser.add_argument("--num_neighbors", type=int, default=5)
     args = parser.parse_args()
 
-    setup_config("visit_sentence", args.vectorizer_method, "cosine", args.num_visits, 5000, 5)
+    # Now we use the arguments to set up our config!
+    setup_config(
+        representation_method=args.representation_method,
+        vectorizer_method=args.vectorizer_method,
+        distance_metric=args.distance_metric,
+        num_visits=args.num_visits,
+        num_patients=args.num_patients,
+        num_neighbors=args.num_neighbors
+    )
     config = get_global_config()
 
     base_dir = project_root / "data" / config.representation_method / config.vectorizer_method.replace('/', '-')

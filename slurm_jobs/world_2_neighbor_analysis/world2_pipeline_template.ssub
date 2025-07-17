@@ -48,7 +48,7 @@ echo "✅ Server is ready!"
 
 # --- Run Neighbor Computation ---
 echo "⚙️ Computing nearest neighbors with our new TRAINED encoder..."
-python scripts/world_2_neighbor_analysis/compute_nearest_neighbors.py \
+python scripts/world_2_neighbor_analysis/compute_neighbors.py \
     --representation_method "visit_sentence" \
     --vectorizer_method "$VEC_METHOD_ENV" \
     --distance_metric "cosine" \
