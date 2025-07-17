@@ -130,14 +130,16 @@ def main():
         for i, (trajectory, label) in enumerate(dataloader):
             optimizer.zero_grad()
             
-            # --- ✨THE THIRD PART OF THE FIX! ✨ ---
-            # Move our label to the GPU as well, just before using it!
             label = label.to(device)
             output = model(trajectory[0]) 
 
             if output is None: continue
 
-            loss = loss_fn(output.squeeze(), label)
+            # --- THE MAGNIFICENT, PRECISE FIX! ---
+            # We now squeeze only the last dimension to match the label's shape!
+            loss = loss_fn(output.squeeze(-1), label)
+            # ------------------------------------
+            
             loss.backward()
             optimizer.step()
             
@@ -147,7 +149,7 @@ def main():
 
         print(f"🌟 Epoch {epoch+1} complete! Average Loss: {total_loss / len(dataloader):.4f} 🌟")
 
-    print(f"\n💾 Saving the magnificent trained encoder to {trained_model_path}")
+    print(f"\n💾 Training complete! Saving the magnificent trained encoder to {trained_model_path}")
     torch.save(model.encoder.state_dict(), trained_model_path)
     print("✅ Done!")
 
