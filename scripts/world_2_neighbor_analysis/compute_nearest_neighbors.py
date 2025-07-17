@@ -17,7 +17,6 @@ if str(project_root) not in sys.path:
 
 from scripts.common.config import setup_config, get_global_config
 from scripts.common.data_loading.load_patient_data import load_patient_data
-from scripts.common.utils import get_visit_term_lists
 from scripts.common.models.hierarchical_encoder import HierarchicalPatientEncoder
 
 def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndarray]:
