@@ -37,11 +37,11 @@ class PatientReadmissionPredictor(nn.Module):
         return self.classifier(patient_vector)
 
 class PatientTrajectoryDataset(Dataset):
-    def __init__(self, patient_data, term_vectorizer, device): # <-- Added device!
+    def __init__(self, patient_data, term_vectorizer, device):
         self.trajectories = []
         self.labels = []
         self.term_vectorizer = term_vectorizer
-        self.device = device # <-- Store the device!
+        self.device = device
         self._prepare_data(patient_data)
 
     def _prepare_data(self, patient_data):
@@ -52,25 +52,30 @@ class PatientTrajectoryDataset(Dataset):
             if len(patient['visits']) < config.num_visits + 1:
                 continue
 
-            history_term_lists = get_visit_term_lists(patient['visits'])
+            history_term_lists = get_visit_term_lists(patient['visits'], config.num_visits)
             
             for end_idx, trajectory_lists in history_term_lists.items():
                 if end_idx + 1 < len(patient['visits']):
+                    trajectory_tensors = []
+                    for visit_terms in trajectory_lists:
+                        if visit_terms:
+                            trajectory_tensors.append(
+                                self.term_vectorizer.encode(visit_terms, convert_to_tensor=True, device=self.device)
+                            )
+                    
+                    # If, after all that, we have no tensors, this history is empty!
+                    # So we skip it and don't create a label for it!
+                    if not trajectory_tensors:
+                        continue
+                    # --------------------------------
+
+                    self.trajectories.append(trajectory_tensors)
+                    
                     history_end_date = pd.to_datetime(patient['visits'][end_idx]['StartVisit'])
                     next_visit_date = pd.to_datetime(patient['visits'][end_idx + 1]['StartVisit'])
                     days_diff = (next_visit_date - history_end_date).days
                     label = 1.0 if days_diff <= 30 else 0.0
-                    
                     self.labels.append(label)
-                    
-                    trajectory_tensors = []
-                    for visit_terms in trajectory_lists:
-                        if visit_terms:
-                            # Encode directly to the correct device! So efficient!
-                            trajectory_tensors.append(
-                                self.term_vectorizer.encode(visit_terms, convert_to_tensor=True, device=self.device)
-                            )
-                    self.trajectories.append(trajectory_tensors)
 
     def __len__(self):
         return len(self.labels)
