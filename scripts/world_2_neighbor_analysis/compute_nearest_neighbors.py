@@ -18,27 +18,62 @@ if str(project_root) not in sys.path:
 from scripts.common.config import setup_config, get_global_config
 from scripts.common.data_loading.load_patient_data import load_patient_data
 from scripts.common.models.hierarchical_encoder import HierarchicalPatientEncoder
+# ✨ We now import our helper from the common workshop! ✨
+from scripts.common.utils import get_visit_term_lists 
 
 def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndarray]:
-    # This function uses the trained HierarchicalPatientEncoder
-    # The logic we created before is perfect and stays the same!
-    # ... (function content as previously defined) ...
-    pass
+    config = get_global_config()
+    VECTORIZER_METHOD = config.vectorizer_method
+    
+    trained_encoder_path = project_root / "data" / "models" / "hierarchical_encoder_trained.pth"
+    if not trained_encoder_path.exists():
+        raise FileNotFoundError(f"OH NO! The trained encoder was not found at {trained_encoder_path}. Please run the training script first!")
+
+    print(f"🗺️ Loading base term vectorizer model...")
+    term_vectorizer = SentenceTransformer(f"/media/scratch/mferguson/models/{VECTORIZER_METHOD.replace('/', '-')}")
+
+    print(f"🧠 Loading the TRAINED Hierarchical Patient Encoder from {trained_encoder_path}...")
+    term_embedding_dim = term_vectorizer.get_sentence_embedding_dimension()
+    patient_encoder = HierarchicalPatientEncoder(
+        term_embedding_dim=term_embedding_dim, visit_hidden_dim=128, patient_hidden_dim=256 
+    )
+    patient_encoder.load_state_dict(torch.load(trained_encoder_path))
+    patient_encoder.eval()
+
+    final_vectors_dict = {}
+    
+    print("\n--- ⚙️ Processing Patients with the New Hierarchical Engine! ---")
+    for patient in patient_data:
+        patient_id = patient["patient_id"]
+        
+        # ✨ CORRECTED! Calling the right function from our utils! ✨
+        history_as_list_of_lists = get_visit_term_lists(patient["visits"], config.num_visits)
+        
+        for end_idx, trajectory_term_lists in history_as_list_of_lists.items():
+            trajectory_to_encode = []
+            with torch.no_grad():
+                for visit_term_list in trajectory_term_lists:
+                    if visit_term_list:
+                        term_embeddings_tensor = term_vectorizer.encode(visit_term_list, convert_to_tensor=True)
+                        trajectory_to_encode.append(term_embeddings_tensor)
+            
+            if not trajectory_to_encode: continue
+
+            with torch.no_grad():
+                patient_vector_tensor = patient_encoder(trajectory_to_encode)
+            
+            if patient_vector_tensor is not None:
+                final_vectors_dict[(patient_id, end_idx)] = patient_vector_tensor.cpu().numpy()
+
+    return final_vectors_dict
 
 def main():
-    parser = argparse.ArgumentParser(description="Compute and save ALL ranked neighbors for each patient.")
+    parser = argparse.ArgumentParser(description="Compute and save ALL ranked neighbors using the hierarchical encoder.")
     parser.add_argument("--vectorizer_method", required=True)
     parser.add_argument("--num_visits", type=int, default=6)
     args = parser.parse_args()
 
-    setup_config(
-        representation_method="visit_sentence",
-        vectorizer_method=args.vectorizer_method,
-        distance_metric="cosine",
-        num_visits=args.num_visits,
-        num_patients=5000,
-        num_neighbors=5 # This k-value will be used by the analysis script later!
-    )
+    setup_config("visit_sentence", args.vectorizer_method, "cosine", args.num_visits, 5000, 5)
     config = get_global_config()
 
     base_dir = project_root / "data" / config.representation_method / config.vectorizer_method.replace('/', '-')
@@ -47,7 +82,6 @@ def main():
     
     os.makedirs(output_dir, exist_ok=True)
 
-    # --- ✨ RENAMED! This file is now a BEHEMOTH! ---
     neighbors_path = output_dir / "all_ranked_neighbors.pkl"
     vectors_path = vectors_dir / "all_vectors.pkl"
 
@@ -55,38 +89,24 @@ def main():
         print(f"✅ All ranked neighbors already computed at {neighbors_path}. Skipping.")
         return
 
-    # --- Load or Compute Vectors ---
     if os.path.exists(vectors_path):
-        with open(vectors_path, "rb") as f:
-            vectors_dict = pickle.load(f)
+        with open(vectors_path, "rb") as f: vectors_dict = pickle.load(f)
     else:
         patient_data = load_patient_data()
+        # ✨ CORRECTED! The function now only needs one argument! ✨
         vectors_dict = get_visit_vectors(patient_data)
-        with open(vectors_path, "wb") as f:
-            pickle.dump(vectors_dict, f)
+        with open(vectors_path, "wb") as f: pickle.dump(vectors_dict, f)
 
     print("🔍 Computing and ranking ALL neighbors for every patient...")
     keys = list(vectors_dict.keys())
     matrix = np.vstack([vectors_dict[k] for k in keys])
     sim_matrix = cosine_similarity(matrix)
 
-    # This dictionary will be huge!
     all_ranked_neighbors = {}
     for i, key in enumerate(keys):
-        patient_id_of_interest, _ = key
-        
         sims = sim_matrix[i]
-        
-        # Get all other patients and their similarity scores
-        potential_neighbors = [
-            (keys[j], sims[j]) for j in range(len(keys)) if i != j
-        ]
-        
-        # Sort by similarity score, from highest to lowest
+        potential_neighbors = [(keys[j], sims[j]) for j in range(len(keys)) if i != j]
         ranked_list = sorted(potential_neighbors, key=lambda x: x[1], reverse=True)
-        
-        # --- ✨ THE BIG CHANGE! ✨ ---
-        # We save the ENTIRE ranked list!
         all_ranked_neighbors[key] = ranked_list
 
     with open(neighbors_path, "wb") as f:
@@ -94,11 +114,4 @@ def main():
     print(f"✅ Saved the Flexible Behemoth (all ranked neighbors) to {neighbors_path}")
 
 if __name__ == "__main__":
-    # A placeholder for get_visit_vectors since its definition is long
-    def get_visit_vectors(patient_data):
-        print("--- (This is where the hierarchical encoder would run) ---")
-        # In a real run, this would generate the vectors
-        # For this example, let's pretend it returns a dummy dictionary
-        return {('patient1', 5): np.random.rand(256), ('patient2', 5): np.random.rand(256)}
-    
     main()
