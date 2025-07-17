@@ -105,6 +105,7 @@ def main():
     NUM_VISITS = 6
     EPOCHS = 5 # Let's train for a bit longer!
     LEARNING_RATE = 1e-5 # ✨ UPGRADE 1: Lower Learning Rate!
+    PATIENCE = 2
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"🛠️ Using device: {device}")
