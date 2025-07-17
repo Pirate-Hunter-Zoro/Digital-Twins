@@ -44,7 +44,7 @@ Our research is divided into four interconnected worlds, each building upon the 
   * **Goal**: A grand tournament to find the best base embedding models for understanding medical language. The winner of this gauntlet is used as the foundational term embedder in our World 2 hierarchical model.
   * **Key Scripts**: `scripts/world_4_embedder_gauntlet/`
   * **Launcher**: `slurm_jobs/world_4_embedder_gauntlet/launch_full_gauntlet.sh`
-  * **Status**: Ready for launch\!
+  * **Status**: **Active and Enhanced!** The term pair generation step now efficiently obtains synthetic synonyms using a **free, external API (`api.dictionaryapi.dev`)** instead of a local LLM, significantly speeding up data preparation!
 
 ## 🔧 Setup & Installation
 
@@ -55,14 +55,16 @@ Before you can unleash the full power of these magnificent machines, you'll need
 ```bash
 conda create --name dt_env python=3.9
 conda activate dt_env
-```
+````
 
 ### 2\. Python Dependencies
 
-Install all the necessary Python libraries using the `requirements.txt` file.
+Install all the necessary Python libraries using the `requirements.txt` file. Make sure to include `requests` for API interactions\!
 
 ```bash
 pip install -r requirements.txt
+# If 'requests' is not in requirements.txt, ensure it's installed:
+# pip install requests
 ```
 
 ## 💥 Usage: Running the Machine\!
