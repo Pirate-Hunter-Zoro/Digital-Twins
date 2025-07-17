@@ -67,10 +67,21 @@ python scripts/world_2_neighbor_analysis/examine_and_correlate_neighbors.py \
     --num_neighbors 5 \
     --model_name "medgemma"
 
+# --- ✨✨ NEW! STEP 3: INDIVIDUAL PLOTTING! ✨✨ ---
+echo "🖼️ Generating individual patient correlation plots..."
+python scripts/world_2_neighbor_analysis/plot_individual_patient_correlations.py \
+    --representation_method "visit_sentence" \
+    --vectorizer_method "$VEC_METHOD_ENV" \
+    --distance_metric "cosine" \
+    --num_visits "$NUM_VISITS_ENV" \
+    --num_patients 5000 \
+    --num_neighbors 5 \
+    --model_name "medgemma"
+
 # ==============================================================================
-# === 🧹 STEP 3: CLEANUP 🧹 ===
+# === 🧹 STEP 4: CLEANUP 🧹 === (Was Step 3)
 # ==============================================================================
-echo -e "\n--- STEP 3: Shutting down the vLLM server ---"
+echo -e "\n--- STEP 4: Shutting down the vLLM server ---"
 kill $VLLM_PID
 wait $VLLM_PID 2>/dev/null
 echo "✅ Server shut down."

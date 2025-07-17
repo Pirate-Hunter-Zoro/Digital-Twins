@@ -11,6 +11,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 # --- End of sys.path adjustment ---
 
+from scripts.common.config import get_global_config
+
 def turn_to_sentence(encounter_obj: dict) -> str:
     """
     Convert an encounter dictionary into a human-readable sentence.

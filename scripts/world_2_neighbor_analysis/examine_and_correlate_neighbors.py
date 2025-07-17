@@ -6,8 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import spearmanr
-from scipy.spatial.distance import mahalanobis
-from numpy.linalg import inv
+from scipy.spatial.distance import cosine # We only need the simple cosine distance now!
 from pathlib import Path
 
 # --- Dynamic sys.path adjustment ---
@@ -17,64 +16,51 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from scripts.common.config import setup_config, get_global_config
-from scripts.common.llm.llm_helper import get_relevance_score, get_narrative
+from scripts.common.llm.query_llm import query_llm # We'll build the prompt here!
 from scripts.common.data_loading.load_patient_data import load_patient_data
+from scripts.common.utils import get_visit_term_lists # Using our new, better helper!
 
-# --- Biomni Integration! ---
-try:
-    from biomni.agent import A1
-    agent = A1()
-    BIOMNI_AVAILABLE = True
-    print("🤖 Biomni agent initialized successfully!")
-except ImportError:
-    print("⚠️ Biomni package not found. Proceeding without Biomni-powered narrative enhancements.")
-    BIOMNI_AVAILABLE = False
-except Exception as e:
-    print(f"🔬 Biomni agent failed to initialize: {e}. Proceeding without enhancements.")
-    BIOMNI_AVAILABLE = False
-
-
-def get_enhanced_narrative(visits, patient_id):
+def get_similarity_score(narrative1: str, narrative2: str) -> float:
     """
-    Generates a narrative for a patient's visits, enhanced with
-    pathway information from Biomni's database tools if available!
+    A new, improved function that asks for SIMILARITY!
     """
-    basic_narrative = get_narrative(visits)
-    if not BIOMNI_AVAILABLE:
-        return basic_narrative
-    try:
-        key_diagnosis = None
-        for visit in reversed(visits):
-            if visit.get("diagnoses"):
-                key_diagnosis = visit["diagnoses"][0].get("Diagnosis_Name")
-                if key_diagnosis:
-                    break
-        if key_diagnosis:
-            print(f"🧬 Querying Biomni for pathway info on: {key_diagnosis}")
-            pathway_info = agent.go(f"Find KEGG pathway for {key_diagnosis}")
-            return f"{basic_narrative} The primary diagnosis, {key_diagnosis}, is associated with the {pathway_info}."
-    except Exception as e:
-        print(f"Biomni call failed: {e}")
-    return basic_narrative
+    prompt = (
+        "You are an expert clinical researcher. On a scale from 0 to 10, "
+        "how clinically SIMILAR are the following two patient summaries? "
+        "A score of 10 means they are almost identical clinical cases.\n\n"
+        f"Patient A:\n{narrative1}\n\n"
+        f"Patient B:\n{narrative2}\n\n"
+        "Similarity Score (0-10):"
+    )
+    # This uses a simple regex to find the first number in the LLM's response
+    # It's a quick and easy way to parse the score!
+    import re
+    response = query_llm(prompt)
+    match = re.search(r"(\d+\.?\d*|\d*\.?\d+)", response)
+    return float(match.group(1)) if match else 0.0
 
-
-def compute_mahalanobis_distance_to_group(patient_vec, neighbor_vecs):
-    if len(neighbor_vecs) < 2:
-        return float('nan')
-    mean_vec = np.mean(neighbor_vecs, axis=0)
-    try:
-        jitter = np.random.rand(neighbor_vecs.shape[1]) * 1e-9
-        cov_matrix = np.cov(neighbor_vecs + jitter, rowvar=False)
-        inv_cov = inv(cov_matrix)
-        return mahalanobis(patient_vec, mean_vec, inv_cov)
-    except np.linalg.LinAlgError:
-        print("⚠️ Warning: Covariance matrix is singular. Could not compute Mahalanobis distance.")
-        return float('nan')
+def get_narrative_from_visits(visits: list[dict]) -> str:
+    """
+    Creates a simple narrative string from a list of visit dictionaries.
+    """
+    # This is a simplified version of your llm_helper's get_narrative.
+    # We can make this more complex later if we need to!
+    narrative_parts = []
+    for visit in visits:
+        # A simple summary of the visit
+        summary = f"Visit on {visit.get('StartVisit', 'unknown date')}: "
+        diags = [d.get('Diagnosis_Name') for d in visit.get('diagnoses', []) if d.get('Diagnosis_Name')]
+        if diags:
+            summary += f"Diagnosed with {', '.join(diags)}. "
+        meds = [m.get('MedSimpleGenericName') for m in visit.get('medications', []) if m.get('MedSimpleGenericName')]
+        if meds:
+            summary += f"Prescribed {', '.join(meds)}."
+        narrative_parts.append(summary)
+    return " ".join(narrative_parts)
 
 def main():
-    # We add this magnificent argument parser!
     import argparse
-    parser = argparse.ArgumentParser(description="Analyze neighbor relevance.")
+    parser = argparse.ArgumentParser(description="Analyze neighbor SIMILARITY using pairwise comparison.")
     parser.add_argument("--representation_method", default="visit_sentence")
     parser.add_argument("--vectorizer_method", required=True)
     parser.add_argument("--distance_metric", default="cosine")
@@ -82,10 +68,9 @@ def main():
     parser.add_argument("--num_patients", type=int, default=5000)
     parser.add_argument("--num_neighbors", type=int, default=5)
     parser.add_argument("--model_name", type=str, default="medgemma")
-    parser.add_argument("--max_patients_to_process", type=int, default=500)
+    parser.add_argument("--max_patients_to_process", type=int, default=100) # Let's keep this small for testing!
     args = parser.parse_args()
 
-    # And we use the args to set up the config!
     setup_config(
         representation_method=args.representation_method,
         vectorizer_method=args.vectorizer_method,
@@ -96,112 +81,79 @@ def main():
     )
     config = get_global_config()
 
-    # --- ✨ Build the hyper-structured directories ---
     base_dir = project_root / "data" / config.representation_method / config.vectorizer_method
     vectors_dir = base_dir / f"visits_{config.num_visits}" / f"patients_{config.num_patients}"
     data_dir = vectors_dir / f"metric_{config.distance_metric}" / f"neighbors_{config.num_neighbors}"
     
     os.makedirs(data_dir, exist_ok=True)
-    print(f"📂 Using data directory: {data_dir}")
     
-    # --- ✨ Use base filenames from their correct, specific locations ---
     vectors_path = vectors_dir / "all_vectors.pkl"
     neighbors_path = data_dir / "neighbors.pkl"
-    graph_output_path = data_dir / "correlation_results.png"
-    summary_output_path = data_dir / "correlation_summary.json"
+    graph_output_path = data_dir / "pairwise_correlation_results.png" # A new name for a new plot!
+    summary_output_path = data_dir / "pairwise_correlation_summary.json"
 
     print("--- 📂 Loading Data ---")
     patient_data = load_patient_data()
     patient_lookup = {p["patient_id"]: p for p in patient_data}
     
-    with open(neighbors_path, "rb") as f:
-        neighbors_dict = pickle.load(f)
-    print(f"✅ Loaded neighbors from {neighbors_path}")
+    with open(neighbors_path, "rb") as f: neighbors_dict = pickle.load(f)
+    with open(vectors_path, "rb") as f: vector_dict = pickle.load(f)
 
-    with open(vectors_path, "rb") as f:
-        vector_dict = pickle.load(f)
-    print(f"✅ Loaded vectors from {vectors_path}")
-
-    print("\n--- 🚀 Starting Analysis ---")
+    print("\n--- 🚀 Starting Pairwise Analysis ---")
     results = []
     
+    patients_processed = 0
     for (patient_id, visit_idx), patient_vector in vector_dict.items():
-        if len(results) >= args.max_patients_to_process:
-            print(f"🏁 Reached processing limit of {args.max_patients_to_process} patients.")
+        if patients_processed >= args.max_patients_to_process:
             break
-
-        print(f"\nProcessing Patient: {patient_id}, Visit Index: {visit_idx}")
         
+        print(f"\nProcessing Patient: {patient_id}")
         neighbors = neighbors_dict.get((patient_id, visit_idx), [])
-        if not neighbors:
-            print("  - No neighbors found. Skipping.")
-            continue
+        if not neighbors: continue
             
-        patient_narrative = get_enhanced_narrative(patient_lookup[patient_id]["visits"][:visit_idx + 1], patient_id)
+        patient_narrative = get_narrative_from_visits(patient_lookup[patient_id]["visits"][:visit_idx + 1])
         
-        relevance_scores = []
-        neighbor_vectors = []
-
         for (neighbor_id, neighbor_vidx), _, neighbor_vec in neighbors[:config.num_neighbors]:
-            neighbor_narrative = get_enhanced_narrative(patient_lookup[neighbor_id]["visits"][:neighbor_vidx + 1], neighbor_id)
-            relevance = get_relevance_score(patient_narrative, neighbor_narrative)
-            print(f"  - Neighbor {neighbor_id} Relevance: {relevance:.2f}")
-            relevance_scores.append(relevance)
-            neighbor_vectors.append(neighbor_vec)
+            neighbor_narrative = get_narrative_from_visits(patient_lookup[neighbor_id]["visits"][:neighbor_vidx + 1])
+            
+            # --- THE NEW WAY! ONE PAIR, TWO METRICS! ---
+            similarity_score = get_similarity_score(patient_narrative, neighbor_narrative)
+            cosine_dist = cosine(patient_vector, neighbor_vec)
+            
+            print(f"  - Neighbor {neighbor_id}: LLM Sim = {similarity_score:.2f}, Cosine Dist = {cosine_dist:.2f}")
+            results.append((similarity_score, cosine_dist))
 
-        if len(relevance_scores) < 2:
-            print("  - Not enough valid neighbors to proceed. Skipping.")
-            continue
-
-        avg_relevance = np.mean(relevance_scores)
-        mahal_dist = compute_mahalanobis_distance_to_group(patient_vector, np.array(neighbor_vectors))
-
-        if not np.isnan(mahal_dist):
-            results.append((avg_relevance, mahal_dist))
-            print(f"  - Avg. Relevance: {avg_relevance:.2f}, Mahalanobis Dist: {mahal_dist:.2f}")
+        patients_processed += 1
 
     print("\n--- 📊 Final Correlation and Graph Generation ---")
     if not results:
-        print("❌ No valid results were generated to calculate correlation or create a graph.")
+        print("❌ No valid results were generated.")
         return
 
-    relevance_vals, mahalanobis_vals = zip(*results)
-    rho, pval = spearmanr(relevance_vals, mahalanobis_vals)
+    llm_scores, vector_distances = zip(*results)
+    rho, pval = spearmanr(llm_scores, vector_distances)
     
-    # --- ✨ NEW GRAPH-O-MATIC MODULE! ✨ ---
     plt.style.use('seaborn-v0_8-whitegrid')
     fig, ax = plt.subplots(figsize=(12, 8))
     
-    scatter = ax.scatter(mahalanobis_vals, relevance_vals, alpha=0.6, edgecolors="w", s=80)
+    ax.scatter(vector_distances, llm_scores, alpha=0.6, edgecolors="w", s=80)
     
-    title = (
-        f'LLM Relevance vs. Mahalanobis Distance\n'
-        f'{config.representation_method} | {config.vectorizer_method}\n'
-        f'{config.num_visits} Visits | {config.distance_metric} | {config.num_neighbors} Neighbors'
-    )
-    ax.set_title(title, fontsize=16, pad=20)
-    ax.set_xlabel('Mahalanobis Distance to Neighbors', fontsize=14)
-    ax.set_ylabel('Average LLM Relevance Score', fontsize=14)
+    ax.set_title("Pairwise LLM Similarity vs. Vector Distance", fontsize=16)
+    ax.set_xlabel("Cosine Distance (Lower is More Similar)", fontsize=14)
+    ax.set_ylabel("LLM Similarity Score", fontsize=14)
     
-    stats_text = f"Spearman's Rho: {rho:.4f}\nP-value: {pval:.4f}\nN: {len(results)}"
+    stats_text = f"Spearman's Rho: {rho:.4f}\nP-value: {pval:.4f}\nN Pairs: {len(results)}"
     ax.text(0.95, 0.05, stats_text, transform=ax.transAxes, fontsize=12,
             verticalalignment='bottom', horizontalalignment='right',
             bbox=dict(boxstyle='round,pad=0.5', fc='wheat', alpha=0.5))
             
     fig.tight_layout()
-    
     plt.savefig(graph_output_path, dpi=300)
-    print(f"\n✅ Magnificent graph saved to: {graph_output_path}")
+    print(f"\n✅ New pairwise graph saved to: {graph_output_path}")
 
-    summary = {
-        "spearman_rho": rho,
-        "p_value": pval,
-        "num_data_points": len(results)
-    }
-    with open(summary_output_path, "w") as f:
-        json.dump(summary, f, indent=2)
-    print(f"✅ Summary statistics saved to {summary_output_path}")
-
+    summary = {"spearman_rho": rho, "p_value": pval, "num_pairs": len(results)}
+    with open(summary_output_path, "w") as f: json.dump(summary, f, indent=2)
+    print(f"✅ New summary saved to {summary_output_path}")
 
 if __name__ == "__main__":
     main()
