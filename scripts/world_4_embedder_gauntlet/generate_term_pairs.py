@@ -87,7 +87,7 @@ def main():
     print(f"📂 Loading RxNorm mapping from: {rxnorm_table_path}")
     rxnorm_df = pd.read_csv(rxnorm_table_path)
     # Create a dictionary for easy lookups! {medication_code: rxnorm_code}
-    rxnorm_map = pd.Series(rxnorm_df['RXNORM_CODE'].values, index=rxnorm_df['Medication_Code']).to_dict()
+    rxnorm_map = pd.Series(rxnorm_df['RXNORM_CODE'].values, index=rxnorm_df['MedicationEpicID']).to_dict()
 
     all_pairs = defaultdict(list)
     
