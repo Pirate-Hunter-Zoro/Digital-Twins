@@ -42,9 +42,10 @@ while ! curl -s http://localhost:8000/health; do
 done
 echo "✅ Server is ready!"
 
-# --- Run the Metric Computation Behemoth! ---
+# --- ✨ THE MAGNIFICENT FIX IS HERE! ✨ ---
+# We now give it the full, glorious path to our beautiful script!
 echo "⚙️  Computing all pairwise metrics with the ${EMBEDDER_TYPE_ENV} vectors..."
-python compute_distance_metrics.py \
+python scripts/world_2_neighbor_analysis/compute_distance_metrics.py \
     --embedder_type "$EMBEDDER_TYPE_ENV" \
     --num_visits "$NUM_VISITS_ENV"
 
@@ -60,7 +61,8 @@ echo "✅ Metric computation complete!"
 # === 🎨 STEP 3: PLOT THE RESULTS! 🎨 ===
 # ==============================================================================
 echo -e "\n--- STEP 3: Unleashing the Correlation Matrix Megaplotter! ---"
-python plot_metrics.py \
+# This one needs its path fixed too! So sneaky!
+python scripts/world_2_neighbor_analysis/plot_metrics.py \
     --embedder_type "$EMBEDDER_TYPE_ENV" \
     --num_visits "$NUM_VISITS_ENV" \
     --sample_size "$SAMPLE_SIZE_ENV"
