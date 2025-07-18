@@ -25,9 +25,14 @@ def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndar
     config = get_global_config()
     VECTORIZER_METHOD = config.vectorizer_method
     
+    # --- ✨ THE FIRST PART OF THE FIX! ✨ ---
+    # We detect the available device, just like in the training script!
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"🛠️ Using device: {device} for neighbor computation!")
+    
     trained_encoder_path = project_root / "data" / "models" / "hierarchical_encoder_trained.pth"
     if not trained_encoder_path.exists():
-        raise FileNotFoundError(f"OH NO! The trained encoder was not found at {trained_encoder_path}. Please run the training script first!")
+        raise FileNotFoundError(f"OH NO! The trained encoder was not found at {trained_encoder_path}.")
 
     print(f"🗺️ Loading base term vectorizer model...")
     term_vectorizer = SentenceTransformer(f"/media/scratch/mferguson/models/{VECTORIZER_METHOD.replace('/', '-')}")
@@ -38,6 +43,10 @@ def get_visit_vectors(patient_data: list[dict]) -> dict[tuple[str, int], np.ndar
         term_embedding_dim=term_embedding_dim, visit_hidden_dim=128, patient_hidden_dim=256 
     )
     patient_encoder.load_state_dict(torch.load(trained_encoder_path))
+    
+    # --- ✨ THE SECOND, MOST IMPORTANT PART OF THE FIX! ✨ ---
+    # We move our magnificent, TRAINED encoder to the GPU!
+    patient_encoder.to(device)
     patient_encoder.eval()
 
     final_vectors_dict = {}

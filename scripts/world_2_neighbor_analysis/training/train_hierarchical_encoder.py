@@ -8,8 +8,8 @@ import pandas as pd
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from torch.utils.data import Dataset, DataLoader
-from sklearn.model_selection import train_test_split # For our data split!
-from torch.nn.utils import clip_grad_norm_ # For our safety rail!
+from sklearn.model_selection import train_test_split
+from torch.nn.utils import clip_grad_norm_
 
 # --- Dynamic sys.path adjustment ---
 current_script_dir = Path(__file__).resolve().parent
@@ -41,12 +41,12 @@ class PatientTrajectoryDataset(Dataset):
         self.labels = []
         self.term_vectorizer = term_vectorizer
         self.device = device
+        self.positive_labels = 0 # We'll need this for our new balancer!
         self._prepare_data(patient_data_subset)
 
     def _prepare_data(self, patient_data):
         print("...Preparing data subset...")
         config = get_global_config()
-        positive_labels = 0
         
         for patient in patient_data:
             if len(patient['visits']) < config.num_visits + 1: continue
@@ -69,12 +69,12 @@ class PatientTrajectoryDataset(Dataset):
                     history_end_date = pd.to_datetime(patient['visits'][end_idx]['StartVisit'])
                     next_visit_date = pd.to_datetime(patient['visits'][end_idx + 1]['StartVisit'])
                     label = 1.0 if (next_visit_date - history_end_date).days <= 30 else 0.0
-                    if label == 1.0: positive_labels += 1
+                    if label == 1.0: self.positive_labels += 1
                     self.labels.append(label)
         
         print(f"✅ Subset prepared! Found {len(self.labels)} total samples.")
-        print(f"   - Positive Samples (Readmitted): {positive_labels} ({(positive_labels/len(self.labels)*100):.2f}%)")
-        print(f"   - Negative Samples (Not Readmitted): {len(self.labels) - positive_labels}")
+        print(f"   - Positive Samples (Readmitted): {self.positive_labels} ({(self.positive_labels/len(self.labels)*100):.2f}%)")
+        print(f"   - Negative Samples (Not Readmitted): {len(self.labels) - self.positive_labels}")
 
     def __len__(self): return len(self.labels)
     def __getitem__(self, idx): return self.trajectories[idx], torch.tensor(self.labels[idx], dtype=torch.float32)
@@ -132,19 +132,24 @@ def main():
     train_dataset = PatientTrajectoryDataset(train_data, term_vectorizer, device)
     train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True)
     
+    # Calculate the weight! It's the number of negative samples divided by the number of positive samples!
+    num_neg = len(train_dataset) - train_dataset.positive_labels
+    num_pos = train_dataset.positive_labels
+    # e.g. if there are three times as many positive observations as negative ones, then messing up a negative should be three times as "costly" in terms of punishment
+    pos_weight = torch.tensor([num_neg / num_pos], device=device) # Move it to the GPU!
+    
+    print(f"⚖️ Calculated positive weight for loss function: {pos_weight.item():.2f}")
+    
     print("\nAssembling testing dataset...")
     test_dataset = PatientTrajectoryDataset(test_data, term_vectorizer, device)
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     print("\nBuilding the new model...")
-    model = PatientReadmissionPredictor(
-        term_embedding_dim=term_vectorizer.get_sentence_embedding_dimension(),
-        visit_hidden_dim=128, patient_hidden_dim=256
-    ).to(device)
+    model = PatientReadmissionPredictor(...)
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
-    loss_fn = nn.BCEWithLogitsLoss()
-    # --- ✨ UPGRADE 3: Learning Rate Scheduler! ---
+    # Give our magnificent new weight to the loss function!
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.85)
 
     best_test_accuracy = 0.0
