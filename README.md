@@ -2,7 +2,7 @@
 
 Welcome to the Digital Twins Project\! This repository contains a suite of magnificent machines and brilliant experiments designed to find the absolute best way to represent a patient's medical history. Our ultimate goal is to predict a patient's next medical visit by creating a "digital twin" and using a Large Language Model to see the future\!
 
-This project is organized into four distinct "Worlds" of research, each with its own dedicated directory for scripts and Slurm jobs.
+-----
 
 ## 🏛️ Project Architecture
 
@@ -12,6 +12,8 @@ Our laboratory is now perfectly organized for maximum efficiency\! The main comp
   * **`scripts/`**: This is the brain of the operation\! It contains all the Python scripts that do the heavy lifting, neatly organized into a `common` directory for shared tools and a directory for each of the four "Worlds."
   * **`slurm_jobs/`**: This is our grand command center\! It contains all the launcher (`.sh`) and template (`.ssub`) files needed to submit jobs to a Slurm-based high-performance computing cluster. It's also perfectly organized by "Worlds"\!
   * **`References/`**: A library of all the brilliant research papers and notes that inspired this magnificent project\!
+
+-----
 
 ## 🚀 The Four Worlds
 
@@ -26,7 +28,7 @@ Our research is divided into four interconnected worlds, each building upon the 
 
   * **Goal**: To build, train, and validate a powerful, custom hierarchical embedding model that understands patient trajectories over time. The ultimate goal is to use this trained model to find both the nearest (most similar) and farthest (most dissimilar) patients to test our similarity metrics comprehensively.
   * **Key Scripts**:
-      * `scripts/world_2_neighbor_analysis/training/train_hierarchical_encoder.py`: The Training Gymnasium\! This script builds and trains our new, custom `HierarchicalPatientEncoder` model on the extrinsic task of predicting 30-day readmission. This is a crucial first step.
+      * `scripts/world_2_neighbor_analysis/training/train_hierarchical_encoder.py`: The Training Gymnasium\! This script builds and trains our new, custom `HierarchicalPatientEncoder` model on the extrinsic task of predicting 30-day readmission. It now includes robust features like class balancing for imbalanced data and early stopping with patience to find the best possible model.
       * `scripts/world_2_neighbor_analysis/compute_neighbors.py`: The Flexible Behemoth\! After the encoder is trained, this machine generates smart, time-aware vectors for all patient histories. It then calculates the similarity to every other patient and saves the **entire ranked list** of neighbors, from nearest to farthest, for maximum flexibility.
       * `scripts/world_2_neighbor_analysis/examine_and_correlate_neighbors.py`: The Quality Control-inator\! This script loads the full ranked lists of neighbors and intelligently analyzes the **k-nearest** vs. the **k-farthest** pairs. It compares their vector similarity to an LLM-judged clinical similarity score to see if our metrics work across the full spectrum of patient relationships.
       * `scripts/world_2_neighbor_analysis/plot_individual_patient_correlations.py`: The Multi-Scope Inspector\! This machine creates a grid of plots to visualize the correlation results for a few individual patients, helping us understand if patterns are consistent or patient-specific.
@@ -44,7 +46,9 @@ Our research is divided into four interconnected worlds, each building upon the 
   * **Goal**: A grand tournament to find the best base embedding models for understanding medical language. The winner of this gauntlet is used as the foundational term embedder in our World 2 hierarchical model.
   * **Key Scripts**: `scripts/world_4_embedder_gauntlet/`
   * **Launcher**: `slurm_jobs/world_4_embedder_gauntlet/launch_full_gauntlet.sh`
-  * **Status**: **Active and Enhanced!** The term pair generation step now efficiently obtains synthetic synonyms using a **free, external API (`api.dictionaryapi.dev`)** instead of a local LLM, significantly speeding up data preparation!
+  * **Status**: Ready for launch\!
+
+-----
 
 ## 🔧 Setup & Installation
 
@@ -55,17 +59,17 @@ Before you can unleash the full power of these magnificent machines, you'll need
 ```bash
 conda create --name dt_env python=3.9
 conda activate dt_env
-````
+```
 
 ### 2\. Python Dependencies
 
-Install all the necessary Python libraries using the `requirements.txt` file. Make sure to include `requests` for API interactions\!
+Install all the necessary Python libraries using the `requirements.txt` file.
 
 ```bash
 pip install -r requirements.txt
-# If 'requests' is not in requirements.txt, ensure it's installed:
-# pip install requests
 ```
+
+-----
 
 ## 💥 Usage: Running the Machine\!
 
