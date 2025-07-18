@@ -24,11 +24,12 @@ Our research is divided into four interconnected worlds, each building upon the 
 
   * **Goal**: To rigorously compare different patient vectorization methods (e.g., our custom GRU model vs. a large Transformer) and different similarity metrics (e.g., Cosine Similarity, Euclidean Distance, LLM Semantic Similarity) to see if they agree on which patients are similar or dissimilar.
   * **Key Scripts**:
-      * `scripts/world_2_neighbor_analysis/training/train_gru_embedder.py`: The Training Gymnasium\! This script trains our custom `HierarchicalPatientEncoder` model on the extrinsic task of predicting 30-day readmission.
+      * `scripts/common/models/training/train_gru_embedder.py`: The Training Gymnasium\! This script trains our custom `HierarchicalPatientEncoder` model on the extrinsic task of predicting 30-day readmission.
       * `scripts/world_2_neighbor_analysis/vectorizers/run_vectorization.py`: The Vectorization Factory\! A scalable, modular script that takes patient data and an embedder type (`gru` or `transformer`) and creates the final patient vector files.
-      * `scripts/world_2_neighbor_analysis/examine_and_plot_correlations.py`: The Analysis & Art Machine\! This script takes a random sample of the generated vectors and performs the main analysis, creating scatter plots and heat maps to compare all the different similarity metrics.
+      * `compute_distance_metrics.py`: The Universal Metric-Calculating Behemoth\! This machine takes the vector files and computes all pairwise metrics (cosine similarity, euclidean distance, LLM score) for every possible pair.
+      * `plot_metrics.py`: The Correlation Matrix Megaplotter\! This is our data-art machine\! It reads the metrics file and generates beautiful scatter plots and heatmaps to visualize the relationships between the different similarity metrics.
   * **Launcher**: `slurm_jobs/world_2_neighbor_analysis/launch_world2_pipeline_grid.sh`
-  * **Status**: **ACTIVE\!** We have designed a new, automated, multi-stage pipeline to train our models, vectorize the data using different methods, and then run a comprehensive pairwise analysis.
+  * **Status**: **ACTIVE\!** We have designed a new, automated, multi-stage pipeline to vectorize the data, compute all pairwise metrics, and then generate a full suite of analytical plots.
 
 ### **World 3: The Judging Chamber** ⚖️
 
@@ -69,10 +70,10 @@ The project is designed as a sequence of experiments that build on each other.
     ```bash
     bash slurm_jobs/world_4_embedder_gauntlet/launch_full_gauntlet.sh
     ```
-3.  **World 2 - Run Full Analysis Pipeline**: Once you have a champion vectorizer from World 4, you can run the entire World 2 pipeline with a single command. This script will automatically handle the multi-stage process in the correct order for each embedder type we want to test:
-    1.  **Train** the custom `HierarchicalPatientEncoder` (if using the `gru` embedder).
-    2.  **Vectorize** all patient histories using the specified embedder (`gru` or `transformer`).
-    3.  **Analyze** a random sample of the vectors, calculating all pairwise metrics and generating the final scatter plots and heat maps.
+3.  **World 2 - Run Full Analysis Pipeline**: Once you have a champion vectorizer from World 4, you can run the entire World 2 pipeline with a single command. This script will automatically handle the new, magnificent three-stage process in the correct order for each embedder type we want to test:
+    1.  **Vectorize** all patient histories using the specified embedder (`gru` or `transformer`).
+    2.  **Compute Metrics** for every single pair of patients (cosine, euclidean, and LLM score).
+    3.  **Analyze & Plot** a random sample of the metrics, generating the final scatter plots and heat maps.
     <!-- end list -->
     ```bash
     bash slurm_jobs/world_2_neighbor_analysis/launch_world2_pipeline_grid.sh

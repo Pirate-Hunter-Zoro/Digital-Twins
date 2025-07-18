@@ -6,7 +6,7 @@ from pathlib import Path
 
 # --- Dynamic sys.path adjustment! ---
 current_script_dir = Path(__file__).resolve().parent
-project_root = current_script_dir.parents[3]
+project_root = current_script_dir.parents[2]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 

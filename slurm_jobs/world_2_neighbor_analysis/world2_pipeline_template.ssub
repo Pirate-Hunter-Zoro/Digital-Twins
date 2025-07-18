@@ -2,7 +2,7 @@
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --mem=80G
-# Note: --gres and --cpus-per-task are now passed by the launcher!
+# Note: --gres and --cpus-per-task are passed by the launcher!
 
 # --- Safety First! ---
 trap "echo '🛑 SIGTERM received, killing vLLM Server...'; kill \$VLLM_PID 2>/dev/null" SIGTERM
@@ -13,77 +13,71 @@ source /opt/apps/easybuild/software/Anaconda3/2022.05/etc/profile.d/conda.sh
 conda activate dt_env
 set -e
 
-# --- Clean up old files from previous runs of this specific configuration ---
-echo "🧹 Cleaning up old files for this configuration..."
-rm -f data/models/hierarchical_encoder_trained.pth 
-rm -f "data/visit_sentence/${VEC_METHOD_ENV//\//-}/visits_${NUM_VISITS_ENV}/patients_5000/all_vectors.pkl"
-rm -f "data/visit_sentence/${VEC_METHOD_ENV//\//-}/visits_${NUM_VISITS_ENV}/patients_5000/metric_cosine/neighbors_5/neighbors.pkl"
-
-
 # ==============================================================================
-# === ⚙️ STEP 1: TRAIN THE HIERARCHICAL ENCODER ⚙️ ===
+# === ⚙️ STEP 1: VECTORIZE THE PATIENTS ⚙️ ===
 # ==============================================================================
-echo -e "\n--- STEP 1: Running Training for the Hierarchical Encoder ---"
-python scripts/world_2_neighbor_analysis/training/train_hierarchical_encoder.py
+echo -e "\n--- STEP 1: Running the Vectorization Factory for embedder: ${EMBEDDER_TYPE_ENV} ---"
+python scripts/world_2_neighbor_analysis/vectorizers/run_vectorization.py \
+    --embedder_type "$EMBEDDER_TYPE_ENV" \
+    --num_visits "$NUM_VISITS_ENV"
 
 if [ $? -ne 0 ]; then
-    echo "❌ ERROR: Training script failed. Halting pipeline."
+    echo "❌ ERROR: Vectorization script failed. Halting pipeline."
     exit 1
 fi
-echo "✅ Training complete!"
-
+echo "✅ Vectorization complete!"
 
 # ==============================================================================
-# === 🔥 STEP 2: LAUNCH VLLM & RUN NEIGHBOR ANALYSIS 🔥 ===
+# === 🔥 STEP 2: LAUNCH VLLM & COMPUTE METRICS 🔥 ===
 # ==============================================================================
-echo -e "\n--- STEP 2: Igniting vLLM Server and Running Neighbor Analysis ---"
+echo -e "\n--- STEP 2: Igniting vLLM Server and Calculating All Metrics ---"
 MODEL_PATH="/media/scratch/mferguson/models/unsloth-medgemma-27b-text-it-bnb-4bit"
 vllm serve "$MODEL_PATH" --served-model-name medgemma &
 VLLM_PID=$!
 echo "✅ vLLM Server starting with PID: $VLLM_PID"
 
 echo "⏳ Waiting for server to be ready..."
-while ! curl -s http://localhost:8000/health; do sleep 5; done
+while ! curl -s http://localhost:8000/health; do
+    sleep 5
+done
 echo "✅ Server is ready!"
 
-# --- Run Neighbor Computation ---
-echo "⚙️ Computing nearest neighbors with our new TRAINED encoder..."
-python scripts/world_2_neighbor_analysis/compute_neighbors.py \
-    --representation_method "visit_sentence" \
-    --vectorizer_method "$VEC_METHOD_ENV" \
-    --distance_metric "cosine" \
-    --num_visits "$NUM_VISITS_ENV" \
-    --num_patients 5000 \
-    --num_neighbors 5
+# --- Run the Metric Computation Behemoth! ---
+echo "⚙️  Computing all pairwise metrics with the ${EMBEDDER_TYPE_ENV} vectors..."
+python compute_distance_metrics.py \
+    --embedder_type "$EMBEDDER_TYPE_ENV" \
+    --num_visits "$NUM_VISITS_ENV"
 
-# --- Run Neighbor Examination ---
-echo "🔬 Examining the new neighbors..."
-python scripts/world_2_neighbor_analysis/examine_and_correlate_neighbors.py \
-    --representation_method "visit_sentence" \
-    --vectorizer_method "$VEC_METHOD_ENV" \
-    --distance_metric "cosine" \
-    --num_visits "$NUM_VISITS_ENV" \
-    --num_patients 5000 \
-    --num_neighbors 5 \
-    --model_name "medgemma"
-
-# --- ✨✨ NEW! STEP 3: INDIVIDUAL PLOTTING! ✨✨ ---
-echo "🖼️ Generating individual patient correlation plots..."
-python scripts/world_2_neighbor_analysis/plot_individual_patient_correlations.py \
-    --representation_method "visit_sentence" \
-    --vectorizer_method "$VEC_METHOD_ENV" \
-    --distance_metric "cosine" \
-    --num_visits "$NUM_VISITS_ENV" \
-    --num_patients 5000 \
-    --num_neighbors 5 \
-    --model_name "medgemma"
+if [ $? -ne 0 ]; then
+    echo "❌ ERROR: Metric computation script failed. Shutting down and halting."
+    kill $VLLM_PID
+    wait $VLLM_PID 2>/dev/null
+    exit 1
+fi
+echo "✅ Metric computation complete!"
 
 # ==============================================================================
-# === 🧹 STEP 4: CLEANUP 🧹 === (Was Step 3)
+# === 🎨 STEP 3: PLOT THE RESULTS! 🎨 ===
+# ==============================================================================
+echo -e "\n--- STEP 3: Unleashing the Correlation Matrix Megaplotter! ---"
+python plot_metrics.py \
+    --embedder_type "$EMBEDDER_TYPE_ENV" \
+    --num_visits "$NUM_VISITS_ENV" \
+    --sample_size "$SAMPLE_SIZE_ENV"
+
+if [ $? -ne 0 ]; then
+    echo "❌ ERROR: Plotting script failed. Something is wrong with our art supplies!"
+    # Still need to clean up!
+fi
+echo "✅ Plotting complete!"
+
+
+# ==============================================================================
+# === 🧹 STEP 4: CLEANUP 🧹 ===
 # ==============================================================================
 echo -e "\n--- STEP 4: Shutting down the vLLM server ---"
 kill $VLLM_PID
 wait $VLLM_PID 2>/dev/null
 echo "✅ Server shut down."
 
-echo -e "\n🎉🎉🎉 FULL WORLD 2 PIPELINE FINISHED SUCCESSFULLY! 🎉🎉🎉"
+echo -e "\n🎉🎉🎉 FULL WORLD 2 PIPELINE FOR ${EMBEDDER_TYPE_ENV} FINISHED SUCCESSFULLY! 🎉🎉🎉"
