@@ -95,9 +95,8 @@ def main():
         print(f"\n--- Processing category: {category} ---")
         df = pd.read_csv(file_path)
 
-        # ✨ The Magnificent Fix! All terms start as lowercase! ✨
-        df['term'] = df.iloc[:, 0].str.lower()
-        df['code'] = df.iloc[:, 1]
+        df['term'] = df.iloc[:, 0].astype(str).str.lower() # Make sure original terms are strings
+        df['code'] = df.iloc[:, 1].astype(str) # Force the 'code' column to be strings
 
         # --- Generate pairs from codes ---
         code_based_pairs = set()

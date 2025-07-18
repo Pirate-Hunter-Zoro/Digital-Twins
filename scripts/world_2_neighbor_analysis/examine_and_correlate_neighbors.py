@@ -11,6 +11,8 @@ from scipy.stats import spearmanr
 from scipy.spatial.distance import cosine
 from pathlib import Path
 
+# TODO - refactor - generate scatter plots and heat maps instead of all this stuff we're doing here
+
 # --- Dynamic sys.path adjustment ---
 current_script_dir = Path(__file__).resolve().parent
 project_root = current_script_dir.parent.parent

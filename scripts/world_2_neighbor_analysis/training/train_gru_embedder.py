@@ -20,7 +20,9 @@ if str(project_root) not in sys.path:
 from scripts.common.config import setup_config, get_global_config
 from scripts.common.data_loading.load_patient_data import load_patient_data
 from scripts.common.utils import clean_term, get_visit_term_lists
-from scripts.common.models.hierarchical_encoder import HierarchicalPatientEncoder
+# --- ✨ THE MAGNIFICENT FIX! ✨ ---
+# We are now importing from our newly named blueprint file!
+from scripts.common.models.gru_embedder import HierarchicalPatientEncoder
 
 # --- The Full Prediction Model ---
 class PatientReadmissionPredictor(nn.Module):
@@ -41,7 +43,7 @@ class PatientTrajectoryDataset(Dataset):
         self.labels = []
         self.term_vectorizer = term_vectorizer
         self.device = device
-        self.positive_labels = 0 # We'll need this for our new balancer!
+        self.positive_labels = 0
         self._prepare_data(patient_data_subset)
 
     def _prepare_data(self, patient_data):
@@ -63,7 +65,6 @@ class PatientTrajectoryDataset(Dataset):
                             )
                     
                     if not trajectory_tensors: continue
-
                     self.trajectories.append(trajectory_tensors)
                     
                     history_end_date = pd.to_datetime(patient['visits'][end_idx]['StartVisit'])
@@ -145,7 +146,11 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     print("\nBuilding the new model...")
-    model = PatientReadmissionPredictor(...)
+    model = PatientReadmissionPredictor(
+        term_embedding_dim=term_vectorizer.get_sentence_embedding_dimension(),
+        visit_hidden_dim=128,
+        patient_hidden_dim=256
+    ).to(device)
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     # Give our magnificent new weight to the loss function!
