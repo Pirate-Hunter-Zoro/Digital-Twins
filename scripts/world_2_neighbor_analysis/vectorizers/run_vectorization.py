@@ -4,15 +4,17 @@ import argparse
 import pickle
 from pathlib import Path
 
-# --- Dynamic sys.path adjustment! ---
+# --- ✨ THE MAGNIFICENT RE-FIX! ✨ ---
+# This little contraption tells the script where the project's home is!
 current_script_dir = Path(__file__).resolve().parent
-project_root = current_script_dir.parents[2]
+# We go up THREE whole levels to get to the project root! You were right!
+project_root = current_script_dir.parents[2] 
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+# ------------------------------------
 
 from scripts.common.data_loading.load_patient_data import load_patient_data
 from scripts.common.config import setup_config, get_global_config
-
 # --- ✨ Correctly importing our magnificent, refactored machines! ✨ ---
 from scripts.common.models.gru_embedder import GRUEmbedder
 from scripts.common.models.transformer_embedder import TransformerEmbedder
