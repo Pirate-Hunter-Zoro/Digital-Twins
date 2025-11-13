@@ -13,16 +13,11 @@ class PatientEmbedder:
     A simplified class that uses the sentence-transformers library to embed text.
     It handles all the underlying complexity.
     """
-    # The home of your models remains unchanged.
-    BASE_MODEL_DIR = "/media/studies/ehr_study/data-EHR-prepped/Mikey-Digital-Twins/models/"
-
+   
     def __init__(self):
         """
         Loads a SentenceTransformer model from a local path.
         The library automatically handles device placement.
-
-        Args:
-            model_name: The name of the model directory under BASE_MODEL_DIR.
         """
         full_model_path = Path(os.environ['EMBEDDER_MODEL_PATH'])
 
