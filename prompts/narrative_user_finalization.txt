@@ -1,0 +1,6 @@
+[BASE NARRATIVE]
+{base_narrative}
+
+---
+[ADDITIONAL VISITS]
+{additional_visits}

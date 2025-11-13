@@ -1,0 +1,31 @@
+#!/bin/bash
+
+ENV_FILE=".env"
+
+echo "Submitting the vLLM server job..."
+sbatch slurm_jobs/patient_embedding/start_vllm_server.sbatch
+
+# We need to ensure the server starts AND updates the file before we try to source it.
+echo "Waiting for vLLM server to become reachable..."
+
+while true; do
+  
+  # 1. Source the file to load the VLLM_URL into our environment.
+  # The file will contain the correct URL once the SLURM job updates it.
+  set -a; source "${ENV_FILE}"; set +a
+
+  if curl -sf "${VLLM_URL}/health" >/dev/null; then
+    # Server is live. Break the loop.
+    echo "--> Server is live and responding at ${VLLM_URL}."
+    break
+  else
+    echo "    Server not ready at ${VLLM_URL}. Retrying in 10 seconds..."
+  fi
+  
+  sleep 10
+done
+
+echo "Launching the rest of the pipeline..."
+sbatch slurm_jobs/patient_embedding/run_pipeline.sbatch
+
+echo "Done."

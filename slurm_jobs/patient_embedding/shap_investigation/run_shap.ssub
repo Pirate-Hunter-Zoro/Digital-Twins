@@ -1,0 +1,44 @@
+#!/bin/bash
+#SBATCH --job-name=shap
+#SBATCH --partition=c3_accel
+#SBATCH --time=7-00:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=256G
+#SBATCH -o slurm_jobs/patient_embedding/shap_investigation/logs/shap_out.txt
+#SBATCH -e slurm_jobs/patient_embedding/shap_investigation/logs/shap_err.txt
+
+# Exit immediately if command fails
+set -e
+
+# ---- Conda configuration ----
+CONDA_ENV=venv
+N_THREADS="${SLURM_CPUS_PER_TASK}"
+
+# ---- Boilerplate env/bootstrap ----
+echo "CHECKPOINT 1: Loading modules..."
+module purge
+module load Anaconda3/2025.06-0
+eval "$(conda shell.bash hook)"
+
+echo "CHECKPOINT 2: Activating Conda..."
+set +u;
+conda activate "${CONDA_ENV}"; set -u || exit 10 
+
+echo "CHECKPOINT 3: Checking for .env file..."
+ENV_FILE="${SLURM_SUBMIT_DIR}/.env"
+if [[ ! -f "${ENV_FILE}" ]];
+then
+  echo "ERROR: ${ENV_FILE} not found. The server job must run first." >&2
+  exit 11
+fi
+
+echo "CHECKPOINT 4: Sourcing .env file..."
+set -a; source "${ENV_FILE}";
+set +a
+
+echo "CHECKPOINT 5: Setting threads..."
+export OMP_NUM_THREADS="${N_THREADS}"
+
+echo "CHECKPOINT 6: Starting srun (Python)..."
+srun python -m scripts.patient_embedding.shap_investigation.run_analysis
