@@ -2,3 +2,5 @@ artifacts/
 __pycache__/
 test_data/
 logs/
+.DS_Store
+*.pyc
