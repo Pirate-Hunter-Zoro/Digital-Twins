@@ -19,15 +19,17 @@ from .discordant import write_discordant
 
 COUNTER_INTERVAL = 5
 
-def handle_plotting(cos_type: str, plots_dir: Path, judge_array: np.array, cos_array: np.array, diff_array: np.array):
-    _ = write_spearman(plots_dir, f"spearman_rho_{cos_type}", cos_array, judge_array)
+def handle_plotting(label: str, plots_dir: Path, judge_array: np.array, cos_array: np.array, diff_array: np.array):
+    _ = write_spearman(plots_dir, f"spearman_rho_{label}", cos_array, judge_array)
          
-    histogram(diff_array.tolist(), "Cosine minus Judge", plots_dir / f"histogram_cos_{cos_type}_minus_judge.png")
+    histogram(diff_array.tolist(), "Cosine minus Judge", plots_dir / f"histogram_cos_{label}_minus_judge.png")
     
-    histogram(cos_array.tolist(), 'Cosine', plots_dir / f"histogram_cos_{cos_type}.png")
+    histogram(cos_array.tolist(), 'Cosine', plots_dir / f"histogram_cos_{label}.png")
+    
+    histogram(judge_array.tolist(), "Judge", plots_dir / f"histogram_judge_{label}")
     
     scatter(cos_array.tolist(), judge_array.tolist(),
-        "Judge vs Cosine", plots_dir / f"scatter_judge_vs_cos_{cos_type}.png",
+        "Judge vs Cosine", plots_dir / f"scatter_judge_vs_cos_{label}.png",
         "cosine", "judge_score (0-1)")
     
 def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], float], out_dir: Path):
@@ -61,7 +63,7 @@ def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], 
     print(f"[Stage3] will judge {len(pairs_new)} new pairs; skipping {len(existing_ids)} already done in {out_dir}", flush=True)
 
     rows_new = []
-    for i, record in enumerate(score_pairs(pairs_new)):
+    for i, record in enumerate(score_pairs(pairs_new, segment=label)):
         rows_new.append(record)
         if (i + 1) % COUNTER_INTERVAL == 0:
             print(f"[Stage3] {i+1}/{len(pairs_new)} new pairs scored in {out_dir}...", flush=True)
@@ -86,7 +88,6 @@ def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], 
                     )
 
 def run() -> None:
-    narr_dir = Path(os.environ['NARRATIVES_DIR'])
     vec_dir  = Path(os.environ['VECTORS_DIR'])
     out_dir  = Path(os.environ['ANALYSIS_DIR'])
     ensure_dir(out_dir)

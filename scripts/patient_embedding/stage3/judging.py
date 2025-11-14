@@ -12,8 +12,8 @@ import json
 from common.models.vllm_client import VllmClient
 
 from patient_embedding.shared.prompts import PromptLoader, SCORE_PATTERN, EXPLANATION_PATTERN
-
-from patient_embedding.shared.io import read_text, write_text
+from patient_embedding.shared.narrative_parsing import parse_single_narrative_sections
+from patient_embedding.shared.io import read_text
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -26,7 +26,8 @@ def init_worker():
     prompt_loader = PromptLoader()
     out_dir  = Path(os.environ['ANALYSIS_DIR'])
     
-def judge_similarity(pid: str, na: str, nb: str, segment: str='full') -> Tuple[float, str]:
+    
+def judge_similarity(na: str, nb: str) -> Tuple[float, str]:
     # Query generative model to judge the semantic similarity between two text dumps of patient data
     try:
         # Get the system prompt.
@@ -63,7 +64,7 @@ def judge_similarity(pid: str, na: str, nb: str, segment: str='full') -> Tuple[f
     
     return (j_score, j_rationale)
 
-def score_pair(patient_pair_tuple: Tuple[str,str,float], segment: str="full") -> Dict[str, Any]:
+def score_pair(patient_pair_tuple: Tuple[str,str,float], segment: str="full", scrub: bool=False) -> Dict[str, Any]:
     # This will compute the judge similarity for the given pair if it does not yet exist
     patient_a_id = patient_pair_tuple[0]
     patient_b_id = patient_pair_tuple[1]
@@ -72,7 +73,7 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float], segment: str="full") ->
     
     # The LLM judgement score is stored based on which segments of the narrative we are scoring
     judge_score_path = Path(os.environ['ANALYSIS_DIR']) / segment / "judge_scores" / f"{pid.replace(':','_')}.json"
-    if judge_score_path.exists():
+    if judge_score_path.exists() and not scrub:
         # The judge already gave us a score
         with open(judge_score_path, 'r') as f:
             judge_output = json.load(f)
@@ -83,10 +84,11 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float], segment: str="full") ->
         na_path = Path(os.environ['NARRATIVES_DIR']) / f'{patient_a_id}.md'
         nb_path = Path(os.environ['NARRATIVES_DIR']) / f'{patient_b_id}.md'
         
-        na = read_text(na_path) if na_path.exists() else ""
-        nb = read_text(nb_path) if nb_path.exists() else ""
         
-        j_score, j_rationale = judge_similarity(pid, na, nb, 'full')
+        na = parse_single_narrative_sections(read_text(na_path))
+        nb = parse_single_narrative_sections(read_text(nb_path))
+        
+        j_score, j_rationale = judge_similarity(na[segment], nb[segment])
         if j_score != float("nan"):
             # We can save this response
             with open(judge_score_path, 'w') as f:
@@ -109,8 +111,8 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float], segment: str="full") ->
     }
     
 
-def score_pairs(pairs: List[Tuple[str,str,float]]) -> Iterator[Dict[str, Any]]:
-    prompt_loader = PromptLoader()
-
+def score_pairs(pairs: List[Tuple[str,str,float]], segment: str) -> Iterator[Dict[str, Any]]:
+    def scrub_score_pair_with_seg(patient_pair_tuple: Tuple[str,str,float]):
+        return score_pair(patient_pair_tuple, segment, scrub=True)
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker) as thread_pool:
-        yield from thread_pool.imap_unordered(score_pair, pairs)
+        yield from thread_pool.imap_unordered(scrub_score_pair_with_seg, pairs)

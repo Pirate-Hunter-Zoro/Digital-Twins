@@ -9,7 +9,6 @@ from scripts.patient_embedding.shared.prompts import PromptLoader
 from scripts.patient_embedding.stage3.pairs import pair_id
 from scripts.patient_embedding.shared.prompts import SCORE_PATTERN, EXPLANATION_PATTERN
 from scripts.common.models.vllm_client import VllmClient
-from scripts.patient_embedding.shared.io import write_text
 import os
 import re
 import json
@@ -26,18 +25,18 @@ def forge_feature_matrix_embedding() -> Tuple[np.array, np.array]:
     y_target = []
     
     for (id_a, id_b) in patient_pairs:
-        cos_full_text = cosine(vector_components[id_a]['full_text'], vector_components[id_b]['full_text'])
+        cos_full_text = cosine(vector_components[id_a]['full'], vector_components[id_b]['full'])
         if np.isnan(cos_full_text):
             cos_full_text = 0
         y_target.append(cos_full_text)
         
-        cos_sim_narrative = cosine(vector_components[id_a]['segment_narrative'], vector_components[id_b]['segment_narrative'])
+        cos_sim_narrative = cosine(vector_components[id_a]['summary'], vector_components[id_b]['summary'])
         if np.isnan(cos_sim_narrative):
             cos_sim_narrative = 0
-        cos_sim_meds = cosine(vector_components[id_a]['segment_medications'], vector_components[id_b]['segment_medications'])
+        cos_sim_meds = cosine(vector_components[id_a]['medications'], vector_components[id_b]['medications'])
         if np.isnan(cos_sim_meds):
             cos_sim_meds = 0
-        cos_sim_diags = cosine(vector_components[id_a]['segment_diagnoses'], vector_components[id_b]['segment_diagnoses'])
+        cos_sim_diags = cosine(vector_components[id_a]['diagnoses'], vector_components[id_b]['diagnoses'])
         if np.isnan(cos_sim_diags):
             cos_sim_diags = 0
         X_features.append([cos_sim_narrative, cos_sim_meds, cos_sim_diags])
@@ -114,18 +113,18 @@ def forge_feature_matrix_judging() -> Tuple[np.array, np.array]:
     y_target = []
     for (id_a, id_b) in patient_pairs:
         pid = pair_id(id_a, id_b)
-        judge_full_text_score = get_judge_score(pid, string_components[id_a]['full_text'], string_components[id_b]['full_text'], client, prompt_loader, 'full')
+        judge_full_text_score = get_judge_score(pid, string_components[id_a]['full'], string_components[id_b]['full'], client, prompt_loader, 'full')
         if np.isnan(judge_full_text_score):
             judge_full_text_score = 0
         y_target.append(judge_full_text_score)
         
-        judge_sim_narrative_score = get_judge_score(pid, string_components[id_a]['segment_narrative'], string_components[id_b]['segment_narrative'], client, prompt_loader, 'summary')
+        judge_sim_narrative_score = get_judge_score(pid, string_components[id_a]['summary'], string_components[id_b]['summary'], client, prompt_loader, 'summary')
         if np.isnan(judge_sim_narrative_score):
             judge_sim_narrative_score = 0
-        judge_sim_meds_score = get_judge_score(pid, string_components[id_a]['segment_medications'], string_components[id_b]['segment_medications'], client, prompt_loader, 'medications')
+        judge_sim_meds_score = get_judge_score(pid, string_components[id_a]['medications'], string_components[id_b]['medications'], client, prompt_loader, 'medications')
         if np.isnan(judge_sim_meds_score):
             judge_sim_meds_score = 0
-        judge_sim_diags_score = get_judge_score(pid, string_components[id_a]['segment_diagnoses'], string_components[id_b]['segment_diagnoses'], client, prompt_loader, 'diagnoses')
+        judge_sim_diags_score = get_judge_score(pid, string_components[id_a]['diagnoses'], string_components[id_b]['diagnoses'], client, prompt_loader, 'diagnoses')
         if np.isnan(judge_sim_diags_score):
             judge_sim_diags_score = 0
         X_features.append([judge_sim_narrative_score, judge_sim_meds_score, judge_sim_diags_score])
