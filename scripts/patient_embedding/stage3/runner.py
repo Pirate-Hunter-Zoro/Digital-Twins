@@ -32,7 +32,7 @@ def handle_plotting(label: str, plots_dir: Path, judge_array: np.array, cos_arra
         "Judge vs Cosine", plots_dir / f"scatter_judge_vs_cos_{label}.png",
         "cosine", "judge_score (0-1)")
     
-def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], float], out_dir: Path):
+def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], float], out_dir: Path, scrub=False):
     # cos_func will find the cosine similarity of either the entire narrative, just the summary, just the medications, or just the diagnoses - depends on which callable gets passed into this function
     ensure_dir(out_dir)
     
@@ -49,7 +49,7 @@ def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], 
         "cosine_diff"
     ]
     existing_ids = set()
-    if existing_df is not None and not existing_df.empty:
+    if existing_df is not None and not existing_df.empty and not scrub:
         done = existing_df[columns_to_check].notna().all(axis=1)
         if not done.empty:
             existing_ids = set(existing_df.loc[done]
@@ -99,6 +99,6 @@ def run() -> None:
     rnd = random.Random(int(os.environ['SEED']))
     cos_funcs = {"full": cos_full, "summary":cos_summary, "medications": cos_medications, "diagnoses": cos_diagnoses}
     for label, cos_func in cos_funcs.items():
-        run_analysis(rnd, label, cos_func, out_dir / label)
+        run_analysis(rnd, label, cos_func, out_dir / label, scrub=True)
 
     print("[Stage3] complete.", flush=True)
