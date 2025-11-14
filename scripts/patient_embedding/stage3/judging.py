@@ -18,14 +18,17 @@ from patient_embedding.shared.io import read_text
 from dotenv import load_dotenv
 load_dotenv()
 
-def init_worker():
+def init_worker(seg: str="full", scr: bool=False):
     global client
     global prompt_loader
     global out_dir
+    global segment
+    global scrub
     client = VllmClient()
     prompt_loader = PromptLoader()
     out_dir  = Path(os.environ['ANALYSIS_DIR'])
-    
+    segment = seg
+    scrub = scr
     
 def judge_similarity(na: str, nb: str) -> Tuple[float, str]:
     # Query generative model to judge the semantic similarity between two text dumps of patient data
@@ -64,7 +67,7 @@ def judge_similarity(na: str, nb: str) -> Tuple[float, str]:
     
     return (j_score, j_rationale)
 
-def score_pair(patient_pair_tuple: Tuple[str,str,float], segment: str="full", scrub: bool=False) -> Dict[str, Any]:
+def score_pair(patient_pair_tuple: Tuple[str,str,float]) -> Dict[str, Any]:
     # This will compute the judge similarity for the given pair if it does not yet exist
     patient_a_id = patient_pair_tuple[0]
     patient_b_id = patient_pair_tuple[1]
@@ -109,10 +112,7 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float], segment: str="full", sc
         "judge_rationale": j_rationale,
         "cosine_diff": cosine - j_score,
     }
-    
 
 def score_pairs(pairs: List[Tuple[str,str,float]], segment: str) -> Iterator[Dict[str, Any]]:
-    def scrub_score_pair_with_seg(patient_pair_tuple: Tuple[str,str,float]):
-        return score_pair(patient_pair_tuple, segment, scrub=True)
-    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker) as thread_pool:
-        yield from thread_pool.imap_unordered(scrub_score_pair_with_seg, pairs)
+    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker, initargs=[segment, True]) as thread_pool:
+        yield from thread_pool.imap_unordered(score_pair, pairs)
