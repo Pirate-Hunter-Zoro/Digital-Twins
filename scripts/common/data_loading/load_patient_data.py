@@ -32,7 +32,7 @@ def _load_one_patient(paths: tuple[Path,Path]) -> Dict:
             sliced_patient_json_file_path.parent.mkdir(parents=True, exist_ok=True)
             with open(sliced_patient_json_file_path, 'w') as f:
                 # Store the sliced json now that we have created it
-                json.dump(sliced_json, f)
+                json.dump(sliced_json, f, indent=4)
             return sliced_json
         
 def _see_if_anchor(json_path: Path) -> Optional[str]:
