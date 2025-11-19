@@ -39,7 +39,7 @@ def pair_md(dfsub: pd.DataFrame, title: str) -> str:
     return "\n".join(lines)
 
 def write_discordant(out_dir: Path, df_pairs: pd.DataFrame, num_std: int) -> None:
-    diff_col = "cosine_diff"
+    diff_col = "diff_norm"
     
     differences = df_pairs[diff_col]
     mean_diff = np.mean(differences)

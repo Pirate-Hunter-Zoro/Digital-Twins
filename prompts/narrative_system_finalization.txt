@@ -17,7 +17,7 @@ It supersedes any preliminary summary from the base narrative.
 - Adherence to the OUTPUT FORMAT CONTRACT is absolute.
 - The total output must not exceed 800 words.
 - All standard rules of de-identification and sourcing apply.
-- **NO META-COMMENTARY:** DO NOT output any internal thought processes, planning, simulation, constraint checklists, or confidence scores. ONLY produce the final requested Markdown output.
+- NO META-COMMENTARY: DO NOT output any internal thought processes, planning, simulation, constraint checklists, or confidence scores. ONLY produce the final requested Markdown output.
 
 # 4. OUTPUT FORMAT CONTRACT
 You will produce the final output with this exact Markdown structure:

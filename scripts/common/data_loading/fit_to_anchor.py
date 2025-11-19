@@ -1,12 +1,17 @@
 import os
 import json
-from typing import Iterator, List, Dict, Optional
+from typing import List, Dict, Optional
 import re
 from datetime import datetime, timedelta
 import copy
 import pandas as pd
+from dotenv import load_dotenv
+import sys
+
+load_dotenv()
 
 ICD_CODE_PATTERN = re.compile(r"(F32|F33|296.2|296.3)")
+MED_INTERVAL_TOLERNACE = 1 # Consider the same medication if all fields are the same and the ending of the first is only this many days before the start of the second
 
 def find_anchor_date(patient_dict: Dict) -> Optional[datetime]:
     """
@@ -92,8 +97,6 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, years_back
         # For each of those encounters, we still want to see any medications active during our window
         for med in encounter['medications']:
             med_key = (
-                med["MedStartInstant"],
-                med["MedEndInstant"],
                 med["MedName"],
                 med["MedStrength"],
                 med["MedForm"],
@@ -101,48 +104,58 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, years_back
                 med["MedFrequency"],
             )
             
-            if med_key not in unique_medications.keys(): 
-                med = copy.deepcopy(med)
-                # The medication end may not be present or the medication may still be active
-                if 'MedEndInstant' in med.keys() and med['MedEndInstant']:
-                    med_end_date = datetime.strptime(med['MedEndInstant'], '%Y-%m-%d')
+            # The medication end may not be present or the medication may still be active
+            if 'MedEndInstant' in med.keys() and med['MedEndInstant']:
+                med_end_date = datetime.strptime(med['MedEndInstant'], '%Y-%m-%d')
+            else:
+                # Still ongoing
+                med_end_date = datetime.max
+                
+            med_start_date = datetime.strptime(med['MedStartInstant'], '%Y-%m-%d')
+            if med_end_date >= start_date and med_start_date <= anchor_date:
+                # This medication was active during our time window of relevance
+                start_instant = -(anchor_date - med_start_date).days
+                
+                if med_end_date == datetime.max:
+                    # Still active
+                    end_instant = sys.maxsize
                 else:
-                    # Still ongoing
-                    med_end_date = datetime.max
-                    
-                med_start_date = datetime.strptime(med['MedStartInstant'], '%Y-%m-%d')
-                if med_end_date >= start_date and med_start_date <= anchor_date:
-                    # This medication was active during our time window of relevance
-                    med['med_start_instant'] = -(anchor_date - med_start_date).days
-                    del med['MedStartInstant']
-                    
-                    # Handle logic on ending time of medication
-                    if med_end_date == datetime.max:
-                        # Still active
-                        med['med_end_instant'] = "ongoing"
-                    else:
-                        med['med_end_instant'] = -(anchor_date - med_end_date).days
-                    if 'MedEndInstant' in med.keys():
-                        del med['MedEndInstant']
-                    
-                    med['med_name'] = med['MedName']
-                    del med['MedName']
-                    med['med_strength'] = med['MedStrength']
-                    del med['MedStrength']
-                    med['med_form'] = med['MedForm']
-                    del med['MedForm']
-                    med['med_route'] = med['MedRoute']
-                    del med['MedRoute']
-                    med['med_freqency'] = med['MedFrequency']
-                    del med['MedFrequency']
-                    
-                    del med['MedSimpleGenericName']
-                    unique_medications[med_key] = med
+                    end_instant = -(anchor_date - med_end_date).days
+                
+                if not med_key in unique_medications.keys():
+                    unique_medications[med_key] = [[start_instant, end_instant]]
+                else:
+                    unique_medications[med_key].append([start_instant, end_instant])
+        
+    # Now for each medication, go through the time intervals and merge them
+    for med_key, intervals in unique_medications.items():
+        intervals.sort(key=lambda x:x[0]) # sort my starting time
+        merged = []
+        for interval in intervals:
+            if len(merged) == 0 or merged[-1][1] + MED_INTERVAL_TOLERNACE < interval[0]:
+                # New interval
+                merged.append(interval)
+            else:
+                # Merge this interval
+                merged[-1][1] = max(merged[-1][1], interval[1])
+        unique_medications[med_key] = merged
+    
+    # Now that all the time frames for each medication have been merged PER medication, that defines our unique medications that we care about
+    for med_key, disjoint_intervals in unique_medications.items():
+        for interval in disjoint_intervals:
+            processed_patient['active_medications'].append({
+                'med_start_instant': interval[0],
+                'med_end_instant': interval[1] if interval[1] < sys.maxsize else "ongoing",
+                'med_name': med_key[0],
+                'med_strength': med_key[1],
+                'med_form': med_key[2],
+                'med_route': med_key[3],
+                'med_frequency': med_key[4]
+            })
     
     # Now sort the encounters in reverse chronological order
     processed_patient['encounters'].sort(key=lambda x: x['details']['start_visit'], reverse=True)
     # Sort medications in reverse chronological order by starting date (since ending date may not be present)
-    processed_patient['active_medications'] = list(unique_medications.values())
     processed_patient['active_medications'].sort(key=lambda x: x['med_start_instant'], reverse=True)
     return processed_patient
     
@@ -150,14 +163,14 @@ if __name__ == "__main__":
     # Dry run test
     YEARS_BACK = 2
     from pathlib import Path
-    test_file = Path("test_data/cleaned_patient_FF1E56AE15FB21D74ABB78D4DA026C5E.json")
+    test_file = Path(os.environ['PATIENT_JSON_DIR']) / "patient_700E678B71CAB827718AE59CC697A7C2.json"
     with open(test_file, 'r') as f_orig:
         patient_dict = json.load(f_orig)
         anchor_date = find_anchor_date(patient_dict)
         if anchor_date != None:
             print(f"Found anchor date: {anchor_date}")
             sliced_dict = slice_and_convert_time(patient_dict, anchor_date, YEARS_BACK)
-            new_file = Path("test_data/sliced_patient_FF1E56AE15FB21D74ABB78D4DA026C5E.json")
+            new_file = Path("test_data/patient_700E678B71CAB827718AE59CC697A7C2.json")
             with open(new_file, 'w') as f_new:
                 json.dump(sliced_dict, f_new, indent=4)
         else:

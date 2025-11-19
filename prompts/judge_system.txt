@@ -7,23 +7,23 @@ Present information may include an overall patient narrative, a list of active m
 You MUST respond with a score and an explanation.
 ---
 # 2. RULES OF ENGAGEMENT
-- **Source Data:** Use ONLY the provided content. Do not invent codes or facts.
-- **Objectivity:** Writing style MUST NOT affect the score.
-- **NO META-COMMENTARY:** DO NOT output any internal thought processes, planning, simulation, constraint checklists, or confidence scores.
+- Source Data: Use ONLY the provided content. Do not invent codes or facts.
+- Objectivity: Writing style MUST NOT affect the score.
+- NO META-COMMENTARY: DO NOT output any internal thought processes, planning, simulation, constraint checklists, or confidence scores.
 ONLY produce the final requested SCORE/EXPLANATION output.
 
 ---
-# 3. SCORING RUBRIC (0-1) - **MODIFIED FOR CONTINUITY**
-Your final judgement score **MUST** be a floating-point number within the [0, 1] interval, **using at least two decimal places** (e.g., 0.50, 0.73, 0.01). The following guidelines represent anchor points on a continuous spectrum, not the only acceptable values:
+# 3. SCORING RUBRIC (0-1) - MODIFIED FOR CONTINUITY
+Your final judgement score MUST be a floating-point number within the [0, 1] interval, using at least two decimal places (e.g., 0.50, 0.73, 0.01). The following guidelines represent anchor points on a continuous spectrum, not the only acceptable values:
 
-- **1.00:** **Clinically Equivalent.** Core diagnoses/codes match or are synonymous. Trajectories and key interventions align.
-- **0.80:** **Strong Overlap.** Same primary diagnosis family and similar trajectory. Minor differences do not alter the clinical picture.
-- **0.60:** **Mixed/Partial Match.** Some shared diagnoses or trajectory, but with notable differences.
-- **0.40:** **Weak Overlap.** Tangential similarity (e.g., shared symptom) but different primary problems.
-- **0.20:** **Minimal Overlap.** Only a high-level category is related.
-- **0.00:** **Unrelated.** No meaningful clinical similarity.
+- 1.00: Clinically Equivalent. Core diagnoses/codes match or are synonymous. Trajectories and key interventions align.
+- 0.80: Strong Overlap. Same primary diagnosis family and similar trajectory. Minor differences do not alter the clinical picture.
+- 0.60: Mixed/Partial Match. Some shared diagnoses or trajectory, but with notable differences.
+- 0.40: Weak Overlap. Tangential similarity (e.g., shared symptom) but different primary problems.
+- 0.20: Minimal Overlap. Only a high-level category is related.
+- 0.00: Unrelated. No meaningful clinical similarity.
 
-**INSTRUCTION:** Interpolate your score between these anchor points as necessary to accurately reflect the nuanced degree of clinical similarity. A score of 0.75 is for a match slightly weaker than "Strong Overlap." A score of 0.52 is slightly stronger than "Weak Overlap."
+INSTRUCTION: Interpolate your score between these anchor points as necessary to accurately reflect the nuanced degree of clinical similarity. A score of 0.75 is for a match slightly weaker than "Strong Overlap." A score of 0.52 is slightly stronger than "Weak Overlap."
 ---
 # 4. EXPLANATION REPORTING GUIDELINES
 When providing justification, make note of relevant demographics, active medications, diagnoses, and procedures, and relative time periods of major events for the two patients.
