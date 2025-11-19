@@ -26,9 +26,53 @@ DEBUG_FILE = Path("test_data/debug.txt")
 
 # ---------------- public APIs ----------------
 
+def _breakup_encounter(base_dict: dict, encounter: dict, chunk_size: int) -> Iterator[dict]:
+    """
+    Yields a sequence of dictionaries which is the full encounter json partitioned iinto mangeable chunks, each including the base dictionary of the patient.
+    """
+    current_dict = copy.deepcopy(base_dict)
+    current_encounter_dict = {
+        'details': encounter['details']
+    }
+    current_diagnoses = []
+    for diagnosis in encounter['diagnoses']:
+        if len(str(current_dict)) + len(str(current_encounter_dict)) + len(str(diagnosis)) > chunk_size:
+            # Past the limit
+            current_dict['encounters'] = [current_encounter_dict]
+            yield copy.deepcopy(current_dict)
+            current_diagnoses = [diagnosis]
+        else:
+            # Append
+            current_diagnoses.append(diagnosis)
+        current_dict = copy.deepcopy(base_dict)
+        current_encounter_dict['diagnoses'] = current_diagnoses
+    
+    # Finally the last diagnoses to yield
+    current_dict['encounters'] = [current_encounter_dict]
+    yield copy.deepcopy(current_dict)
+    
+    # Move on to procedures
+    current_encounter_dict['diagnoses'] = [] # we don't want this to get in the way of our procedures.
+    current_procedures = []
+    for procedure in encounter['procedures']:
+        if len(str(current_dict)) + len(str(current_procedures)) + len(str(procedure)) > chunk_size:
+            # Past the limit
+            current_dict['encounters'] = [current_encounter_dict]
+            yield copy.deepcopy(current_dict)
+            current_procedures = [procedure]
+        else:
+            # Append
+            current_procedures.append(procedure)
+        current_dict = copy.deepcopy(base_dict)
+        current_encounter_dict['procedures'] = current_procedures
+    
+    # Finally the last diagnoses to yield
+    current_dict['encounters'] = [current_encounter_dict]
+    yield copy.deepcopy(current_dict)
+
 def _yield_patient_json_in_batches(full_patient_json: dict, chunk_size: int) -> Iterator[dict]:
     """
-    Yield a list of strings which is the full json partitioned into manageable chunks.
+    Yield a sequence of dictionaries which is the full json partitioned into manageable chunks.
     """
     base_dict = {
         "patient_id": full_patient_json["patient_id"],
@@ -40,17 +84,18 @@ def _yield_patient_json_in_batches(full_patient_json: dict, chunk_size: int) -> 
     
     current_chunk_medications = []
     current_dict = None
+    json_so_far = base_dict
     # Chunk from the base dictionary for all medications
     for medication in full_patient_json["active_medications"]:
-        current_chunk_medications.append(medication)
-        json_so_far = copy.deepcopy(base_dict)
-        json_so_far["active_medications"] = current_chunk_medications
-        if len(str(json_so_far)) > chunk_size:
+        if len(str(json_so_far)) + len(str(medication)) > chunk_size:
             # Past the limit
             yield current_dict
             current_chunk_medications = [medication]
         else:
-            current_dict = json_so_far
+            current_chunk_medications.append(medication)
+        json_so_far = copy.deepcopy(base_dict)
+        json_so_far["active_medications"] = current_chunk_medications
+        current_dict = json_so_far
     if len(current_chunk_medications) > 0:
         last_dict = copy.deepcopy(base_dict)
         last_dict['active_medications'] = current_chunk_medications
@@ -59,16 +104,22 @@ def _yield_patient_json_in_batches(full_patient_json: dict, chunk_size: int) -> 
     # Chunk from the base dictionary for all encounters
     current_dict = None
     current_chunk_encounters = []
+    json_so_far = base_dict
     for encounter in full_patient_json["encounters"]:
-        current_chunk_encounters.append(encounter)
+        if len(str(json_so_far)) + len(str(encounter)) > chunk_size:
+            # Past the limit
+            if len(current_chunk_encounters) > 0:
+                yield current_dict
+                current_chunk_encounters = [encounter]
+            else:
+                # This single encounter was too big
+                for encounter_chunk in _breakup_encounter(base_dict, encounter, chunk_size):
+                    yield encounter_chunk
+        else:
+            current_chunk_encounters.append(encounter)
         json_so_far = copy.deepcopy(base_dict)
         json_so_far["encounters"] = current_chunk_encounters
-        if len(str(json_so_far)) > chunk_size:
-            # Past the limit
-            yield current_dict
-            current_chunk_encounters = [encounter]
-        else:
-            current_dict = json_so_far
+        current_dict = json_so_far
     if len(current_chunk_encounters) > 0:
         last_dict = copy.deepcopy(base_dict)
         last_dict['encounters'] = current_chunk_encounters
