@@ -34,9 +34,9 @@ def _embed_pair(embedder: PatientEmbedder, pids_with_narratives: List[Tuple[str,
     indices = [i for i in range(len(pids_with_narratives)) if not vectors_exist(pids_with_narratives[i][0])]
     narratives = [read_text(pids_with_narratives[i][1]) for i in indices]
     sections = parse_narrative_sections(narratives)
-    summaries = [section['segment_narrative'] for section in sections]
-    medications = [section['segment_medications'] for section in sections]
-    diagnoses = [section['segment_diagnoses'] for section in sections]
+    summaries = [section['summary'] for section in sections]
+    medications = [section['medications'] for section in sections]
+    diagnoses = [section['diagnoses'] for section in sections]
     
     vec_paths_full = [FULL_VEC_DIR / f"full_{pids_with_narratives[i][0]}.npy" for i in indices]
     vec_paths_summary = [SUMMARY_VEC_DIR / f"summary_{pids_with_narratives[i][0]}.npy" for i in indices]
