@@ -12,7 +12,7 @@ num_narratives = int(os.environ['NUM_SHAP_NARRATIVES'])
 record_every = 10
 
 def parse_test_narratives() -> Dict[str, Dict[str, str]]:
-    # For each patient, return a dictionary of their segment_narrative, segment_medications, segment_diagnoses, and full_text
+    # For each patient, return a dictionary of their summary, medications, diagnoses, and full_text
     os.makedirs(narratives_dir, exist_ok=True)
     all_narratives = list(narratives_dir.glob("*.md"))
     random.seed(int(os.environ['SEED']))

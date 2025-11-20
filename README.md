@@ -8,19 +8,19 @@ This project investigates the contribution of different EHR narrative sections t
 
 1.  **Input Data:** A collection of patient EHR narratives (as `.md` files).
 2.  **Parsing:** Each narrative is parsed to extract text from three distinct sections:
-    * `segment_narrative` (The "Patient Summary Narrative")
-    * `segment_medications` (The "Medications" list)
-    * `segment_diagnoses` (The "Diagnostics" list)
-3.  **Components:** For each patient, four text components are stored: `full_text`, `segment_narrative`, `segment_medications`, and `segment_diagnoses`.
+    * `summary` (The "Patient Summary Narrative")
+    * `medications` (The "Medications" list)
+    * `diagnoses` (The "Diagnostics" list)
+3.  **Components:** For each patient, four text components are stored: `full_text`, `summary`, `medications`, and `diagnoses`.
 
 ## 3. Methodology
 
 Two parallel SHAP analyses are conducted. Both create a feature matrix `X` and a target vector `y` from all possible pairs of patients in the dataset.
 
 * **Features (X):** A 3-dimensional vector representing the similarity of the parts:
-    * `X_1`: Similarity of `segment_narrative`
-    * `X_2`: Similarity of `segment_medications`
-    * `X_3`: Similarity of `segment_diagnoses`
+    * `X_1`: Similarity of `summary`
+    * `X_2`: Similarity of `medications`
+    * `X_3`: Similarity of `diagnoses`
 * **Target (y):** A scalar value representing the similarity of the whole:
     * `y`: Similarity of `full_text`
 

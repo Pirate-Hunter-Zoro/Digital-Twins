@@ -33,25 +33,25 @@ def embed_batch(batch_ids: list[str], vector_components: Dict[str, Dict[str, np.
     
     if len(batch_ids_missing_vector) > 0:
         full_texts_missing = [string_components[id]['full'] for id in batch_ids_missing_vector]
-        segment_narratives_missing = [string_components[id]['summary'] for id in batch_ids_missing_vector]
-        segment_medications_lists_missing = [string_components[id]['medications'] for id in batch_ids_missing_vector]
-        segment_diagnoses_lists_missing = [string_components[id]['diagnoses'] for id in batch_ids_missing_vector]
+        summarys_missing = [string_components[id]['summary'] for id in batch_ids_missing_vector]
+        medications_lists_missing = [string_components[id]['medications'] for id in batch_ids_missing_vector]
+        diagnoses_lists_missing = [string_components[id]['diagnoses'] for id in batch_ids_missing_vector]
         
         full_text_vectors_missing = embedder.vectorize(full_texts_missing)
-        segment_narratives_vectors_missing = embedder.vectorize(segment_narratives_missing)
-        segment_medications_lists_vectors_missing = embedder.vectorize(segment_medications_lists_missing)
-        segment_diagnoses_lists_vectors_missing = embedder.vectorize(segment_diagnoses_lists_missing)
+        summarys_vectors_missing = embedder.vectorize(summarys_missing)
+        medications_lists_vectors_missing = embedder.vectorize(medications_lists_missing)
+        diagnoses_lists_vectors_missing = embedder.vectorize(diagnoses_lists_missing)
     
         for i,id in enumerate(batch_ids_missing_vector):
             # Store the vectors in a dictionary as well as a file
             vector_components[id]['full'] = full_text_vectors_missing[i]
             write_npy(FULL_VEC_DIR / f'full_{id}.npy', full_text_vectors_missing[i])
-            vector_components[id]['summary'] = segment_narratives_vectors_missing[i]
-            write_npy(SUMMARY_VEC_DIR / f'summary_{id}.npy', segment_narratives_vectors_missing[i])
-            vector_components[id]['medications'] = segment_medications_lists_vectors_missing[i]
-            write_npy(MEDICATIONS_VEC_DIR / f'medications_{id}.npy', segment_medications_lists_vectors_missing[i])
-            vector_components[id]['diagnoses'] = segment_diagnoses_lists_vectors_missing[i]
-            write_npy(DIAGNOSES_VEC_DIR / f'diagnoses_{id}.npy', segment_diagnoses_lists_vectors_missing[i])
+            vector_components[id]['summary'] = summarys_vectors_missing[i]
+            write_npy(SUMMARY_VEC_DIR / f'summary_{id}.npy', summarys_vectors_missing[i])
+            vector_components[id]['medications'] = medications_lists_vectors_missing[i]
+            write_npy(MEDICATIONS_VEC_DIR / f'medications_{id}.npy', medications_lists_vectors_missing[i])
+            vector_components[id]['diagnoses'] = diagnoses_lists_vectors_missing[i]
+            write_npy(DIAGNOSES_VEC_DIR / f'diagnoses_{id}.npy', diagnoses_lists_vectors_missing[i])
 
 def forge_test_vectors(batch_size: int=4) -> Dict[str, Dict[str, np.array]]:
     # Convert all strings into vectors
