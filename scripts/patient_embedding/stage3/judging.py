@@ -30,7 +30,7 @@ def init_worker(seg: str="full", scr: bool=False):
     segment = seg
     scrub = scr
     
-def judge_similarity(na: str, nb: str) -> Tuple[float, str]:
+def judge_similarity(pid: str, na: str, nb: str) -> Tuple[float, str]:
     # Query generative model to judge the semantic similarity between two text dumps of patient data
     try:
         # Get the system prompt.
@@ -61,9 +61,9 @@ def judge_similarity(na: str, nb: str) -> Tuple[float, str]:
         
         # Explicitly check for a non-compliant response
         if j_score is None:
-            raise ValueError(f"LLM response did not contain a 'SCORE:' line. Content was: {resp}")
+            raise ValueError(f"LLM response did not contain a 'SCORE:' line for pair id {pid}. Content was: {resp}")
     except Exception as e:
-        raise ValueError(f"Error in querying judge: {e}")
+        raise ValueError(f"Error in querying judge for pair id {pid}: {e}")
     
     return (j_score, j_rationale)
 
@@ -91,7 +91,7 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float]) -> Dict[str, Any]:
         na = parse_single_narrative_sections(read_text(na_path))
         nb = parse_single_narrative_sections(read_text(nb_path))
         
-        j_score, j_rationale = judge_similarity(na[segment], nb[segment])
+        j_score, j_rationale = judge_similarity(pid, na[segment], nb[segment])
         if j_score != float("nan"):
             # We can save this response
             with open(judge_score_path, 'w') as f:

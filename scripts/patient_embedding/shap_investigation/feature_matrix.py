@@ -86,7 +86,7 @@ def get_judge_score(pid: str, na: str, nb: str, client: VllmClient, prompt_loade
             
             # Explicitly check for a non-compliant response
             if j_score is None:
-                raise ValueError(f"LLM response did not contain a 'SCORE:' line. Content was: {resp}")
+                raise ValueError(f"LLM response did not contain a 'SCORE:' line for pair id {pid}. Content was: {resp}")
             else:
                 # SAVE the judge score - that took a lot of work to produce after all...
                 with open(judge_score_path, 'w') as f:
