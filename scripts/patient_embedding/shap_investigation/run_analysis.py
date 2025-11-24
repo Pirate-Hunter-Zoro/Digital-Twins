@@ -74,7 +74,7 @@ def run_embedding_shap_analysis():
     
     with multiprocessing.Pool(processes=int(os.environ['NUM_SHAP_PROCESSES']), initializer=init_worker, initargs=(X_train, X_test, y_train, y_test, feature_names)) as pool:
         for results_and_values in pool.imap_unordered(run_model_analysis, jobs_to_run):
-            save_dir = Path(os.environ['ANALYSIS_DIR']) / "shap_analysis" / f"embedding"
+            save_dir = Path(os.environ['SHAP_DIR']) / f"embedding"
             os.makedirs(save_dir, exist_ok=True)
             
             # Obtain values
@@ -112,7 +112,7 @@ def run_judge_shap_analysis():
     
     with multiprocessing.Pool(processes=int(os.environ['NUM_SHAP_PROCESSES']), initializer=init_worker, initargs=(X_train, X_test, y_train, y_test, feature_names)) as pool:
         for results_and_values in pool.imap_unordered(run_model_analysis, jobs_to_run):
-            save_dir = Path(os.environ['ANALYSIS_DIR']) / "shap_analysis" / f"judging"
+            save_dir = Path(os.environ['SHAP_DIR']) / f"judging"
             os.makedirs(save_dir, exist_ok=True)
             
             # Obtain values

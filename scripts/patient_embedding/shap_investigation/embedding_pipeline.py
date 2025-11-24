@@ -5,7 +5,6 @@ from typing import Dict
 import numpy as np
 import pickle
 import os
-import multiprocessing
 from pathlib import Path
 from dotenv import load_dotenv
 
