@@ -110,7 +110,6 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float]) -> Dict[str, Any]:
         "cosine": cosine,
         "judge_score": j_score, 
         "judge_rationale": j_rationale,
-        "diff": cosine - j_score,
     }
 
 def score_pairs(pairs: List[Tuple[str,str,float]], segment: str) -> Iterator[Dict[str, Any]]:

@@ -18,11 +18,8 @@ from .discordant import write_discordant
 
 COUNTER_INTERVAL = 5
 
-def handle_plotting(label: str, plots_dir: Path, judge_array: np.array, cos_array: np.array, diff_array: np.array, norm_judge_array: np.array, norm_cos_array: np.array, diff_norm_array: np.array):
+def handle_plotting(label: str, plots_dir: Path, judge_array: np.array, cos_array: np.array):
     _ = write_spearman(plots_dir, f"spearman_rho_judge_vs_cos_{label}", cos_array, judge_array)
-    _ = write_spearman(plots_dir, f"spearman_rho_norm_judge_vs_norm_cos_{label}", norm_cos_array, norm_judge_array)
-         
-    histogram(diff_array.tolist(), "Cosine minus Judge", plots_dir / f"histogram_cos_{label}_minus_judge.png")
     
     histogram(cos_array.tolist(), 'Cosine', plots_dir / f"histogram_cos_{label}.png")
     
@@ -31,16 +28,6 @@ def handle_plotting(label: str, plots_dir: Path, judge_array: np.array, cos_arra
     scatter(cos_array.tolist(), judge_array.tolist(),
         "Judge vs Cosine", plots_dir / f"scatter_judge_vs_cos_{label}.png",
         "cosine", "judge_score")
-    
-    histogram(diff_norm_array.tolist(), "Normalized Cosine minus Normalized Judge", plots_dir / f"histogram_normalzied_cos_{label}_minus_normalized_judge.png")
-    
-    histogram(norm_cos_array.tolist(), 'Normalized Cosine', plots_dir / f"histogram_normalized_cos_{label}.png")
-    
-    histogram(norm_judge_array.tolist(), "Normalized Judge", plots_dir / f"histogram_normalized_judge_{label}")
-    
-    scatter(norm_cos_array.tolist(), norm_judge_array.tolist(),
-        "Normalized Judge vs Normalized Cosine", plots_dir / f"scatter_normalized_judge_vs_normalized_cos_{label}.png",
-        "norm_cosine", "norm_judge_score")
     
 def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], float], out_dir: Path, scrub=False):
     # cos_func will find the cosine similarity of either the entire narrative, just the summary, just the medications, or just the diagnoses - depends on which callable gets passed into this function
@@ -86,23 +73,11 @@ def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], 
     
     judge_array = df_pairs["judge_score"]
     cos_array = df_pairs["cosine"]
-    diff_array = df_pairs["diff"] # Difference between cosine score and judge score
-    norm_judge_array = (judge_array - judge_array.min()) / judge_array.ptp()
-    norm_cos_array = (cos_array - cos_array.min()) / cos_array.ptp()
-    diff_norm_array = norm_cos_array - norm_judge_array # Difference between normalized cosine and normalized judge score
-    # Store in the data frame 
-    df_pairs["judge_score_norm"] = norm_judge_array
-    df_pairs["cosine_norm"] = norm_cos_array
-    df_pairs["diff_norm"] = diff_norm_array
     
     plots_dir = out_dir / "plots"
     os.makedirs(plots_dir, exist_ok=True)
-    handle_plotting(label, plots_dir, judge_array, cos_array, diff_array, norm_judge_array, norm_cos_array, diff_norm_array)
-    write_discordant(
-                    out_dir, 
-                    df_pairs, 
-                    int(os.environ['DISCORDANT_DIFFERENCE_STDEV']), 
-                    )
+    handle_plotting(label, plots_dir, judge_array, cos_array)
+    write_discordant(out_dir, df_pairs)
 
 def run() -> None:
     vec_dir  = Path(os.environ['VECTORS_DIR'])

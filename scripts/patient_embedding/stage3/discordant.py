@@ -4,11 +4,14 @@ Selects LLM-high/Cos-low and Cos-high/LLM-low pairs and writes markdown + parque
 from __future__ import annotations
 import math
 from pathlib import Path
-from typing import Tuple
 import pandas as pd
-import numpy as np
 import os
+import numpy as np
 from patient_embedding.shared.io import read_text, write_text
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def pair_md(dfsub: pd.DataFrame, title: str) -> str:
     lines = [f"# {title}", ""]
@@ -38,25 +41,21 @@ def pair_md(dfsub: pd.DataFrame, title: str) -> str:
         ]
     return "\n".join(lines)
 
-def write_discordant(out_dir: Path, df_pairs: pd.DataFrame, num_std: int) -> None:
-    diff_col = "diff_norm"
+def write_discordant(out_dir: Path, df_pairs: pd.DataFrame) -> None:
+    low_percentile = int(os.environ['DISCORDANT_LOW_PERCENTILE'])
+    low_percentile_cos = np.percentile(df_pairs['cosine'], low_percentile)
+    low_percentile_judge = np.percentile(df_pairs['judge_score'], low_percentile)
     
-    differences = df_pairs[diff_col]
-    mean_diff = np.mean(differences)
-    std_diff = np.std(differences)
-    low_threshold = mean_diff - num_std*std_diff
-    high_threshold = mean_diff + num_std*std_diff
+    high_percentile = int(os.environ['DISCORDANT_HIGH_PERCENTILE'])
+    high_percentile_cos = np.percentile(df_pairs['cosine'], high_percentile)
+    high_percentile_judge = np.percentile(df_pairs['judge_score'], high_percentile)
     
-    hl = df_pairs[df_pairs[diff_col] <= low_threshold]
-    lh = df_pairs[df_pairs[diff_col] >= high_threshold]
+    hl = df_pairs[df_pairs['judge_score'] >= high_percentile_judge and df_pairs['cosine'] <= low_percentile_cos]
+    lh = df_pairs[df_pairs['judge_score'] <= low_percentile_judge and df_pairs['cosine'] >= high_percentile_cos]
     
-    try:
-        hl.to_parquet(out_dir / f"discordant_llmHigh_cosLow.parquet", index=False)
-        lh.to_parquet(out_dir / f"discordant_cosHigh_llmLow.parquet", index=False)
-    except Exception:
-        hl.to_csv(out_dir / f"discordant_llmHigh_cosLow.csv", index=False)
-        lh.to_csv(out_dir / f"discordant_cosHigh_llmLow.csv", index=False)
-
+    hl.to_parquet(out_dir / f"discordant_llmHigh_cosLow.parquet", index=False)
+    lh.to_parquet(out_dir / f"discordant_cosHigh_llmLow.parquet", index=False)
+    
     write_text(out_dir / f"discordant_llmHigh_cosLow.md",
                 pair_md(hl, "LLM-high / Cosine-low"))
     write_text(out_dir / f"discordant_cosHigh_llmLow.md",
