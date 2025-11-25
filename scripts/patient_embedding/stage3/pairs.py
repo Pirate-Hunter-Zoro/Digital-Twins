@@ -3,11 +3,13 @@
 from __future__ import annotations
 import os
 import random
-from typing import Callable, Dict, List, Tuple
-import pandas as pd
+from typing import Callable, List, Tuple
 from itertools import combinations
-import math
 from pathlib import Path
+from patient_embedding.shared.plots import histogram
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def pair_id(a: str, b: str) -> str:
     """Creates a canonical, order-independent ID for a pair."""
@@ -66,6 +68,10 @@ def build_pairs(
             if i > 0 and i % 5000 == 0:
                 print(f"[Stage3] ...scanned {i} / {len(all_possible_pairs)} pairs")
             pairs_by_similarity.append((a, b, cos_func(a,b)))
+        
+        # Create histogram of all cosine values
+        similarities = [pair[2] for pair in pairs_by_similarity]
+        histogram(similarities, f"{str(cos_func)}_all_pairs_cosine_similarity.png", Path(os.environ['ANALYSIS_DIR']))
         
         pairs_by_similarity.sort(key = lambda x: x[2])
         lowest = pairs_by_similarity[0][2]

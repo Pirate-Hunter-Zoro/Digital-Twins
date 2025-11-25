@@ -8,7 +8,7 @@ import numpy as np, pandas as pd
 from typing import Callable
 
 from patient_embedding.shared.io import ensure_dir
-from patient_embedding.shared.plots import scatter, histogram
+from patient_embedding.shared.plots import scatter
 from patient_embedding.shared.metrics import write_spearman
 from .cosine_calculator import all_cos_funcs
 from .pairs import build_pairs, pair_id
@@ -20,10 +20,6 @@ COUNTER_INTERVAL = 5
 
 def handle_plotting(label: str, plots_dir: Path, judge_array: np.array, cos_array: np.array):
     _ = write_spearman(plots_dir, f"spearman_rho_judge_vs_cos_{label}", cos_array, judge_array)
-    
-    histogram(cos_array.tolist(), 'Cosine', plots_dir / f"histogram_cos_{label}.png")
-    
-    histogram(judge_array.tolist(), "Judge", plots_dir / f"histogram_judge_{label}")
     
     scatter(cos_array.tolist(), judge_array.tolist(),
         "Judge vs Cosine", plots_dir / f"scatter_judge_vs_cos_{label}.png",

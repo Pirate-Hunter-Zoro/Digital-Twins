@@ -29,7 +29,6 @@ def vectors_exist(pid: str) -> bool:
 
 
 def _embed_pair(embedder: PatientEmbedder, pids_with_narratives: List[Tuple[str, Path]]):
-    pids = [pid_with_narrative[0] for pid_with_narrative in pids_with_narratives]
     # Filter by only non-existant vectors
     indices = [i for i in range(len(pids_with_narratives)) if not vectors_exist(pids_with_narratives[i][0])]
     narratives = [read_text(pids_with_narratives[i][1]) for i in indices]
@@ -43,23 +42,18 @@ def _embed_pair(embedder: PatientEmbedder, pids_with_narratives: List[Tuple[str,
     vec_paths_medications = [MEDICATIONS_VEC_DIR / f"medications_{pids_with_narratives[i][0]}.npy" for i in indices]
     vec_paths_diagnoses = [DIAGNOSES_VEC_DIR / f"diagnoses_{pids_with_narratives[i][0]}.npy" for i in indices]
     
-    # Call embedder
-    try:
-        vecs_full = embedder.vectorize(narratives)
-        vecs_summary = embedder.vectorize(summaries)
-        vecs_medications = embedder.vectorize(medications)
-        vecs_diagnoses = embedder.vectorize(diagnoses)
-        for vec_path, vec in zip(vec_paths_full, vecs_full):
-            write_npy(vec_path, vec)
-        for vec_path, vec in zip(vec_paths_summary, vecs_summary):
-            write_npy(vec_path, vec)
-        for vec_path, vec in zip(vec_paths_medications, vecs_medications):
-            write_npy(vec_path, vec)
-        for vec_path, vec in zip(vec_paths_diagnoses, vecs_diagnoses):
-            write_npy(vec_path, vec)
-    except Exception as e:
-        print(f"[Stage2][err] {pid} : {e}", flush=True)
-        
+    vecs_full = embedder.vectorize(narratives)
+    vecs_summary = embedder.vectorize(summaries)
+    vecs_medications = embedder.vectorize(medications)
+    vecs_diagnoses = embedder.vectorize(diagnoses)
+    for vec_path, vec in zip(vec_paths_full, vecs_full):
+        write_npy(vec_path, vec)
+    for vec_path, vec in zip(vec_paths_summary, vecs_summary):
+        write_npy(vec_path, vec)
+    for vec_path, vec in zip(vec_paths_medications, vecs_medications):
+        write_npy(vec_path, vec)
+    for vec_path, vec in zip(vec_paths_diagnoses, vecs_diagnoses):
+        write_npy(vec_path, vec)    
         
 def run_embed_loop(items: List[Tuple[str, Path]]):
     print("Loading Embedding Model...", flush=True)
