@@ -50,8 +50,8 @@ def write_discordant(out_dir: Path, df_pairs: pd.DataFrame) -> None:
     high_percentile_cos = np.percentile(df_pairs['cosine'], high_percentile)
     high_percentile_judge = np.percentile(df_pairs['judge_score'], high_percentile)
     
-    hl = df_pairs[df_pairs['judge_score'] >= high_percentile_judge and df_pairs['cosine'] <= low_percentile_cos]
-    lh = df_pairs[df_pairs['judge_score'] <= low_percentile_judge and df_pairs['cosine'] >= high_percentile_cos]
+    hl = df_pairs[(df_pairs['judge_score'] >= high_percentile_judge) & (df_pairs['cosine'] <= low_percentile_cos)]
+    lh = df_pairs[(df_pairs['judge_score'] <= low_percentile_judge) & (df_pairs['cosine'] >= high_percentile_cos)]
     
     hl.to_parquet(out_dir / f"discordant_llmHigh_cosLow.parquet", index=False)
     lh.to_parquet(out_dir / f"discordant_cosHigh_llmLow.parquet", index=False)
