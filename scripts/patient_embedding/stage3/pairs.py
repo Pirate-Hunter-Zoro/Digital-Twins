@@ -71,7 +71,7 @@ def build_pairs(
         
         # Create histogram of all cosine values
         similarities = [pair[2] for pair in pairs_by_similarity]
-        histogram(similarities, f"Cosine Similarity of All Pairs ({str(cos_func)})", Path(os.environ['ANALYSIS_DIR']) / f"{str(cos_func)}_cos_sim_all_pairs")
+        histogram(similarities, f"Cosine Similarity of All Pairs ({str(cos_func)})", Path(os.environ['ANALYSIS_DIR']) / f"{str(cos_func)}_cos_sim_all_pairs.png")
         
         pairs_by_similarity.sort(key = lambda x: x[2])
         lowest = pairs_by_similarity[0][2]

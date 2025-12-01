@@ -4,10 +4,7 @@ Embed each narrative, write .npy + audit .embed.txt."""
 from __future__ import annotations
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
-import multiprocessing
-
-import numpy as np
+from typing import List, Tuple
 from common.models.patient_embedder import PatientEmbedder
 from patient_embedding.shared.io import read_text
 from patient_embedding.shared.narrative_parsing import parse_narrative_sections

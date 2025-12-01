@@ -1,5 +1,4 @@
 import pandas as pd
-import sqlite3
 from pathlib import Path
 import os
 from dotenv import load_dotenv
@@ -8,8 +7,11 @@ import multiprocessing
 import re
 
 load_dotenv()
-db_path = Path(os.environ['DB_PATH'])
 person_csv_path = Path(os.environ['PERSON_CSV_PATH'])
+encounter_csv_path = Path(os.environ['ENCOUNTER_CSV_PATH'])
+diagnosis_csv_path = Path(os.environ['DIAGNOSIS_CSV_PATH'])
+medication_csv_path = Path(os.environ['MEDICATION_CSV_PATH'])
+procedure_csv_path = Path(os.environ['PROCEDURE_CSV_PATH'])
 output_json_dir = Path(os.environ['PATIENT_JSON_DIR'])
 
 CHECKPOINT = 1
@@ -33,11 +35,6 @@ IMPORTANT_PROCEDURE_FIELDS = [
     "ProcedureStartInstant",
     "ProcedureEndInstant"
 ]
-
-def init_worker(db_path: Path):
-    global connection
-    # Connect to the database for other patient data
-    connection = sqlite3.connect(db_path)
     
 def clean_encounter(encounter: dict) -> dict:
     # Omit useless bloated information and grab only the details that matter
@@ -107,15 +104,16 @@ def process_patient(patient_id: str) -> any:
         return False
         
     global person_df
+    global encounter_df
+    global diagnosis_df
+    global medication_df
+    global procedure_df
     patient_dict = {'patient_id':patient_id}
     patient_demographics = person_df.loc[patient_id].to_dict()
     patient_dict['demographics'] = patient_demographics
     # Grab all the encounters of this patient (each with an encounter ID that we can use to get its other information)
     patient_dict['encounters'] = []
-    patient_encounters = pd.read_sql_query('SELECT * FROM Encounter_Table WHERE PatientEpicId_SH = ?', connection, params=(patient_id,))
-    patient_diagnoses = pd.read_sql_query('SELECT * FROM Diagnosis_Table WHERE PatientEpicId_SH = ?', connection, params=(patient_id,))
-    patient_medications = pd.read_sql_query('SELECT * FROM Medication_Table WHERE PatientEpicId_SH = ?', connection, params=(patient_id,))
-    patient_procedures = pd.read_sql_query('SELECT * FROM Procedure_Table WHERE PatientEpicId_SH = ?', connection, params=(patient_id,))
+    
     for _, encounter_row in patient_encounters.iterrows():
         encounter_id = encounter_row['EncounterId_SH']
         encounter_dict = {'details':encounter_row.to_dict()}
@@ -141,6 +139,11 @@ def process_patient(patient_id: str) -> any:
 dry_run = False
 
 if __name__ == "__main__":
+    global person_df
+    global encounter_df
+    global diagnosis_df
+    global medication_df
+    global procedure_df
     
     if dry_run:
         target_json = Path("test_data/patient_FF1E56AE15FB21D74ABB78D4DA026C5E.json")
@@ -155,20 +158,17 @@ if __name__ == "__main__":
         
     else:
         print("Started patient json creation...", flush=True)
-        # Connect to the database for other patient data
-        connection = sqlite3.connect(db_path)
-        cursor = connection.cursor()
-        cursor.execute('SELECT DISTINCT PatientEpicId_SH FROM Encounter_Table;')
-        patient_ids_with_visits = cursor.fetchall()
-        # Turn from tuples to strings
-        patient_ids_with_visits = [patient_tuple[0] for patient_tuple in patient_ids_with_visits]
-        
+       
         person_df = pd.read_csv(person_csv_path, dtype={23: str})
         # Make person id consistent with the .db file
         person_df.rename(columns={'person_id': 'PatientEpicId_SH'}, inplace=True)
         person_df.set_index('PatientEpicId_SH', inplace=True)
         
-        connection.close()
+        encounter_df = pd.read_csv(encounter_csv_path, dtype={23: str, 24: str})
+        diagnosis_df = pd.read_csv(diagnosis_csv_path, dtype={23: str, 24: str})
+        medication_df = pd.read_csv(medication_csv_path, dtype={23: str, 24: str})
+        procedure_df = pd.read_csv(procedure_csv_path, dtype={23: str, 24: str})
+        
         existing_patient_json = list(output_json_dir.glob("*.json"))
         print(f"Found {len(patient_ids_with_visits)-len(existing_patient_json)} new patients to create json for...", flush=True)
         

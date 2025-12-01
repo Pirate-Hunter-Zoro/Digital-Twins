@@ -2,15 +2,7 @@
 Initializes embedder, gathers narratives, runs embedding loop."""
 
 from __future__ import annotations
-import argparse, os, time
 from pathlib import Path
-from typing import Any, Dict, List
-import numpy as np
-import math
-
-from common.models.patient_embedder import PatientEmbedder
-
-from patient_embedding.shared.io import read_text
 from .embed_loop import run_embed_loop
 import os
 from dotenv import load_dotenv
