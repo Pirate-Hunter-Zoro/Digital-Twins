@@ -12,29 +12,31 @@ from patient_embedding.shared.io import ensure_dir
 
 def histogram(x: List[float], title: str, outpath: Path) -> None:
     # Create a new figure
-    plt.figure(figsize=(10, 6))
+    x = [v for v in x if (isinstance(v, float) and (not math.isnan(v)) and (not math.isinf(v)))]
+    if len(x) > 0:
+        plt.figure(figsize=(10, 6))
     
-    # Plot the histogram
-    # 'bins='auto'' lets matplotlib decide the optimal number of bins
-    plt.hist(x, bins='auto', edgecolor='black', alpha=0.7)
-    
-    # Set the title and labels
-    plt.title(title)
-    plt.xlabel("Value")
-    plt.ylabel("Frequency")
-    
-    # Add a grid for better readability
-    plt.grid(axis='y', alpha=0.75)
-    
-    # Ensure the parent directory exists
-    outpath.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Save the figure to the specified Path object
-    # bbox_inches='tight' helps prevent the title or labels from being cut off
-    plt.savefig(outpath, format='png', bbox_inches='tight')
-    
-    # Close the plot to free up memory
-    plt.close()
+        # Plot the histogram
+        # 'bins='auto'' lets matplotlib decide the optimal number of bins
+        plt.hist(x, bins=100, edgecolor='black', alpha=0.7)
+        
+        # Set the title and labels
+        plt.title(title)
+        plt.xlabel("Value")
+        plt.ylabel("Frequency")
+        
+        # Add a grid for better readability
+        plt.grid(axis='y', alpha=0.75)
+        
+        # Ensure the parent directory exists
+        outpath.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save the figure to the specified Path object
+        # bbox_inches='tight' helps prevent the title or labels from being cut off
+        plt.savefig(outpath, format='png', bbox_inches='tight')
+        
+        # Close the plot to free up memory
+        plt.close()
 
 def scatter(xs: List[Optional[float]], ys: List[Optional[float]], title: str, outpath: Path,
            xlabel: str, ylabel: str) -> None:
