@@ -12,7 +12,7 @@
 GPUS=2                      
 CPUS=32      
 CONDA_ENV=venv
-MODEL_ID=/media/studies/ehr_study/data-EHR-prepped/Mikey-Digital-Twins/models/google_medgemma-27b-text-it
+MODEL_ID=/media/studies/ehr_study/analysis/mferguson/models/google_medgemma-27b-text-it
 TP_SIZE=2  
 PP_SIZE=1                   
 PORT=8000
