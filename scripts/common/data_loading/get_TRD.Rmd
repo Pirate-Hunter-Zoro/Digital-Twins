@@ -1,0 +1,341 @@
+---
+title: "TRD"
+output: html_document
+date: "2025-09-18"
+---
+
+<style type="text/css">
+.main-container {
+max-width: 80% !important;
+margin: auto;
+}
+</style>
+
+```{r, include=FALSE}
+source("../R/my_functions.R")
+notebook_setup()
+
+options(scipen = 999)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+# Load in the Medication table
+```{r}
+folder_date <- "25_09_10"
+file_date <- "25_09_10"
+my_version <- "v1"
+
+load(paste0("../PrepData-", folder_date, "/Medication_Table-", file_date, "-", my_version, ".rds"))
+medi_table_prep <- medi_table_prep %>% dplyr::select(-EncounterId_SH)
+medi_table_prep %>%
+  my_kable_table()
+```
+
+# Frequency of Pharmaceutical Classes in the dataset
+```{r}
+medi_table_prep$MedPharmaceuticalClass %>% 
+  table() %>% 
+  as.data.frame %>% 
+  rename(Drug = ".") %>% 
+  arrange(-Freq) %>% 
+  mutate(Freq = comma(Freq)) %>% 
+  my_kable_table(cut = F)
+```
+
+# Filter to antidepressants
+```{r}
+ad_record <- medi_table_prep %>% filter(MedPharmaceuticalClass == "Antidepressants") %>% mutate(across(where(is.factor), ~as.character(.)))
+write.table(unique(ad_record$PatientEpicId_SH), paste0("../OutputData-", folder_date, "/IDs-Antidepressant_Use.txt"), row.names = F, col.names = F)
+ad_record %>%
+  my_kable_table()
+```
+
+# Frequency of Order Types in the Antidepressants Dataset.
+```{r}
+ad_record$MedOrderType %>% table() %>% as.data.frame %>% rename(Drug = ".") %>% arrange(-Freq) %>% mutate(Freq = comma(Freq)) %>% 
+  my_kable_table()
+```
+
+# Frequency of Medication Names in the Antidepressants Dataset.
+```{r}
+ad_record$MedSimpleGenericName %>% table() %>% as.data.frame %>% rename(Drug = ".") %>% arrange(-Freq) %>% mutate(Freq = comma(Freq)) %>% 
+  my_kable_table(cut = F)
+```
+
+# Filter the Diagnosis Table to MDD
+```{r}
+# mdd_codes <- c("296.2", "296.3", "300.4", "311", "F32", "F33", "F34.1")
+load(paste0("../PrepData-", folder_date, "/MDD-Diagnosis_Table-", file_date, "-", my_version, ".rds"))
+mdd_record <- diag_record
+load(paste0("../PrepData-", folder_date, "/MDD_IDs-", file_date, "-", my_version, ".rds"))
+mdd_id <- data.frame(PatientEpicId_SH = diag_id)
+mdd_record %>%
+  my_kable_table()
+```
+
+# Define Bipolar Disorder and Schizophrenic Participants.
+```{r}
+# bd_codes <- c("296.0", "296.4", "296.5", "296.6", "296.7", "296.8", "F30", "F31")
+load(paste0("../PrepData-", folder_date, "/BD_IDs-", file_date, "-", my_version, ".rds"))
+bd_id <- data.frame(PatientEpicId_SH = diag_id)
+
+# sch_codes <- c("295", "298", "F20", "F23", "F25", "F28", "F29")
+load(paste0("../PrepData-", folder_date, "/SCH_IDs-", file_date, "-", my_version, ".rds"))
+sch_id <- data.frame(PatientEpicId_SH = diag_id)
+
+cat(paste0("N BD: ",(bd_id %>% nrow %>% comma), "\n"))
+cat(paste0("N SCH: ",(sch_id %>% nrow %>% comma)))
+```
+
+# Identify First MDD Record.
+```{r}
+mdd_first_record <- mdd_record %>% 
+  group_by(PatientEpicId_SH) %>% 
+  filter(Encounter_StartVisit == min(Encounter_StartVisit)) %>% 
+  dplyr::select(PatientEpicId_SH, Encounter_StartVisit) %>%
+  rename(first_depression_dx_date = Encounter_StartVisit) %>%
+  slice(1) %>%
+  ungroup()
+
+mdd_first_record %>% 
+  my_kable_table()
+```
+
+# Total MDD in Dataset.
+```{r}
+paste0("There are ",(mdd_first_record %>% nrow %>% comma)," participants in the dataset with Depression.") %>% cat
+```
+
+```{r}
+cat(paste0("There are ",  (mdd_id %>% filter(!PatientEpicId_SH %in% c(bd_id$PatientEpicId_SH, sch_id$PatientEpicId_SH)) %>% nrow %>% comma), " participants that are MDD and do not have Schizophrenia or Bipolar Disorder"))
+```
+
+# Filter to Antidepressants that are prescribed after first MDD Diagnosis.
+```{r}
+ad_record_1 <- ad_record  %>%
+  filter(PatientEpicId_SH %in% unique(mdd_first_record$PatientEpicId_SH)) %>%
+  left_join(mdd_first_record, by = join_by(PatientEpicId_SH == PatientEpicId_SH)) %>% 
+  filter(MedStartInstant >= first_depression_dx_date)
+
+
+paste0("There are ",(ad_record$PatientEpicId_SH %>% unique %>% length %>%comma)," participants in the antidepressant drug dataset.\nThe dataset has ",(ad_record %>% nrow %>% comma)," antidepressant drug records.") %>% cat
+
+paste0("\n\nThere are ",(ad_record_1$PatientEpicId_SH %>% unique %>% length %>%comma)," participants in the antidepressant drug dataset whose MDD diagnosis precedes antidepressant treatment.\nThe dataset filtered to post-MDD treatment has ",(ad_record_1 %>% nrow %>% comma)," antidepressant drug records.") %>% cat
+```
+
+# Identify first ad prescription post MDD diagnosis
+```{r}
+post_mdd_ad_index <- ad_record_1 %>%
+  arrange(PatientEpicId_SH, MedStartInstant) %>% 
+  group_by(PatientEpicId_SH) %>%
+  filter(MedStartInstant == min(MedStartInstant)) %>%
+  mutate(n_drugs_prescribed = n(),
+         n_unique_drugs_prescribed = length(unique(MedSimpleGenericName))
+         ) 
+
+filename <- paste0("../OutputData-", folder_date, "/post_mdd_ad_index.csv")
+post_mdd_ad_index %>% write.csv(filename, row.names = F)
+
+post_mdd_ad_index %>%
+  my_kable_table()
+```
+
+# Create a list of all drugs that each participant has taken.
+```{r}
+antidepressant_record_uq <- ad_record_1 %>% 
+  dplyr::select(PatientEpicId_SH, MedSimpleGenericName) %>% 
+  unique %>%
+  arrange(PatientEpicId_SH)
+
+antidepressant_record_uq %>%
+  my_kable_table()
+```
+
+# TRD definition step 1
+```{r}
+ad_record_1$days_supply <- NA
+filename <- paste0("../OutputData-", folder_date, "/antidepressant_consecutive_instance.csv")
+overwrite <- TRUE
+if(!file.exists(filename) | overwrite){
+  df <- ad_record_1
+  
+  # Calculate intervals and instances
+  df <- df %>%
+    arrange(PatientEpicId_SH, MedSimpleGenericName, MedStartInstant) %>%
+    group_by(PatientEpicId_SH, MedSimpleGenericName) %>%
+    mutate(
+      interval = as.numeric(difftime(MedStartInstant, lag(MedStartInstant), units = "days")),
+      interval = ifelse(row_number() == 1, 1, interval),
+      consecutive_instance = interval > 180,
+      consecutive_instance = ifelse(row_number() == 1, TRUE, consecutive_instance),
+      consecutive_instance = cumsum(consecutive_instance)
+    )
+  
+  # Calculate first and last records
+  consecutive_instance_tab <- df %>%
+    group_by(PatientEpicId_SH, MedSimpleGenericName, consecutive_instance) %>%
+    summarise(
+      first.record = first(MedStartInstant),
+      last.record = last(MedStartInstant),
+      last.record.days_supply = last(days_supply),
+      drug_class = first(MedPharmaceuticalSubclass),
+      .groups = 'drop'
+    ) %>%
+    dplyr::select(-consecutive_instance) %>%
+    arrange(PatientEpicId_SH, first.record, MedSimpleGenericName) %>%
+    mutate(last.record = replace(last.record, last.record == first.record, as.Date(NA))) %>%
+    as.data.frame 
+  consecutive_instance_tab %>% write.csv(filename, row.names = FALSE)
+}else{
+  consecutive_instance_tab <- read.csv(filename)
+}
+
+consecutive_instance_tab %>% 
+  my_kable_table()
+```
+
+# TRD definition step 2.
+```{r}
+overwrite <- TRUE
+my_progress <- 0
+filename <- paste0("../OutputData-", folder_date, "/antidepressant_consecutive_period.csv")
+if(!file.exists(filename) | overwrite){
+  assign_period <- function(this_data){
+    for(i in 1:nrow(this_data)){
+      this_period_time_from_start <- ifelse(i == 1, 
+                                            0, 
+                                            as.integer(difftime(as_date(this_data$first.record[i]), 
+                                                                as_date(this_data$period_start[i-1]), 
+                                                                units = "days"))
+      )
+      
+      new_period <- ifelse(i == 1, 
+                           TRUE, 
+                           (this_period_time_from_start > 365 | (this_data$MedSimpleGenericName[i] == this_data$MedSimpleGenericName[i-1]))
+      )
+      
+      this_data$period[i] = ifelse(i == 1, 
+                                   1, 
+                                   ifelse(new_period,
+                                          this_data$period[i-1] + 1,
+                                          this_data$period[i-1]
+                                   )
+      )
+      
+      this_data$period_start[i] <- ifelse(new_period, 
+                                          this_data$first.record[i], 
+                                          this_data$period_start[i-1])
+      
+      this_data$period_time_from_start[i] <- ifelse(new_period, 
+                                                    0, 
+                                                    this_period_time_from_start)                       
+    }
+    
+    return(this_data)
+  }
+  
+  consecutive_period_tab_start <- consecutive_instance_tab %>%
+    mutate(
+      period = NA,
+      period_start = as.Date(NA),
+      period_time_from_start = NA
+    ) %>%
+    split(consecutive_instance_tab$PatientEpicId_SH)
+  
+  # Register the parallel backend
+  num_cores <- detectCores()
+  cl <- makeCluster(num_cores/2)
+  registerDoParallel(cl)
+  
+  # Use foreach to apply your function in parallel
+  consecutive_period_tab_list <- foreach(x=consecutive_period_tab_start, .packages = c("lubridate","base")) %dopar% {
+    assign_period(x)
+  }
+  
+  # Stop the cluster when you're done
+  stopCluster(cl)
+  
+  consecutive_period_tab <- bind_rows(consecutive_period_tab_list)
+  consecutive_period_tab %>% write.csv(filename, row.names = F)
+}else{
+  consecutive_period_tab <- read.csv(filename)
+}
+
+consecutive_period_tab %>%
+  my_kable_table()
+```
+
+```{r}
+third_drug_of_trd_index <- consecutive_period_tab %>%
+  group_by(PatientEpicId_SH, period, MedSimpleGenericName) %>%
+  slice(1) %>%
+  group_by(PatientEpicId_SH, period) %>%
+  mutate(ndrug = n(),
+         drug_order = row_number()) %>% 
+  ungroup %>%
+  filter(ndrug > 2) %>% 
+  filter(!PatientEpicId_SH %in% c(bd_id$PatientEpicId_SH, sch_id$PatientEpicId_SH)) %>% 
+  group_by(PatientEpicId_SH) %>% 
+  filter(period == min(period)) %>% 
+  ungroup %>% 
+  filter(drug_order == 3)
+
+filename <- paste0("../OutputData-", folder_date, "/TRD_index_period_third_drug.csv")
+third_drug_of_trd_index %>% write.csv(filename, row.names = F)
+
+third_drug_of_trd_index %>%
+  my_kable_table()
+```
+
+# TRD definition step 3.
+```{r}
+consecutive_period_tab_summ <- consecutive_period_tab %>% group_by(PatientEpicId_SH,period) %>% 
+  summarise(
+    ndrug = (MedSimpleGenericName %>% unique %>% length),
+    drugs = (MedSimpleGenericName %>% unique %>% paste(collapse = ", ")),
+    period.start = min(first.record), period.end = max(first.record))
+consecutive_period_tab_summ %>% head(10)
+write.csv(consecutive_period_tab_summ, paste0("../OutputData-", folder_date, "/antidepressant_consecutive_period_tab_summ.csv"))
+consecutive_period_tab_summ %>% 
+  my_kable_table()
+```
+
+# TRD index definition step 4.
+```{r}
+consecutive_period_trdIndexEvent <- consecutive_period_tab_summ %>% 
+  filter(ndrug > 2) %>% group_by(PatientEpicId_SH) %>% filter(period == min(period)) %>% 
+  filter(!PatientEpicId_SH %in% c(bd_id$PatientEpicId_SH, sch_id$PatientEpicId_SH))
+write.csv(consecutive_period_trdIndexEvent, paste0("../OutputData-", folder_date, "/TRD_index.csv"))
+consecutive_period_trdIndexEvent %>%
+  my_kable_table()
+```
+
+# TRD legacy step 4.
+```{r}
+consecutive_period_maxDrugs <- consecutive_period_tab_summ %>% group_by(PatientEpicId_SH) %>% 
+  filter(ndrug == max(ndrug)) %>% filter(period == max(period))
+consecutive_period_maxDrugs$has_TRD <- consecutive_period_maxDrugs$ndrug > 2
+write.csv(consecutive_period_maxDrugs, paste0("../OutputData-", folder_date, "/antidepressant_consecutive_period_maxDrugs.csv"))
+consecutive_period_maxDrugs %>%
+  my_kable_table()
+```
+
+# Frequency of the number of max drugs in a period.
+```{r}
+consecutive_period_maxDrugs$ndrug %>% table %>% as.data.frame %>% rename(nDrugs = ".") %>% arrange(-Freq) %>% mutate(Freq = comma(Freq)) %>% 
+  my_kable_table()
+```
+
+# TRD count.
+```{r}
+TRD_list <- consecutive_period_trdIndexEvent %>% 
+  dplyr::select(PatientEpicId_SH) %>% 
+  filter(!PatientEpicId_SH %in% c(bd_id$PatientEpicId_SH, sch_id$PatientEpicId_SH))
+
+cat(paste0("N TRD: ", TRD_list %>% nrow %>% comma, "\n"))
+```
+
+# Write the TRD data.
+```{r}
+write.table(unique(TRD_list$PatientEpicId_SH), paste0("../OutputData-", folder_date, "/IDs-TRD.txt"), row.names = F, col.names = F)
+```

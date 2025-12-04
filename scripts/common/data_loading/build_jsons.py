@@ -216,6 +216,8 @@ if __name__ == "__main__":
     global medications_df
     global procedures_df
     
+    # TODO - handle commas within quotes - those should not be counted
+    
     print("Started patient json creation...", flush=True)
     
     total_people_lines = count_file_lines(PERSON_CSV_PATH)  

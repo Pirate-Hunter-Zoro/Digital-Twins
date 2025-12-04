@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional
 import multiprocessing
 
-from .generation import generate_note
+from .llm_narrative_generation import generate_note
 from common.data_loading.load_patient_data import load_patient_data
 from common.models.vllm_client import VllmClient
 
