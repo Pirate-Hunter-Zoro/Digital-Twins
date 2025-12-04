@@ -5,8 +5,6 @@ Formats prompts and calls llama.cpp chat; raises on empty content."""
 
 from __future__ import annotations
 
-import json, math
-from typing import List
 from pathlib import Path
 import os
 if __name__=="__main__":
@@ -19,6 +17,7 @@ else:
     from patient_embedding.shared.prompts import PromptLoader
 from typing import Iterator
 import copy
+import json
 
 prompt_loader = PromptLoader()
 DEBUG = False
@@ -149,6 +148,7 @@ def generate_note(
         if not chunked_json:
             raise ValueError(f"Invalid json chunk yielded for patient {patient_id}: {chunked_json}")
         if first_chunk:
+            # This is the first chunk - use the initial prompt
             first_chunk = False
             user_text  = prompt_loader.render_narrative_user_initial(patient_json=chunked_json)
             messages = [
@@ -165,6 +165,7 @@ def generate_note(
                 if DEBUG:
                     sections.append(base_narrative)
         else:
+            # This is a subsequent chunk - use the extraction prompt
             user_text  = prompt_loader.render_narrative_user_extraction(patient_json=chunked_json)
             messages = [
                 {"role": "system", "content": system_text_extraction},

@@ -10,7 +10,7 @@ from typing import Callable
 from patient_embedding.shared.io import ensure_dir
 from patient_embedding.shared.plots import scatter
 from patient_embedding.shared.metrics import write_spearman
-from .cosine_calculator import all_cos_funcs
+from .cosine_calculator import create_cos_factory
 from .pairs import build_pairs, pair_id
 from .persist import read_existing_pairs, write_pairs
 from .judging import score_pairs
@@ -18,14 +18,13 @@ from .discordant import write_discordant
 
 COUNTER_INTERVAL = 5
 
-def handle_plotting(label: str, plots_dir: Path, judge_array: np.array, cos_array: np.array):
-    _ = write_spearman(plots_dir, f"spearman_rho_judge_vs_cos_{label}", cos_array, judge_array)
-    
+def handle_plotting(plots_dir: Path, judge_array: np.array, cos_array: np.array):
+    _ = write_spearman(plots_dir, f"spearman_rho_judge_vs_cos", cos_array, judge_array)
     scatter(cos_array.tolist(), judge_array.tolist(),
-        "Judge vs Cosine", plots_dir / f"scatter_judge_vs_cos_{label}.png",
+        "Judge vs Cosine", plots_dir / f"scatter_judge_vs_cos.png",
         "cosine", "judge_score")
     
-def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], float], out_dir: Path, scrub=False):
+def run_analysis(rnd: random.Random, cos_func: Callable[[str, str], float], out_dir: Path, scrub=False):
     # cos_func will find the cosine similarity of either the entire narrative, just the summary, just the medications, or just the diagnoses - depends on which callable gets passed into this function
     ensure_dir(out_dir)
     
@@ -56,7 +55,7 @@ def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], 
     print(f"[Stage3] will judge {len(pairs_new)} new pairs; skipping {len(existing_ids)} already done in {out_dir}", flush=True)
 
     rows_new = []
-    for i, record in enumerate(score_pairs(pairs_new, segment=label)):
+    for i, record in enumerate(score_pairs(pairs_new)):
         rows_new.append(record)
         if (i + 1) % COUNTER_INTERVAL == 0:
             print(f"[Stage3] {i+1}/{len(pairs_new)} new pairs scored in {out_dir}...", flush=True)
@@ -72,7 +71,7 @@ def run_analysis(rnd: random.Random, label: str, cos_func: Callable[[str, str], 
     
     plots_dir = out_dir / "plots"
     os.makedirs(plots_dir, exist_ok=True)
-    handle_plotting(label, plots_dir, judge_array, cos_array)
+    handle_plotting(plots_dir, judge_array, cos_array)
     write_discordant(out_dir, df_pairs)
 
 def run() -> None:
@@ -80,13 +79,11 @@ def run() -> None:
     out_dir  = Path(os.environ['ANALYSIS_DIR'])
     ensure_dir(out_dir)
     
-    vec_files = vec_dir.glob("**/*.npy")
+    vec_files = vec_dir.glob("*.npy")
     vec_map = {Path(vec_file).stem : Path(vec_file) for vec_file in vec_files}
-    cos_full, cos_summary, cos_medications, cos_diagnoses = all_cos_funcs(vec_map)
+    cos = create_cos_factory(vec_map)
 
     rnd = random.Random(int(os.environ['SEED']))
-    cos_funcs = {"full": cos_full, "summary":cos_summary, "medications": cos_medications, "diagnoses": cos_diagnoses}
-    for label, cos_func in cos_funcs.items():
-        run_analysis(rnd, label, cos_func, out_dir / label, scrub=True)
+    run_analysis(rnd, cos, out_dir, scrub=False)
 
     print("[Stage3] complete.", flush=True)

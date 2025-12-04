@@ -12,13 +12,12 @@ import json
 from common.models.vllm_client import VllmClient
 
 from patient_embedding.shared.prompts import PromptLoader, SCORE_PATTERN, EXPLANATION_PATTERN
-from patient_embedding.shared.narrative_parsing import parse_single_narrative_sections
 from patient_embedding.shared.io import read_text
 
 from dotenv import load_dotenv
 load_dotenv()
 
-def init_worker(seg: str="full", scr: bool=False):
+def init_worker(scr: bool=False):
     global client
     global prompt_loader
     global out_dir
@@ -27,7 +26,6 @@ def init_worker(seg: str="full", scr: bool=False):
     client = VllmClient()
     prompt_loader = PromptLoader()
     out_dir  = Path(os.environ['ANALYSIS_DIR'])
-    segment = seg
     scrub = scr
     
 def judge_similarity(pid: str, na: str, nb: str) -> Tuple[float, str]:
@@ -75,7 +73,7 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float]) -> Dict[str, Any]:
     pid = f"{patient_a_id}:{patient_b_id}"
     
     # The LLM judgement score is stored based on which segments of the narrative we are scoring
-    judge_score_path = Path(os.environ['ANALYSIS_DIR']) / segment / "judge_scores" / f"{pid.replace(':','_')}.json"
+    judge_score_path = Path(os.environ['ANALYSIS_DIR']) / "judge_scores" / f"{pid.replace(':','_')}.json"
     if judge_score_path.exists() and not scrub:
         # The judge already gave us a score
         with open(judge_score_path, 'r') as f:
@@ -88,10 +86,10 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float]) -> Dict[str, Any]:
         nb_path = Path(os.environ['NARRATIVES_DIR']) / f'{patient_b_id}.md'
         
         
-        na = parse_single_narrative_sections(read_text(na_path))
-        nb = parse_single_narrative_sections(read_text(nb_path))
+        na = read_text(na_path)
+        nb = read_text(nb_path)
         
-        j_score, j_rationale = judge_similarity(pid, na[segment], nb[segment])
+        j_score, j_rationale = judge_similarity(pid, na, nb)
         if j_score != float("nan"):
             # We can save this response
             with open(judge_score_path, 'w') as f:
@@ -112,6 +110,6 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float]) -> Dict[str, Any]:
         "judge_rationale": j_rationale,
     }
 
-def score_pairs(pairs: List[Tuple[str,str,float]], segment: str) -> Iterator[Dict[str, Any]]:
-    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker, initargs=[segment, True]) as thread_pool:
+def score_pairs(pairs: List[Tuple[str,str,float]]) -> Iterator[Dict[str, Any]]:
+    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker, initargs=[True]) as thread_pool:
         yield from thread_pool.imap_unordered(score_pair, pairs)

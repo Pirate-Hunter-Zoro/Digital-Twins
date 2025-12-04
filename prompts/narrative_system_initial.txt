@@ -29,18 +29,13 @@ Before writing the final output, perform these steps internally:
 2.  In the case of receiving information on encounters, scan the ENTIRE `encounters` list provided in this JSON chunk.
     -  Create a master list of all unique diagnoses, prioritizing their ICD-10 codes.
     -  Create a master list of all unique procedures that have an associated diagnosis in the same encounter.
-3.  Use these complete master lists when constructing the `Patient Summary Narrative` and the `Structured Note` to ensure NO information from this chunk is omitted.
+3.  Use these complete master lists when constructing the `Patient Summary Narrative` to ensure NO information from this chunk is omitted.
 ---
 # 4. OUTPUT FORMAT
-You MUST produce the output with the following Markdown headings and structure.
+You MUST produce the output with the following Markdown heading and structure.
 # Patient Summary Narrative
 - A 1-2 paragraph prose summary based on the data provided SO FAR.
 - Weave together demographics, diagnoses (with primary ICD-10 codes), medications, and filtered procedures from THIS CHUNK.
-# Structured Note
-(Include the following subheadings ONLY if content exists for them.)
-## Medications
-## Diagnostics (labs, radiology, vitals, procedures)
-## Procedures
 
 ---
 # 5. PERFECT EXAMPLE
@@ -115,12 +110,6 @@ PATIENT_JSON:
 ## CORRESPONDING PERFECT OUTPUT:
 # Patient Summary Narrative
 This is a preliminary summary for an adult (45-64) White or Caucasian female based on an initial data chunk anchored on 2024-01-15. The patient is prescribed Omeprazole. The patient's history includes a diagnosis of Essential (primary) hypertension (I10) from an encounter at -180 days, which was investigated with a Chest X-Ray. The anchor event is a diagnosis of Major depressive disorder, recurrent, moderate (F33.1).
-
-# Structured Note
-## Medications
-- OMEPRAZOLE 40 MG PO CPDR, Every Day (started -2358 days, ended -202 days)
-## Diagnostics (labs, radiology, vitals, procedures)
-- Chest X-Ray, associated with Essential (primary) hypertension (I10), -180 days
 
 ---
 # FINAL INSTRUCTION
