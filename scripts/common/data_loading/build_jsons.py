@@ -193,21 +193,6 @@ def load_all_patient_json():
                 if num_completed % CHECKPOINT == 0:
                     print(f"Completed {num_completed} patient jsons...")
 
-def count_file_lines(p: Path) -> int:
-    """
-    Docstring for count_file_lines
-    
-    :param p: Input file path
-    :type p: Path
-    :return: Number of lines in file
-    :rtype: int
-    """
-    try:
-        with open(p, 'r') as f:
-            return sum(1 for _ in f)
-    except Exception:
-        return 0
-
 DRY_RUN = True
 if __name__ == "__main__":
     global people_df
@@ -216,31 +201,21 @@ if __name__ == "__main__":
     global medications_df
     global procedures_df
     
-    # TODO - handle commas within quotes - those should not be counted
-    
     print("Started patient json creation...", flush=True)
     
-    total_people_lines = count_file_lines(PERSON_CSV_PATH)  
-    people_df = pd.read_csv(PERSON_CSV_PATH, dtype={23: str}, on_bad_lines='skip', low_memory=False) # PatientStatus is a string
-    print(f"Percentage of people lines read successfully: {len(people_df)/(total_people_lines if total_people_lines > 0 else 1)*100:.2f}%", flush=True)
+    people_df = pd.read_csv(PERSON_CSV_PATH, dtype={23: str}, escapechar='\\', low_memory=False) # PatientStatus is a string
     # Make person id consistent with the other .csv files
     people_df.rename(columns={'person_id': 'PatientEpicId_SH'}, inplace=True)
-    
-    total_encounter_lines = count_file_lines(ENCOUNTER_CSV_PATH)
-    encounters_df = pd.read_csv(ENCOUNTER_CSV_PATH, on_bad_lines='skip', low_memory=False)
-    print(f"Percentage of encounter lines read successfully: {len(encounters_df)/(total_encounter_lines if total_encounter_lines > 0 else 1)*100:.2f}%", flush=True)
-    
-    total_diagnosis_lines = count_file_lines(DIAGNOSIS_CSV_PATH)
-    diagnoses_df = pd.read_csv(DIAGNOSIS_CSV_PATH, on_bad_lines='skip', low_memory=False)
-    print(f"Percentage of diagnosis lines read successfully: {len(diagnoses_df)/(total_diagnosis_lines if total_diagnosis_lines > 0 else 1)*100:.2f}%", flush=True)
-    
-    total_medication_lines = count_file_lines(MEDICATION_CSV_PATH)
-    medications_df = pd.read_csv(MEDICATION_CSV_PATH, on_bad_lines='skip', low_memory=False)
-    print(f"Percentage of medication lines read successfully: {len(medications_df)/(total_medication_lines if total_medication_lines > 0 else 1)*100:.2f}%", flush=True)
-    
-    total_procedure_lines = count_file_lines(PROCEDURE_CSV_PATH)
-    procedures_df = pd.read_csv(PROCEDURE_CSV_PATH, on_bad_lines='skip', low_memory=False)
-    print(f"Percentage of procedure lines read successfully: {len(procedures_df)/(total_procedure_lines if total_procedure_lines > 0 else 1)*100:.2f}%", flush=True)
+    print("Loaded people dataframe...", flush=True)
+    # Now for the other dataframes
+    encounters_df = pd.read_csv(ENCOUNTER_CSV_PATH, escapechar='\\', low_memory=False)
+    print("Loaded encounters dataframe...", flush=True)
+    diagnoses_df = pd.read_csv(DIAGNOSIS_CSV_PATH, escapechar='\\', low_memory=False)
+    print("Loaded diagnoses dataframe...", flush=True)
+    medications_df = pd.read_csv(MEDICATION_CSV_PATH, escapechar='\\', low_memory=False)
+    print("Loaded medications dataframe...", flush=True)
+    procedures_df = pd.read_csv(PROCEDURE_CSV_PATH, escapechar='\\', low_memory=False)
+    print("Loaded procedures dataframe...", flush=True)
     
     dfs = [people_df, encounters_df, diagnoses_df, medications_df, procedures_df]
     for df in dfs:
@@ -248,7 +223,7 @@ if __name__ == "__main__":
         df.sort_index(inplace=True)
     
     if DRY_RUN:
-        patient_id = "FF1E56AE15FB21D74ABB78D4DA026C5E"
+        patient_id = "B51F69E061B1137C6C9881CD89E71BFE"
         raw_json_path = Path(f"test_data/raw_{patient_id}.json")
         os.makedirs(raw_json_path.parent, exist_ok=True)
         cleaned_json_path = Path(f"test_data/cleaned_{patient_id}.json")
