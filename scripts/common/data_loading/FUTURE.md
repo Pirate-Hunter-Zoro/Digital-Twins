@@ -27,6 +27,6 @@ https://chatgpt.com/s/t_6925f606849481918ff5dcd6b5ae3ebe
 https://chatgpt.com/s/t_6925f6e815b481919ed89a6e088c7ee5
 
 MDD-Diagnosis_Table-25_09_10-v1.rds - EVERY diagnosis that has that ICD9/10 that corresponds to MDD
-MDD_IDs-25_09_10-v1.rds. - every patient ever who had MDD
- BD-Diagnosis_Table-25_09_10-v1.rds
-SCH-Diagnosis_Table-25_09_10-v1.rds 
+MDD_IDs-25_09_10-v1.rds - every patient ever who had MDD
+BD_IDs-25_09_10-v1.rds - every patient ever who has had bipolar disorder
+SCH-IDs-25_09_10-v1.rds - every patient ever who had schizophrenia

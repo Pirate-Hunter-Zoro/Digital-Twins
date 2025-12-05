@@ -183,7 +183,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
         for med in encounter['medications']:
             med_key = (
                 med["MedName"],
-                med["MedSimpleGenericName"].lower() if med["MedSimpleGenericName"] else None,
+                med["MedSimpleGenericName"].lower() if isinstance(med["MedSimpleGenericName"], str) else None,
                 med["MedStrength"],
                 med["MedForm"],
                 med["MedRoute"],
@@ -191,7 +191,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
             )
             
             # The medication end may not be present or the medication may still be active
-            if 'MedEndInstant' in med.keys() and med['MedEndInstant']:
+            if 'MedEndInstant' in med.keys() and isinstance(med['MedEndInstant'], str):
                 med_end_date = datetime.strptime(med['MedEndInstant'], '%Y-%m-%d')
             else:
                 # Still ongoing

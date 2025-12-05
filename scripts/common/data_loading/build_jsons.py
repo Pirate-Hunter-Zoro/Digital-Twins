@@ -193,7 +193,7 @@ def load_all_patient_json():
                 if num_completed % CHECKPOINT == 0:
                     print(f"Completed {num_completed} patient jsons...")
 
-DRY_RUN = True
+DRY_RUN = False
 if __name__ == "__main__":
     global people_df
     global encounters_df

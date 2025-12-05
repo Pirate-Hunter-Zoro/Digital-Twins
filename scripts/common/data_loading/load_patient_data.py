@@ -1,5 +1,5 @@
 import os
-from typing import Iterator, List, Dict, Optional
+from typing import Iterator, Dict, Optional
 from pathlib import Path
 import multiprocessing
 import random
@@ -42,7 +42,7 @@ def _see_if_anchor(json_path: Path) -> Optional[str]:
             return patient_dict['patient_id']
         return None
 
-def load_patient_data(years_back:int=2) -> Iterator[Dict]:
+def load_patient_data() -> Iterator[Dict]:
     seed = int(os.environ['SEED'])
     num_patients = int(os.environ['NUM_PATIENTS'])
     raw_json_path = Path(os.environ['PATIENT_JSON_DIR'])

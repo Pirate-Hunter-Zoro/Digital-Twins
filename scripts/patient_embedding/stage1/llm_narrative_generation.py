@@ -203,8 +203,8 @@ def generate_note(
 if __name__=="__main__":
     
     client = VllmClient()
-    id = "FF1E56AE15FB21D74ABB78D4DA026C5E"
-    TEST_PATIENT_FILE = f"test_data/cleaned_{id}.json"
+    id = "B51F69E061B1137C6C9881CD89E71BFE"
+    TEST_PATIENT_FILE = f"test_data/sliced_{id}.json"
 
     # Open the file and then load its contents
     with open(TEST_PATIENT_FILE, 'r') as f:

@@ -93,7 +93,7 @@ PATIENT_JSON:
                 }
             ],
             "procedures": [
-                { "CPT_Procedure_Description": "Chest X-Ray" }
+                { "Procedure_Description": "Chest X-Ray" }
             ]
         },
         {
@@ -101,7 +101,7 @@ PATIENT_JSON:
             "days_from_anchor": -250,
             "diagnoses": [],
             "procedures": [
-                { "CPT_Procedure_Description": "Routine blood work" }
+                { "Procedure_Description": "Routine blood work" }
             ]
         }
     ]

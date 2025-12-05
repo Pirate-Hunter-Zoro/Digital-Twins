@@ -4,7 +4,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
-#SBATCH --mem=64G
+#SBATCH --mem=256G
 #SBATCH -o slurm_jobs/data_loading/logs/load_json_out.txt
 #SBATCH -e slurm_jobs/data_loading/logs/load_json_err.txt
 

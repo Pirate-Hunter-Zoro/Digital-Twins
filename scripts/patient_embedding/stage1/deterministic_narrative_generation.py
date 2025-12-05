@@ -128,10 +128,10 @@ if __name__ == "__main__":
     # Dry run test
     YEARS_BACK = 2
     from pathlib import Path
-    test_files = list(Path("/media/studies/ehr_study/analysis/mferguson/patient_json/").glob("*.json"))
+    test_files = list(Path("test_data/").glob("cleaned_*.json"))
     anchor_found = False
     for i, test_file in enumerate(test_files):
-        id = test_file.stem
+        id = test_file.stem[8:]
         with open(test_file, 'r') as f_orig:
             patient_dict = json.load(f_orig)
             anchor_date, mdd_date = find_anchor_date(patient_dict)
