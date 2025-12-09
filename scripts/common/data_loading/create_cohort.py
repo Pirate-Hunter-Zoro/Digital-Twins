@@ -1,4 +1,3 @@
-import pyreadr
 import pandas as pd
 from pathlib import Path
 import os
@@ -7,9 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATA_DIR = Path(os.environ['PREP_DATA_DIR'])
-MDD_PATH = DATA_DIR / 'MDD_IDs-25_09_10-v1.rds'
-BD_PATH = DATA_DIR / 'BD_IDs-25_09_10-v1.rds'
-SCH_PATH = DATA_DIR / 'SCH_IDs-25_09_10-v1.rds'
+MDD_PATH = DATA_DIR / 'MDD_IDs.csv'
+BD_PATH = DATA_DIR / 'BD_IDs.csv'
+SCH_PATH = DATA_DIR / 'SCH_IDs.csv'
 
 OUTPUT_CSV = Path(os.environ['COHORT_PATH'])
 
@@ -22,8 +21,7 @@ def extract_ids(file_path: Path) -> set[str]:
     :return: All patient IDs associated with said file
     :rtype: set[str]
     """
-    file_dict = pyreadr.read_r(str(file_path))
-    df = file_dict[list(file_dict.keys())[0]]
+    df = pd.read_csv(file_path)
     return set(df.iloc[:, 0].astype(str))
 
 if __name__=="__main__":

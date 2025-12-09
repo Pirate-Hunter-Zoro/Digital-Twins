@@ -204,8 +204,6 @@ if __name__ == "__main__":
     print("Started patient json creation...", flush=True)
     
     people_df = pd.read_csv(PERSON_CSV_PATH, dtype={23: str}, escapechar='\\', low_memory=False) # PatientStatus is a string
-    # Make person id consistent with the other .csv files
-    people_df.rename(columns={'person_id': 'PatientEpicId_SH'}, inplace=True)
     print("Loaded people dataframe...", flush=True)
     # Now for the other dataframes
     encounters_df = pd.read_csv(ENCOUNTER_CSV_PATH, escapechar='\\', low_memory=False)
