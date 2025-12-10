@@ -1,7 +1,6 @@
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, Tuple, Optional
 from datetime import datetime, timedelta
 import copy
-import sys
 import pandas as pd
 from pathlib import Path
 import os
@@ -12,12 +11,33 @@ DEBUG = False
 MED_DATE_CSV = Path(os.environ['MDD_MED_DATE_CSV_PATH'])
 MED_DATE_DF = pd.read_csv(MED_DATE_CSV)
 
-def find_anchor_date(patient_json: dict) -> datetime:
+def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series]) -> Optional[Tuple[datetime, datetime]]:
     """
-    Find the anchor date for a patient based on their medication history.
-    The anchor date is defined as the first date they start an MDD-related medication.
+    Find the anchor date of a patient given their history and the med date dataframe row that pertains to them
+    
+    :param patient_json: All patient's electronic health records
+    :type patient_json: Dict
+    :param anchor_data: Information on the 
+    :type anchor_data: Optional[pd.Series]
+    :return: Corresponding MDD diagnosis and preceding medications dates
+    :rtype: Tuple[datetime, datetime] | None
     """
-    patient_id = patient_json['patient_id']
+    if anchor_data is None:
+        # The patient never even had any post-MDD medications
+        return None
+    
+    candidate_date = datetime.strptime(anchor_data['MedStartInstant'], '%Y-%m-%d')
+    mdd_date = datetime.strptime(anchor_data['first_depression_dx_date'], '%Y-%m-%d')
+    target_ingredient = anchor_data['MedSimpleGenericName']
+    for encounter in patient_json['encounters']:
+        for med in encounter['medications']:
+            if (target_ingredient.lower() in med['MedSimpleGenericName'].lower()) or (target_ingredient.lower() in med['MedName'].lower()):
+                # See if this falls within the washout date
+                med_start_date = datetime.strptime(med['MedStartInstant'], '%Y-%m-%d')
+                if (med_start_date > candidate_date - timedelta(days=WASHOUT)) and (med_start_date < candidate_date):
+                    # The date found for the first post-MDD antidepressant will not suffice as the patient had the same ingredient within the previous washout period
+                    return None
+    return (candidate_date, mdd_date)
     
 
 def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: datetime, years_back: int) -> Tuple[Dict, Dict]:
@@ -34,5 +54,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
         'encounters':[]
     }
     processed_patient = copy.deepcopy(processed_sliced_patient)
+    
+    # TODO - next
     
     return (processed_sliced_patient, processed_patient)

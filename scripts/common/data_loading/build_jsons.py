@@ -97,7 +97,14 @@ def clean_encounter(encounter: dict) -> dict:
 
 def process_patient(patient_id: str, raw: bool=False) -> bool:
     """
-    Load all of the patients demographics and encounter data and save their json
+    Given the patient ID, look through various CSV files and create a JSON record, cleaned if specified
+    
+    :param patient_id: ID of patient
+    :type patient_id: str
+    :param raw: Flag for if thee json should be the raw result from the .csv files or cleaned to remove useless "null" data
+    :type raw: bool
+    :return: Flag to indicate if it was necessary to create the json from scratch or if it was already found
+    :rtype: bool
     """
     output_file_path = PATIENT_JSON_DIR / f'patient_{patient_id}.json'
     if output_file_path.exists() and not SCRUB:
@@ -193,7 +200,7 @@ def load_all_patient_json():
                 if num_completed % CHECKPOINT == 0:
                     print(f"Completed {num_completed} patient jsons...")
 
-DRY_RUN = False
+DRY_RUN = True
 if __name__ == "__main__":
     global people_df
     global encounters_df
