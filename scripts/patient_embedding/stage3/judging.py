@@ -21,7 +21,6 @@ def init_worker(scr: bool=False):
     global client
     global prompt_loader
     global out_dir
-    global segment
     global scrub
     client = VllmClient()
     prompt_loader = PromptLoader()

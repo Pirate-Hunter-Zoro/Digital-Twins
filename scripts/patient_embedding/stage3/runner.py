@@ -25,7 +25,7 @@ def handle_plotting(plots_dir: Path, judge_array: np.array, cos_array: np.array)
         "cosine", "judge_score")
     
 def run_analysis(rnd: random.Random, cos_func: Callable[[str, str], float], out_dir: Path, scrub=False):
-    # cos_func will find the cosine similarity of either the entire narrative, just the summary, just the medications, or just the diagnoses - depends on which callable gets passed into this function
+    # cos_func will find the cosine similarity of the entire narrative
     ensure_dir(out_dir)
     
     # Check for previously found cosine calculations
@@ -38,7 +38,6 @@ def run_analysis(rnd: random.Random, cos_func: Callable[[str, str], float], out_
         "cosine", 
         "judge_score", 
         "judge_rationale", 
-        "cosine_diff"
     ]
     existing_ids = set()
     if existing_df is not None and not existing_df.empty and not scrub:
