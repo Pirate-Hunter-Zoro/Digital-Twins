@@ -12,7 +12,7 @@
 set -e
 
 # ---- Conda configuration ----
-CONDA_ENV=venv
+CONDA_ENV=ehr_env
 N_THREADS="${SLURM_CPUS_PER_TASK}"
 
 # ---- Boilerplate env/bootstrap ----

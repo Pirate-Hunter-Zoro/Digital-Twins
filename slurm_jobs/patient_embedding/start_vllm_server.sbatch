@@ -11,7 +11,7 @@
   
 GPUS=2                      
 CPUS=32      
-CONDA_ENV=venv
+CONDA_ENV=ehr_env
 MODEL_ID=/media/studies/ehr_study/analysis/mferguson/models/google_medgemma-27b-text-it
 TP_SIZE=2  
 PP_SIZE=1                   
@@ -25,7 +25,7 @@ export OMP_NUM_THREADS="${CPUS}"
 module purge
 module load Anaconda3/2025.06-0
 eval "$(conda shell.bash hook)"
-conda activate venv
+conda activate ehr_env
 
 # Ensure proper gpu availability
 nvidia-smi -L

@@ -12,7 +12,7 @@
 set -e
 
 # ---- Conda configuration ----
-CONDA_ENV=venv
+CONDA_ENV=ehr_env
 
 # ---- Boilerplate env/bootstrap ----
 module purge

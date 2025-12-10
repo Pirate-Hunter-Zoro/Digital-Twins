@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import List, Tuple
-from common.models.patient_embedder import PatientEmbedder
+from scripts.common.models.string_embedder import StringEmbedder
 from patient_embedding.shared.io import read_text
 from patient_embedding.shared.io import write_npy
 
@@ -16,7 +16,7 @@ def vectors_exist(pid: str) -> bool:
     vec_path = VECTOR_DIR / f"{pid}.npy"
     return vec_path.exists() and vec_path.stat().st_size == 0
 
-def _embed_pair(embedder: PatientEmbedder, pids_with_narratives: List[Tuple[str, Path]]):
+def _embed_pair(embedder: StringEmbedder, pids_with_narratives: List[Tuple[str, Path]]):
     # Filter by only non-existant vectors
     indices = [i for i in range(len(pids_with_narratives)) if not vectors_exist(pids_with_narratives[i][0])]
     narratives = [read_text(pids_with_narratives[i][1]) for i in indices]
@@ -29,7 +29,7 @@ def _embed_pair(embedder: PatientEmbedder, pids_with_narratives: List[Tuple[str,
         
 def run_embed_loop(items: List[Tuple[str, Path]]):
     print("Loading Embedding Model...", flush=True)
-    embedder = PatientEmbedder()
+    embedder = StringEmbedder()
     batch_size = int(os.environ['EMBEDDER_BATCH_SIZE'])
     # Create the batches
     num_batches = int(len(items) / batch_size)
