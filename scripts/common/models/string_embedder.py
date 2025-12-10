@@ -112,6 +112,11 @@ if __name__=="__main__":
 - XR CHEST 1 VIEW, -665 days"
 
     embedder = StringEmbedder()
-    vec1 = embedder.vectorize([str_1])[0]
-    vec2 = embedder.vectorize([str_2])[0]
-    print(cosine(vec1, vec2))
+    vec1_first = embedder.vectorize([str_1])[0]
+    vec1_second = embedder.vectorize([str_1])[0]
+    vec2_first = embedder.vectorize([str_2])[0]
+    vec2_second = embedder.vectorize([str_2])[0]
+    print(cosine(vec1_first, vec2_first))
+    print(cosine(vec2_second, vec1_second))
+    print(cosine(vec1_first, vec1_second))
+    print(cosine(vec2_first, vec2_second))
