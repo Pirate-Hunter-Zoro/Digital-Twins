@@ -120,3 +120,7 @@ if __name__=="__main__":
     print(cosine(vec2_second, vec1_second))
     print(cosine(vec1_first, vec1_second))
     print(cosine(vec2_first, vec2_second))
+    
+    empty_str_vec = embedder.vectorize([""])[0]
+    print(cosine(vec1_first, empty_str_vec))
+    print(cosine(empty_str_vec, empty_str_vec))

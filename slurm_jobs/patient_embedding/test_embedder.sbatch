@@ -34,4 +34,4 @@ set -a; source "${ENV_FILE}"; set +a
 # Threading sanity
 export OMP_NUM_THREADS="${N_THREADS}"
 
-srun python scripts/common/models/string_embedder.py
+srun python -m scripts.common.models.string_embedder
