@@ -4,6 +4,8 @@ Cosine distance/utility functions that operate on numpy arrays; safe for NaNs/ze
 from __future__ import annotations
 import numpy as np
 
+# TODO - keep associate vector id that was produced by string_embedder class
+
 def cosine(a: np.ndarray, b: np.ndarray) -> float:
     a = a.astype(np.float64).ravel()
     b = b.astype(np.float64).ravel()

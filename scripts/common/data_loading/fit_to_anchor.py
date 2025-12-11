@@ -84,6 +84,31 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
             # Append the encounter into the encounter list of the sliced dict - since it occurred within the time window
             processed_sliced_patient['encounters'].append(encounter_copy)
             
-        # TODO - handle active medications
+        # Handle the active medications - note that the same medication MAY be listed multiple times due to overlap which means we should collapse such intervals
+        med_intervals = {}
+        sliced_med_intervals = {}
+        for med in encounter['medications']:
+            med_start_date = datetime.strptime(med['MedStartInstant'], '%Y-%m-%d')
+            if med_start_date > anchor_date:
+                # Med started in the future - not interested
+                continue
+            med_end_date = min(anchor_date, datetime.strptime(med['MedEndInstant'], '%Y-%m-%d'))
+            key = (
+                med["MedName"],
+                med["MedSimpleGenericName"],
+                med["MedStrength"],
+                med["MedForm"],
+                med["MedRoute"],
+                med["MedFrequency"],
+            )
+            med_copy = copy.deepcopy(med)
+            med_start_num = -(anchor_date-med_start_date).days
+            med_end_num = -(anchor_date-med_end_date).days
+            # DEFINITELY include this medication interval to the unsliced patient json
+            if key not in med_intervals.keys():
+                med_intervals[key] = []
+            med_intervals[key].append([med_start_num, med_end_num])
+            
+            if med_end_date > 
     
     return (processed_sliced_patient, processed_patient)

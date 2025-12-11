@@ -9,6 +9,8 @@ from scripts.patient_embedding.shared.similarity import cosine
 
 load_dotenv()
 
+# TODO - log string and vector (create some kind of unique id)
+
 class StringEmbedder:
     """
     A simplified class that uses the sentence-transformers library to embed text.
