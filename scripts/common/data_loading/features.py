@@ -61,11 +61,11 @@ def burden(patient_dict: dict, ingredients: set[str]) -> set[str]:
     """
     distinct_ingredients = set()
     for med in patient_dict['active_medications']:
-        name = med['med_name']
+        name = med['MedName']
         for ingredient in ingredients:
             if ingredient in name.lower():
-                med_end = min(0, med['med_end_instant']) if med['med_end_instant'] != "ongoing" else 0
-                med_start = med['med_start_instant']
+                med_end = med['MedEndInstant']
+                med_start = med['MedStartInstant']
                 
                 if med_end - med_start >= 7:
                     # at least a week duration
@@ -91,11 +91,11 @@ def polypharmacy(patient_dict: dict) -> set[str]:
     """
     distinct_active_meds = set()
     for med in patient_dict['active_medications']:
-        name = med['med_name']
+        name = med['MedName']
         for ingredient in MASTER_INGREDIENTS_MAP.keys():
             if ingredient in name.lower():
-                start = med['med_start_instant']
-                end = med['med_end_instant']
+                start = med['MedStartInstant']
+                end = med['MedEndInstant']
                 # Determine if active
                 if start <= 0 and (end == "ongoing" or end >= 0):
                     distinct_active_meds.add(ingredient)
@@ -108,9 +108,9 @@ def benzo_days(patient_dict: dict) -> int:
     intervals = []
     for med in patient_dict['active_medications']:
         for ingredient in BENZODIAZEPINE_INGREDIENTS:
-            if ingredient in med['med_name'].lower():
-                end = min(0, med['med_end_instant']) if med['med_end_instant'] != 'ongoing' else 0
-                start = med['med_start_instant']
+            if ingredient in med['MedName'].lower():
+                end = min(0, med['MedEndInstant']) if med['MedEndInstant'] != 'ongoing' else 0
+                start = med['MedStartInstant']
                 intervals.append([start, end])
                 break
     # Sort intervals by starting date
@@ -129,13 +129,13 @@ def prior_adequate_trials(patient_dict: dict) -> Dict[str, int]:
     """
     Prior adequate antidepressant trials (24 months): for each class, did the patient have at least 6 weeks at a therapeutic dose?
     """
-    result = {med_name: 0 for med_name in ALL_ARMS}
+    result = {MedName: 0 for MedName in ALL_ARMS}
     for med in patient_dict['active_medications']:
-        arm = get_med_arm(med['med_name'])
+        arm = get_med_arm(med['MedName'])
         if arm != None:
-            end = med['med_end_instant']
+            end = med['MedEndInstant']
             end =  min(0, end) if end != 'ongoing' else 0
-            start = med['med_start_instant']
+            start = med['MedStartInstant']
             if end - start >= 42:
                 # The med in the current arm has been ongoing for adequate time
                 result[arm] += 1
@@ -169,20 +169,20 @@ def augmentation_flag(patient_dict: dict) -> bool:
     antidepressant_intervals = []
     augmenting_agent_intervals = []
     for med in patient_dict['active_medications']:
-        name = med['med_name']
+        name = med['MedName']
         for ingredient in ALL_ARM_INGREDIENTS:
             if ingredient in name.lower():
                 # This is an antidepressant
-                start = min(0, med['med_start_instant'])
-                end = min(0, med['med_end_instant']) if med['med_end_instant'] != "ongoing" else 0
+                start = min(0, med['MedStartInstant'])
+                end = min(0, med['MedEndInstant']) if med['MedEndInstant'] != "ongoing" else 0
                 if end - start >= 14:
                     antidepressant_intervals.append([start, end])
                 break
         for ingredient in AUGMENTATION_INGREDIENTS:
             if ingredient in name.lower():
                 # This is an augmenting agent
-                start = min(0, med['med_start_instant'])
-                end = min(0, med['med_end_instant']) if med['med_end_instant'] != "ongoing" else 0
+                start = min(0, med['MedStartInstant'])
+                end = min(0, med['MedEndInstant']) if med['MedEndInstant'] != "ongoing" else 0
                 if end - start >= 14:
                     augmenting_agent_intervals.append([start, end])
                 break

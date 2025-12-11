@@ -3,8 +3,7 @@ Runs workers to produce narratives."""
 
 from __future__ import annotations
 import os
-from pathlib import Path
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Dict, Tuple, Optional
 import multiprocessing
 
 from .llm_narrative_generation import generate_note

@@ -2,10 +2,8 @@
 Validates env/paths, initializes logger, constructs cohort, and invokes the threadpool."""
 
 from __future__ import annotations
-import argparse, os, time
+import os, time
 from pathlib import Path
-from typing import Any, Dict, List
-import math
 
 from patient_embedding.shared.io import ensure_dir, nonempty
 from .threadpool import run_threadpool_stage

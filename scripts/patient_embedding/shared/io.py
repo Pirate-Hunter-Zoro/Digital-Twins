@@ -3,9 +3,7 @@ Thin wrappers for text/json/npy read/write, mkdir, size checks, and vector norms
 Used across all stages; no side effects beyond the filesystem."""
 
 from __future__ import annotations
-import json
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 

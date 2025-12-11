@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 import pandas as pd
-from patient_embedding.shared.io import write_text
 
 def read_existing_pairs(out_dir: Path) -> Optional[pd.DataFrame]:
     pq = out_dir / "pairs.parquet"

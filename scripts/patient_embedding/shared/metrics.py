@@ -4,7 +4,6 @@ Computes and writes correlation stats (e.g., Spearman rho) for judge vs cosine s
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional
-import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 from .io import write_text

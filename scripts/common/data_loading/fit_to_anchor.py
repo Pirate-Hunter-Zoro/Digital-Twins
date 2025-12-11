@@ -2,14 +2,10 @@ from typing import Dict, Tuple, Optional
 from datetime import datetime, timedelta
 import copy
 import pandas as pd
-from pathlib import Path
-import os
 
-MED_INTERVAL_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
-WASHOUT = 180
+MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
+WASHOUT = 180 # If a medication occurence is a candidate 'anchor date', it fails if another medication with the same ingredient occurred less than or equal to this many days before it
 DEBUG = False
-MED_DATE_CSV = Path(os.environ['MDD_MED_DATE_CSV_PATH'])
-MED_DATE_DF = pd.read_csv(MED_DATE_CSV)
 
 def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series]) -> Optional[Tuple[datetime, datetime]]:
     """
@@ -40,6 +36,38 @@ def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series]) -> Op
     return (candidate_date, mdd_date)
     
 
+def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict):
+    """
+    Given interval of occurences for a bunch of unique medications, for each medication merge the intervals and append all unique intervals of occurence to the patient json
+    
+    :param med_intervals: Medications' intervals of occurrences
+    :type med_intervals: dict[any, list[list[int]]]
+    :param patient_json: Record to update post-interval merging
+    :type patient_json: dict
+    """
+    for med_key, dates in med_intervals.items():
+        dates.sort(key=lambda x : x[0]) # Sort this medications active intervals by start time
+        merged_intervals = [dates[0]]
+        for date in dates[1:]:
+            if merged_intervals[-1][1] >= date[0] - MED_OVERLAP_TOLERANCE: # Merge this interval with the last merged interval
+                merged_intervals[-1][1] = max(merged_intervals[-1][1], date[1]) # New ending time for this med is potentially greater
+            else:
+                merged_intervals.append(date)
+        # Now all disjoint intervals count for unique instances of this particular medication
+        for interval in merged_intervals:
+            patient_json['active_medications'].append(
+                {
+                    "MedName" : med_key[0],
+                    "MedSimpleGenericName" : med_key[1],
+                    "MedStrength" : med_key[2],
+                    "MedForm" : med_key[3],
+                    "MedRoute" : med_key[4],
+                    "MedFrequency" : med_key[5],
+                    "MedStartInstant" : interval[0],
+                    "MedEndInstant" : interval[1]
+                }
+            )
+
 def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: datetime, years_back: int) -> Tuple[Dict, Dict]:
     """
     Remove all irrelevant history taking place after the anchor date and recast the remaining events in time relative to the anchor.
@@ -55,8 +83,8 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
     }
     processed_patient = copy.deepcopy(processed_sliced_patient)
     
-    unique_sliced_meds = {}
-    unique_unsliced_meds = {}
+    med_intervals = {}
+    sliced_med_intervals = {}
     for encounter in patient_dict['encounters']:
         encounter_copy = {'details' : encounter['details'], 'procedures' : [], 'diagnoses' : encounter['diagnoses']}
         info = encounter_copy['details']
@@ -85,14 +113,16 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
             processed_sliced_patient['encounters'].append(encounter_copy)
             
         # Handle the active medications - note that the same medication MAY be listed multiple times due to overlap which means we should collapse such intervals
-        med_intervals = {}
-        sliced_med_intervals = {}
         for med in encounter['medications']:
             med_start_date = datetime.strptime(med['MedStartInstant'], '%Y-%m-%d')
             if med_start_date > anchor_date:
                 # Med started in the future - not interested
                 continue
-            med_end_date = min(anchor_date, datetime.strptime(med['MedEndInstant'], '%Y-%m-%d'))
+            med_end_date_str = med.get('MedEndInstant')
+            if med_end_date_str:
+                med_end_date = min(anchor_date, datetime.strptime(med_end_date_str, '%Y-%m-%d'))
+            else: # Ongoing
+                med_end_date = anchor_date
             key = (
                 med["MedName"],
                 med["MedSimpleGenericName"],
@@ -101,7 +131,6 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
                 med["MedRoute"],
                 med["MedFrequency"],
             )
-            med_copy = copy.deepcopy(med)
             med_start_num = -(anchor_date-med_start_date).days
             med_end_num = -(anchor_date-med_end_date).days
             # DEFINITELY include this medication interval to the unsliced patient json
@@ -109,6 +138,20 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
                 med_intervals[key] = []
             med_intervals[key].append([med_start_num, med_end_num])
             
-            if med_end_date > 
+            if med_end_date > start_date:
+                # This was an active medication within our window for the slicing
+                if key not in sliced_med_intervals.keys():
+                    sliced_med_intervals[key] = []
+                sliced_med_intervals[key].append([med_start_num, med_end_num])
+        
+    # Now merge the intervals for both the sliced and unsliced versions of our active medications
+    merge_and_add(med_intervals, processed_patient)
+    merge_and_add(sliced_med_intervals, processed_sliced_patient)
+    
+    # Sort both medications and encounters by reverse chronological order
+    processed_patient['encounters'].sort(key = lambda encounter: -encounter['details']['start_visit'])
+    processed_patient['active_medications'].sort(key = lambda med: -med['MedStartInstant'])
+    processed_sliced_patient['encounters'].sort(key = lambda encounter: -encounter['details']['start_visit'])
+    processed_sliced_patient['active_medications'].sort(key = lambda med: -med['MedStartInstant'])
     
     return (processed_sliced_patient, processed_patient)
