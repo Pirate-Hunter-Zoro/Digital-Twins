@@ -55,6 +55,35 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
     }
     processed_patient = copy.deepcopy(processed_sliced_patient)
     
-    # TODO - next
+    unique_sliced_meds = {}
+    unique_unsliced_meds = {}
+    for encounter in patient_dict['encounters']:
+        encounter_copy = {'details' : encounter['details'], 'procedures' : [], 'diagnoses' : encounter['diagnoses']}
+        info = encounter_copy['details']
+        encounter_start_date = datetime.strptime(info['start_visit'], '%Y-%m-%d')
+        encounter_end_date = min(anchor_date, datetime.strptime(info['end_visit'], '%Y-%m-%d'))
+        if encounter_start_date > anchor_date:
+            # Happens in the future - does not even belong in the unsliced dict
+            continue
+        
+        start_offset = -(anchor_date - encounter_start_date).days
+        end_offset = -(anchor_date - encounter_end_date).days
+        info['start_visit'] = start_offset
+        info['end_visit'] = end_offset
+        for procedure in encounter['procedures']:
+            procedure_copy = copy.deepcopy(procedure)
+            procedure_start = datetime.strptime(procedure_copy['ProcedureStartInstant'], '%Y-%m-%d')
+            procedure_end = min(anchor_date, datetime.strptime(procedure_copy['ProcedureEndInstant'], '%Y-%m-%d'))
+            procedure_copy['ProcedureStartInstant'] = -(anchor_date-procedure_start).days
+            procedure_copy['ProcedureEndInstant'] = -(anchor_date-procedure_end).days
+            encounter_copy['procedures'].append(procedure_copy)
+        
+        # Append the encounter into the encounter list of the unsliced dict
+        processed_patient['encounters'].append(encounter_copy)
+        if encounter_start_date >= start_date:
+            # Append the encounter into the encounter list of the sliced dict - since it occurred within the time window
+            processed_sliced_patient['encounters'].append(encounter_copy)
+            
+        # TODO - handle active medications
     
     return (processed_sliced_patient, processed_patient)
