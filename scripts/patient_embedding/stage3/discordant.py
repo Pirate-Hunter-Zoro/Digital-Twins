@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import os
 import numpy as np
-from patient_embedding.shared.io import read_text, write_text
+from scripts.patient_embedding.shared.io import read_text, write_text
 
 from dotenv import load_dotenv
 

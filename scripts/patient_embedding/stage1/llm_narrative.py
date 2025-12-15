@@ -1,24 +1,17 @@
 """LLM call wrapper for narrative generation.
 Formats prompts and calls llama.cpp chat; raises on empty content."""
 
-# scripts/patient_embedding/stage1/generation.py
-
-from __future__ import annotations
-
 from pathlib import Path
 import os
-if __name__=="__main__":
-    from dotenv import load_dotenv
-    load_dotenv()
-    from scripts.common.models.vllm_client import VllmClient  
-    from scripts.patient_embedding.shared.prompts import PromptLoader
-else:
-    from common.models.vllm_client import VllmClient
-    from patient_embedding.shared.prompts import PromptLoader
+import re
 from typing import Iterator
 import copy
 import json
+from dotenv import load_dotenv
+load_dotenv()
 
+from scripts.common.models.vllm_client import VllmClient  
+from scripts.patient_embedding.shared.prompts import PromptLoader
 prompt_loader = PromptLoader()
 DEBUG = False
 DEBUG_FILE = Path("test_data/debug.txt")
@@ -124,6 +117,17 @@ def _yield_patient_json_in_batches(full_patient_json: dict, chunk_size: int) -> 
         last_dict['encounters'] = current_chunk_encounters
         yield last_dict
 
+def clean_response(response: str) -> str:
+    """
+    Return cleaned LLM response with no thought segments attached
+    
+    :param response: Raw LLM response
+    :type response: str
+    :return: Cleaned LLM response without thought segment
+    :rtype: str
+    """
+    return re.sub(pattern=r"<unused94>thought.*?<unused95>", repl="", flags=re.DOTALL, string=response)
+
 def generate_llm_narrative(
     client: VllmClient,
     patient_json: dict,
@@ -135,6 +139,7 @@ def generate_llm_narrative(
     narrative_save_path = Path(os.environ['LLM_NARRATIVES_DIR']) / f"{patient_id}.md"
     if narrative_save_path.exists():
         return
+    os.makedirs(narrative_save_path.parent, exist_ok=True)
     
     system_text_initial = prompt_loader.get_narrative_system_initial()
     system_text_extraction = prompt_loader.get_narrative_system_extraction()
@@ -198,7 +203,7 @@ def generate_llm_narrative(
             with open(DEBUG_FILE, 'w') as f:
                 f.write("\n\n\n\n=========================================================\n\n".join(sections))
         with open(narrative_save_path, 'w') as f:
-            f.write(resp)
+            f.write(clean_response(resp))
 
 if __name__=="__main__":
     

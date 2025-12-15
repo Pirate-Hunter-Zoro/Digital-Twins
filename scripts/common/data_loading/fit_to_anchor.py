@@ -9,32 +9,50 @@ DEBUG = False
 
 def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series]) -> Optional[Tuple[datetime, datetime]]:
     """
-    Find the anchor date of a patient given their history and the med date dataframe row that pertains to them
-    
-    :param patient_json: All patient's electronic health records
-    :type patient_json: Dict
-    :param anchor_data: Information on the 
-    :type anchor_data: Optional[pd.Series]
-    :return: Corresponding preceding medication date and MDD diagnosis date
-    :rtype: Tuple[datetime, datetime] | None
+    Find the anchor date of a patient given their history and the med date dataframe row that pertains to them.
     """
     if anchor_data is None:
-        # The patient never even had any post-MDD medications
         return None
     
-    candidate_date = datetime.strptime(anchor_data['MedStartInstant'], '%Y-%m-%d')
-    mdd_date = datetime.strptime(anchor_data['first_depression_dx_date'], '%Y-%m-%d')
-    target_ingredient = anchor_data['MedSimpleGenericName']
+    # 1. Validate Dates
+    start_date_str = anchor_data.get('MedStartInstant')
+    mdd_date_str = anchor_data.get('first_depression_dx_date')
+    
+    if not isinstance(start_date_str, str) or not isinstance(mdd_date_str, str):
+        return None
+        
+    candidate_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+    mdd_date = datetime.strptime(mdd_date_str, '%Y-%m-%d')
+
+    # 2. Get Target Ingredient (with Fallback)
+    target_ingredient = anchor_data.get('MedSimpleGenericName')
+    if not isinstance(target_ingredient, str):
+        # Fallback: Try the specific MedName from the anchor row if generic is missing
+        target_ingredient = anchor_data.get('MedName')
+    
+    # If it is STILL not a string, we cannot proceed.
+    if not isinstance(target_ingredient, str):
+        return None
+
+    # 3. Check Washout
     for encounter in patient_json['encounters']:
         for med in encounter['medications']:
-            if (target_ingredient.lower() in med['MedSimpleGenericName'].lower()) or (target_ingredient.lower() in med['MedName'].lower()):
-                # See if this falls within the washout date
-                med_start_date = datetime.strptime(med['MedStartInstant'], '%Y-%m-%d')
-                if (med_start_date > candidate_date - timedelta(days=WASHOUT)) and (med_start_date < candidate_date):
-                    # The date found for the first post-MDD antidepressant will not suffice as the patient had the same ingredient within the previous washout period
-                    return None
+            med_simple_name = med.get('MedSimpleGenericName')
+            med_name = med.get('MedName')
+            
+            # Safe Lowercase Check
+            match_generic = (isinstance(med_simple_name, str) and target_ingredient.lower() in med_simple_name.lower())
+            match_name = (isinstance(med_name, str) and target_ingredient.lower() in med_name.lower())
+
+            if match_generic or match_name:
+                med_start_str = med.get('MedStartInstant')
+                if isinstance(med_start_str, str):
+                    med_start_date = datetime.strptime(med_start_str, '%Y-%m-%d')
+                    if (med_start_date > candidate_date - timedelta(days=WASHOUT)) and (med_start_date < candidate_date):
+                        # Washout overlap detected
+                        return None
+                        
     return (candidate_date, mdd_date)
-    
 
 def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict):
     """
@@ -69,89 +87,109 @@ def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict)
             )
 
 def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: datetime, years_back: int) -> Tuple[Dict, Dict]:
-    """
-    Remove all irrelevant history taking place after the anchor date and recast the remaining events in time relative to the anchor.
-    Also add the anchor date as a new field.
-    """
     start_date = min(mdd_date, anchor_date - timedelta(days=years_back * 365))
+    
     processed_sliced_patient = {
-        'patient_id':patient_dict['patient_id'],
-        'demographics':patient_dict['demographics'],
-        'anchor_date':anchor_date.strftime('%Y-%m-%d'),
-        'active_medications':[],
-        'encounters':[]
+        'patient_id': patient_dict['patient_id'],
+        'demographics': patient_dict['demographics'],
+        'anchor_date': anchor_date.strftime('%Y-%m-%d'),
+        'active_medications': [],
+        'encounters': []
     }
     processed_patient = copy.deepcopy(processed_sliced_patient)
     
     med_intervals = {}
     sliced_med_intervals = {}
+    
     for encounter in patient_dict['encounters']:
-        encounter_copy = {'details' : encounter['details'], 'procedures' : [], 'diagnoses' : encounter['diagnoses']}
+        encounter_copy = {'details': encounter['details'], 'procedures': [], 'diagnoses': encounter['diagnoses']}
         info = encounter_copy['details']
-        encounter_start_date = datetime.strptime(info['start_visit'], '%Y-%m-%d')
-        encounter_end_date = min(anchor_date, datetime.strptime(info['end_visit'], '%Y-%m-%d'))
+        
+        # --- FIX 1: Verify Encounter Dates ---
+        enc_start_str = info.get('start_visit')
+        if not isinstance(enc_start_str, str):
+            continue # Skip bad encounters
+            
+        encounter_start_date = datetime.strptime(enc_start_str, '%Y-%m-%d')
+        
+        enc_end_str = info.get('end_visit')
+        if isinstance(enc_end_str, str):
+            encounter_end_date = min(anchor_date, datetime.strptime(enc_end_str, '%Y-%m-%d'))
+        else:
+            encounter_end_date = min(anchor_date, encounter_start_date)
+
         if encounter_start_date > anchor_date:
-            # Happens in the future - does not even belong in the unsliced dict
             continue
         
         start_offset = -(anchor_date - encounter_start_date).days
         end_offset = -(anchor_date - encounter_end_date).days
         info['start_visit'] = start_offset
         info['end_visit'] = end_offset
+        
         for procedure in encounter['procedures']:
             procedure_copy = copy.deepcopy(procedure)
-            procedure_start = datetime.strptime(procedure_copy['ProcedureStartInstant'], '%Y-%m-%d')
-            procedure_end = min(anchor_date, datetime.strptime(procedure_copy['ProcedureEndInstant'], '%Y-%m-%d'))
-            procedure_copy['ProcedureStartInstant'] = -(anchor_date-procedure_start).days
-            procedure_copy['ProcedureEndInstant'] = -(anchor_date-procedure_end).days
-            encounter_copy['procedures'].append(procedure_copy)
+            # --- FIX 2: Verify Procedure Dates ---
+            proc_start_str = procedure_copy.get('ProcedureStartInstant')
+            if isinstance(proc_start_str, str):
+                procedure_start = datetime.strptime(proc_start_str, '%Y-%m-%d')
+                procedure_copy['ProcedureStartInstant'] = -(anchor_date - procedure_start).days
+                
+                # Handle End Date
+                proc_end_str = procedure_copy.get('ProcedureEndInstant')
+                if isinstance(proc_end_str, str):
+                    procedure_end = min(anchor_date, datetime.strptime(proc_end_str, '%Y-%m-%d'))
+                    procedure_copy['ProcedureEndInstant'] = -(anchor_date - procedure_end).days
+                else:
+                    procedure_copy['ProcedureEndInstant'] = procedure_copy['ProcedureStartInstant']
+                
+                encounter_copy['procedures'].append(procedure_copy)
         
-        # Append the encounter into the encounter list of the unsliced dict
         processed_patient['encounters'].append(encounter_copy)
         if encounter_start_date >= start_date:
-            # Append the encounter into the encounter list of the sliced dict - since it occurred within the time window
             processed_sliced_patient['encounters'].append(encounter_copy)
             
-        # Handle the active medications - note that the same medication MAY be listed multiple times due to overlap which means we should collapse such intervals
         for med in encounter['medications']:
-            med_start_date = datetime.strptime(med['MedStartInstant'], '%Y-%m-%d')
-            if med_start_date > anchor_date:
-                # Med started in the future - not interested
+            # --- Verify Medication Dates ---
+            med_start_str = med.get('MedStartInstant')
+            if not isinstance(med_start_str, str):
                 continue
+            
+            med_start_date = datetime.strptime(med_start_str, '%Y-%m-%d')
+            if med_start_date > anchor_date:
+                continue
+                
             med_end_date_str = med.get('MedEndInstant')
-            if med_end_date_str:
+            if isinstance(med_end_date_str, str):
                 med_end_date = min(anchor_date, datetime.strptime(med_end_date_str, '%Y-%m-%d'))
-            else: # Ongoing
+            else:
                 med_end_date = anchor_date
+                
             key = (
-                med["MedName"],
-                med["MedSimpleGenericName"],
-                med["MedStrength"],
-                med["MedForm"],
-                med["MedRoute"],
-                med["MedFrequency"],
+                med.get("MedName"),
+                med.get("MedSimpleGenericName"),
+                med.get("MedStrength"),
+                med.get("MedForm"),
+                med.get("MedRoute"),
+                med.get("MedFrequency"),
             )
-            med_start_num = -(anchor_date-med_start_date).days
-            med_end_num = -(anchor_date-med_end_date).days
-            # DEFINITELY include this medication interval to the unsliced patient json
-            if key not in med_intervals.keys():
-                med_intervals[key] = []
+            
+            med_start_num = -(anchor_date - med_start_date).days
+            med_end_num = -(anchor_date - med_end_date).days
+            
+            if key not in med_intervals: med_intervals[key] = []
             med_intervals[key].append([med_start_num, med_end_num])
             
             if med_end_date > start_date:
-                # This was an active medication within our window for the slicing
-                if key not in sliced_med_intervals.keys():
-                    sliced_med_intervals[key] = []
+                if key not in sliced_med_intervals: sliced_med_intervals[key] = []
                 sliced_med_intervals[key].append([med_start_num, med_end_num])
         
-    # Now merge the intervals for both the sliced and unsliced versions of our active medications
     merge_and_add(med_intervals, processed_patient)
     merge_and_add(sliced_med_intervals, processed_sliced_patient)
     
-    # Sort both medications and encounters by reverse chronological order
-    processed_patient['encounters'].sort(key = lambda encounter: -encounter['details']['start_visit'])
-    processed_patient['active_medications'].sort(key = lambda med: -med['MedStartInstant'])
-    processed_sliced_patient['encounters'].sort(key = lambda encounter: -encounter['details']['start_visit'])
-    processed_sliced_patient['active_medications'].sort(key = lambda med: -med['MedStartInstant'])
+    # Sort
+    processed_patient['encounters'].sort(key=lambda x: -x['details']['start_visit'])
+    processed_patient['active_medications'].sort(key=lambda x: -x['MedStartInstant'])
+    processed_sliced_patient['encounters'].sort(key=lambda x: -x['details']['start_visit'])
+    processed_sliced_patient['active_medications'].sort(key=lambda x: -x['MedStartInstant'])
     
     return (processed_sliced_patient, processed_patient)

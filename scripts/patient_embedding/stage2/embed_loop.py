@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 from typing import List, Tuple
 from scripts.common.models.string_embedder import StringEmbedder
-from patient_embedding.shared.io import read_text
-from patient_embedding.shared.io import write_npy
+from scripts.patient_embedding.shared.io import read_text
+from scripts.patient_embedding.shared.io import write_npy
 
 RECORD_EVERY = 1
 VECTOR_DIR = Path(os.environ['VECTORS_DIR'])

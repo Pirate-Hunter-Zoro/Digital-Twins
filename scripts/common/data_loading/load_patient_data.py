@@ -7,17 +7,17 @@ import pandas as pd
 import json
 import multiprocessing
 
-from common.data_loading.fit_to_anchor import slice_and_convert_time, find_anchor_date
-from common.data_loading.create_cohort import create_cohort
+from scripts.common.data_loading.fit_to_anchor import slice_and_convert_time, find_anchor_date
+from scripts.common.data_loading.create_cohort import create_cohort
 
 MED_DATE_CSV = Path(os.environ['MDD_MED_DATE_CSV_PATH'])
-MED_DATE_DF = pd.read_csv(MED_DATE_CSV)
+MED_DATE_DF = pd.read_csv(MED_DATE_CSV, escapechar='\\', low_memory=False)
 MED_DATE_DF.set_index('PatientEpicId_SH', inplace=True)
 
 COHORT_PATH = Path(os.environ['COHORT_PATH'])
 if not COHORT_PATH.exists():
     create_cohort()
-COHORT_DF = pd.read_csv(COHORT_PATH)
+COHORT_DF = pd.read_csv(COHORT_PATH, escapechar='\\', low_memory=False)
 
 SEED = int(os.environ['SEED'])
 NUM_PATIENTS = int(os.environ['NUM_PATIENTS'])
@@ -37,31 +37,35 @@ def _load_one_patient(patient_args: Tuple[str, Path, Path, Path, Dict]) -> Tuple
     :rtype: Tuple[Dict, Dict]
     """
     sliced_path, unsliced_path, raw_path, anchor_data = patient_args
+    sliced_json, unsliced_json = None, None
     if sliced_path.exists() and unsliced_path.exists():
-        with open(sliced_path, 'r') as f:
-            sliced_json = json.load(f)
-        with open(unsliced_path, 'r') as f:
-            unsliced_json = json.load(f)
-    else:
-        # Load the patient's raw data
-        with open(raw_path, 'r') as f:
-            raw_json = json.load(f)
-        # Verify the anchor date and create the sliced dictionary
-        verified_anchor = find_anchor_date(patient_json=raw_json, anchor_data=anchor_data)
-        if verified_anchor is not None:
-            os.makedirs(UNSLICED_JSON_PATH.parent, exist_ok=True)
-            os.makedirs(SLICED_JSON_PATH.parent, exist_ok=True)
-            sliced_json, unsliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=verified_anchor[0], mdd_date=verified_anchor[1], years_back=YEARS_BACK)
-            # Save the json to avoid re-computation
-            with open(sliced_path, 'w') as f:
-                json.dump(sliced_json, f)
-            with open(unsliced_path, 'w') as f:
-                json.dump(unsliced_json, f)
-        else:
-            # Anchor date was within a 'washout' period
-            return None
+        try:
+            with open(sliced_path, 'r') as f:
+                sliced_json = json.load(f)
+            with open(unsliced_path, 'r') as f:
+                unsliced_json = json.load(f)
+            return (sliced_json, unsliced_json)
+        except json.JSONDecodeError as e:
+            print(f"Exception occured when reading from either {sliced_path} or {unsliced_path}... {e.with_traceback()}... will try to recreate...")
     
-    return (sliced_json, unsliced_json)
+    # Load the patient's raw data
+    with open(raw_path, 'r') as f:
+        raw_json = json.load(f)
+    # Verify the anchor date and create the sliced dictionary
+    verified_anchor = find_anchor_date(patient_json=raw_json, anchor_data=anchor_data)
+    if verified_anchor is not None:
+        os.makedirs(UNSLICED_JSON_PATH, exist_ok=True)
+        os.makedirs(SLICED_JSON_PATH, exist_ok=True)
+        sliced_json, unsliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=verified_anchor[0], mdd_date=verified_anchor[1], years_back=YEARS_BACK)
+        # Save the json to avoid re-computation
+        with open(sliced_path, 'w') as f:
+            json.dump(sliced_json, f)
+        with open(unsliced_path, 'w') as f:
+            json.dump(unsliced_json, f)
+        return (sliced_json, unsliced_json)
+    else:
+        # Anchor date was within a 'washout' period
+        return None
     
 def load_patient_data() -> Iterator[Tuple[Dict, Dict]]:
     """

@@ -9,10 +9,10 @@ import multiprocessing
 import re
 import json
 
-from common.models.vllm_client import VllmClient
+from scripts.common.models.vllm_client import VllmClient
 
-from patient_embedding.shared.prompts import PromptLoader, SCORE_PATTERN, EXPLANATION_PATTERN
-from patient_embedding.shared.io import read_text
+from scripts.patient_embedding.shared.prompts import PromptLoader, SCORE_PATTERN, EXPLANATION_PATTERN
+from scripts.patient_embedding.shared.io import read_text
 
 from dotenv import load_dotenv
 load_dotenv()

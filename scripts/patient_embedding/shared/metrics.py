@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 import pandas as pd
 from scipy.stats import spearmanr
-from .io import write_text
+from scripts.patient_embedding.shared.io import write_text
 
 def write_spearman(out_dir: Path, name: str, series: pd.Series, y: pd.Series) -> Optional[float]:
     mask = ~(series.isna() | y.isna())

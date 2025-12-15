@@ -7,14 +7,14 @@ from pathlib import Path
 import numpy as np, pandas as pd
 from typing import Callable
 
-from patient_embedding.shared.io import ensure_dir
-from patient_embedding.shared.plots import scatter
-from patient_embedding.shared.metrics import write_spearman
-from .cosine_calculator import create_cos_factory
-from .pairs import build_pairs, pair_id
-from .persist import read_existing_pairs, write_pairs
-from .judging import score_pairs
-from .discordant import write_discordant
+from scripts.patient_embedding.shared.io import ensure_dir
+from scripts.patient_embedding.shared.plots import scatter
+from scripts.patient_embedding.shared.metrics import write_spearman
+from scripts.patient_embedding.stage3.cosine_calculator import create_cos_factory
+from scripts.patient_embedding.stage3.pairs import build_pairs, pair_id
+from scripts.patient_embedding.stage3.persist import read_existing_pairs, write_pairs
+from scripts.patient_embedding.stage3.judging import score_pairs
+from scripts.patient_embedding.stage3.discordant import write_discordant
 
 COUNTER_INTERVAL = 5
 

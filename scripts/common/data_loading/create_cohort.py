@@ -21,7 +21,7 @@ def extract_ids(file_path: Path) -> set[str]:
     :return: All patient IDs associated with said file
     :rtype: set[str]
     """
-    df = pd.read_csv(file_path)
+    df = pd.read_csv(file_path, escapechar='\\', low_memory=False)
     return set(df.iloc[:, 0].astype(str))
 
 def create_cohort():
