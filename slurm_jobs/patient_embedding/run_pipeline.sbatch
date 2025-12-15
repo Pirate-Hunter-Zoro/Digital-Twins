@@ -34,8 +34,8 @@ set -a; source "${ENV_FILE}"; set +a
 # Threading sanity
 export OMP_NUM_THREADS="${N_THREADS}"
 
-srun python scripts/patient_embedding/forge_narratives.py
+python -m scripts.patient_embedding.forge_narratives
 
-srun python scripts/patient_embedding/forge_vectors.py 
+# srun python scripts/patient_embedding/forge_vectors.py 
   
-srun python scripts/patient_embedding/analyze_and_plot.py
+# srun python scripts/patient_embedding/analyze_and_plot.py

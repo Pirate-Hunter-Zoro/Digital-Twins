@@ -124,7 +124,7 @@ def _yield_patient_json_in_batches(full_patient_json: dict, chunk_size: int) -> 
         last_dict['encounters'] = current_chunk_encounters
         yield last_dict
 
-def generate_note(
+def generate_llm_narrative(
     client: VllmClient,
     patient_json: dict,
 ):
@@ -132,7 +132,7 @@ def generate_note(
     
     # Check to see if narrative already exists
     patient_id = patient_json['patient_id']
-    narrative_save_path = Path(os.environ['NARRATIVES_DIR']) / f"{patient_id}.md"
+    narrative_save_path = Path(os.environ['LLM_NARRATIVES_DIR']) / f"{patient_id}.md"
     if narrative_save_path.exists():
         return
     
@@ -212,7 +212,7 @@ if __name__=="__main__":
         with open(TEST_PATIENT_FILE, 'w') as f:
             json.dump(patient_json, f, indent=4)
     
-    generate_note(client, patient_json)
+    generate_llm_narrative(client, patient_json)
     with open(Path(os.environ['NARRATIVES_DIR']) / f"{id}.md", 'r') as f:
         narrative = "\n".join(f.readlines())
         with open(f"test_data/patient_{id}.md", "w") as f:

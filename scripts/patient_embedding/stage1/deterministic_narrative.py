@@ -1,5 +1,6 @@
 from typing import Dict
 import json
+import os
 
 from scripts.common.data_loading.fit_to_anchor import find_anchor_date, slice_and_convert_time
 from scripts.common.data_loading.med_definitions import SSRI, BUPROPION
@@ -26,11 +27,21 @@ def get_bool_str(val: bool) -> str:
         return "Present"
     return "Absent"
 
-def generate_narrative(sliced_json: Dict, unsliced_json: Dict) -> str:
+def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
+    """
+    Parse the sliced and unsliced patient json to generate a deterministic markdown file output
+    
+    :param sliced_json: Anchor date going back a certain number of years
+    :type sliced_json: Dict
+    :param unsliced_json: Anchor date going back to the beginning of the patient's history
+    :type unsliced_json: Dict
+    """
+    # First check for pre-existence
+    narrative_save_path = Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']) / f"{sliced_json['patient_id']}.md"
+    if narrative_save_path.exists():
+        return
+    
     demographics_of_interests = [
-        "DepressionDiagnosis",
-        "BipolarDiagnosis",
-        "SchizophreniaDiagnosis",
         "Sex",
         "PreferredLanguage",
         "AgeInYears",
@@ -72,7 +83,7 @@ def generate_narrative(sliced_json: Dict, unsliced_json: Dict) -> str:
     
     # Header
     condition = "MDD"
-    baseline_window = "-730...0"
+    baseline_window = f"-{365*int(os.environ['YEARS_BACK'])}...0"
     HEADER = f"### COHORT & INDEX\nCondition: {condition} | Index date: {sliced_json['anchor_date']} | Baseline window: {baseline_window} days\n"
     
     # Demographics
@@ -122,7 +133,11 @@ NSAID_CT={len(distinct_nsaid_ingredients)};\
 POLYPHARM_CT={len(distinct_ingredients)};\
 PRIOR_AD=SSRI:{adequate_trials_count.get(SSRI, 0)},BUP:{adequate_trials_count.get(BUPROPION, 0)};"
                     
-    return "\n".join([HEADER, DEMOGRAPHICS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, SUBSTANCE_ABUSE, UTILIZATION, SAFETY, SUICIDE, MACHINE_FLAG])
+    result = "\n".join([HEADER, DEMOGRAPHICS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, SUBSTANCE_ABUSE, UTILIZATION, SAFETY, SUICIDE, MACHINE_FLAG])
+    # Record the narrative
+    os.makedirs(narrative_save_path.parent, exist_ok=True)
+    with open(narrative_save_path, 'w') as f:
+        f.write(result)
 
 if __name__ == "__main__":
     # Dry run test
@@ -149,7 +164,7 @@ if __name__ == "__main__":
                 # Now generate the narrative
                 narrative_file = Path(f"test_data/narrative_{id}.md")
                 with open(narrative_file, 'w') as f_narrative:
-                    f_narrative.write(generate_narrative(sliced_dict, unsliced_dict))
+                    f_narrative.write(generate_deterministic_narrative(sliced_dict, unsliced_dict))
                 break
         if (i+1) % 1000 == 0:
             print(f"Searched for an anchor in {i+1} patients so far...")
