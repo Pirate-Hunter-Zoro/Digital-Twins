@@ -16,7 +16,7 @@ def extract_ids(file_path: Path) -> set[str]:
     """
     Docstring for extract_ids
     
-    :param file_path: Location of 'rds' file to read
+    :param file_path: Location of 'csv' file to read
     :type file_path: Path
     :return: All patient IDs associated with said file
     :rtype: set[str]
@@ -24,7 +24,10 @@ def extract_ids(file_path: Path) -> set[str]:
     df = pd.read_csv(file_path)
     return set(df.iloc[:, 0].astype(str))
 
-if __name__=="__main__":
+def create_cohort():
+    """
+    Docstring for create_cohort
+    """
     mdd_set = extract_ids(file_path=MDD_PATH)
     bd_set = extract_ids(file_path=BD_PATH)
     sch_set = extract_ids(file_path=SCH_PATH)

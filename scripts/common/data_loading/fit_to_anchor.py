@@ -15,7 +15,7 @@ def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series]) -> Op
     :type patient_json: Dict
     :param anchor_data: Information on the 
     :type anchor_data: Optional[pd.Series]
-    :return: Corresponding MDD diagnosis and preceding medications dates
+    :return: Corresponding preceding medication date and MDD diagnosis date
     :rtype: Tuple[datetime, datetime] | None
     """
     if anchor_data is None:
