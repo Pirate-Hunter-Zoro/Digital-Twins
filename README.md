@@ -50,6 +50,5 @@ The system is designed for interactive, counterfactual analysis.
 * **Simulation:** A user can propose a hypothetical action (e.g., "switch to bupropion").  For the encoder, this action is added to the patient's record, which is re-embedded, and a new set of neighbors is analyzed with the AIPW estimator.  For the LLM, the instruction is simply prepended to its prompt. 
 * **Evaluation:** The entire pipeline is subject to nightly regression tests, monitoring for model degradation, fairness, and calibration to ensure the system remains robust and reliable without constant human oversight. 
 
+### Investigate
 Multiple concurrent queries running on a server at once - langchain has asyncronous module - take one patient, submit all those queries (sequences) into the server and let it queue - vllm will tell you what the best number of submissions is for peak performance (e.g. 8-10 queries at a time)
-
-Make sure ENTIRE patient is most similar to themsevles - throw in some changes in history and see how that changes things
