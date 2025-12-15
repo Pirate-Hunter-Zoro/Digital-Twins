@@ -46,7 +46,7 @@ def _load_one_patient(patient_args: Tuple[str, Path, Path, Path, Dict]) -> Tuple
                 unsliced_json = json.load(f)
             return (sliced_json, unsliced_json)
         except json.JSONDecodeError as e:
-            print(f"Exception occured when reading from either {sliced_path} or {unsliced_path}... {e.with_traceback()}... will try to recreate...")
+            print(f"Exception occured when reading from either {sliced_path} or {unsliced_path}... {str(e)}... will try to recreate...", flush=True)
     
     # Load the patient's raw data
     with open(raw_path, 'r') as f:
