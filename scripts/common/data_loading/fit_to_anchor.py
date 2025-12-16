@@ -7,7 +7,7 @@ MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many
 WASHOUT = 180 # If a medication occurence is a candidate 'anchor date', it fails if another medication with the same ingredient occurred less than or equal to this many days before it
 DEBUG = False
 
-def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series]) -> Optional[Tuple[datetime, datetime]]:
+def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series], check_washout: bool = False) -> Optional[Tuple[datetime, datetime]]:
     """
     Find the anchor date of a patient given their history and the med date dataframe row that pertains to them.
     """
@@ -24,33 +24,34 @@ def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series]) -> Op
     candidate_date = datetime.strptime(start_date_str, '%Y-%m-%d')
     mdd_date = datetime.strptime(mdd_date_str, '%Y-%m-%d')
 
-    # 2. Get Target Ingredient (with Fallback)
-    target_ingredient = anchor_data.get('MedSimpleGenericName')
-    if not isinstance(target_ingredient, str):
-        # Fallback: Try the specific MedName from the anchor row if generic is missing
-        target_ingredient = anchor_data.get('MedName')
-    
-    # If it is STILL not a string, we cannot proceed.
-    if not isinstance(target_ingredient, str):
-        return None
+    if check_washout:
+        # 2. Get Target Ingredient (with Fallback)
+        target_ingredient = anchor_data.get('MedSimpleGenericName')
+        if not isinstance(target_ingredient, str):
+            # Fallback: Try the specific MedName from the anchor row if generic is missing
+            target_ingredient = anchor_data.get('MedName')
+        
+        # If it is STILL not a string, we cannot proceed.
+        if not isinstance(target_ingredient, str):
+            return None
 
-    # 3. Check Washout
-    for encounter in patient_json['encounters']:
-        for med in encounter['medications']:
-            med_simple_name = med.get('MedSimpleGenericName')
-            med_name = med.get('MedName')
-            
-            # Safe Lowercase Check
-            match_generic = (isinstance(med_simple_name, str) and target_ingredient.lower() in med_simple_name.lower())
-            match_name = (isinstance(med_name, str) and target_ingredient.lower() in med_name.lower())
+        # 3. Check Washout
+        for encounter in patient_json['encounters']:
+            for med in encounter['medications']:
+                med_simple_name = med.get('MedSimpleGenericName')
+                med_name = med.get('MedName')
+                
+                # Safe Lowercase Check
+                match_generic = (isinstance(med_simple_name, str) and target_ingredient.lower() in med_simple_name.lower())
+                match_name = (isinstance(med_name, str) and target_ingredient.lower() in med_name.lower())
 
-            if match_generic or match_name:
-                med_start_str = med.get('MedStartInstant')
-                if isinstance(med_start_str, str):
-                    med_start_date = datetime.strptime(med_start_str, '%Y-%m-%d')
-                    if (med_start_date > candidate_date - timedelta(days=WASHOUT)) and (med_start_date < candidate_date):
-                        # Washout overlap detected
-                        return None
+                if match_generic or match_name:
+                    med_start_str = med.get('MedStartInstant')
+                    if isinstance(med_start_str, str):
+                        med_start_date = datetime.strptime(med_start_str, '%Y-%m-%d')
+                        if (med_start_date > candidate_date - timedelta(days=WASHOUT)) and (med_start_date < candidate_date):
+                            # Washout overlap detected
+                            return None
                         
     return (candidate_date, mdd_date)
 

@@ -102,6 +102,7 @@ pydantic_core
 Pygments
 pyparsing
 pyreadr
+pytest
 python-dateutil
 python-dotenv
 python-json-logger

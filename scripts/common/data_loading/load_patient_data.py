@@ -77,9 +77,11 @@ def load_patient_data() -> Iterator[Tuple[Dict, Dict]]:
     # Find the intersection of the medication dates
     cohort_ids = COHORT_DF['PatientEpicId_SH']
     patients_with_anchor = MED_DATE_DF.loc[MED_DATE_DF.index.isin(cohort_ids)]
+    print(f"Found {len(patients_with_anchor)} patients with anchor dates in the cohort of {len(cohort_ids)} patients.", flush=True)
     
     # We need to create a random sample of these patients
     sampled_patients = patients_with_anchor.sample(n=min(NUM_PATIENTS, len(patients_with_anchor)), random_state=SEED)
+    print(f"Sampling {len(sampled_patients)} patients for processing...", flush=True)
     
     # In multiprocessing, each worker will need arguments to do its job
     worker_args = []
