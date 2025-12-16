@@ -59,3 +59,21 @@ class MockPatientBuilder:
         }
         self.patient['encounters'].append(encounter_dict)
         return self # Again for command chaining
+    
+    def build(self) -> Dict:
+        """
+        Return resulting patient dictionary
+        
+        :return: Patient dictionary of this MockPatientBuilder object
+        :rtype: Dict
+        """
+    
+@pytest.fixture
+def builder() -> MockPatientBuilder:
+    """
+    Return new instance of a MockPatientBuilder
+    
+    :return: MockPatientBuilder instance
+    :rtype: MockPatientBuilder
+    """
+    return MockPatientBuilder()
