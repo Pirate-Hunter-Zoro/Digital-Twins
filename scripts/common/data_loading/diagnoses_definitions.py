@@ -1,10 +1,12 @@
 from typing import Optional
 import re
 
+# TODO function to create specific MDD stage/specifications given MDD code - goes in the 'condition' of the narrative
+
 DIAGNOSIS_CODES = {
-    "MDD" : [
-        r'F32\.\d',
-        r'F33\.\d'
+    "MDD" : [ # TODO - characterize which stage of depression this is based on code
+        r'F32\.\d+',
+        r'F33\.\d+'
     ],
     "SOCIAL_ANXIETY" : [
         r'F40\.\d'

@@ -34,6 +34,7 @@ class MockPatientBuilder:
         self.patient['active_medications'].append(med_dict)
         return self # So that we can chain commands
     
+    # TODO - be able to just add diagnoses/procedures to encounters too
     def add_encounter(self, start: int, end: int, diagnoses: List[Dict] = [], procedures: List[Dict] = []) -> Self:
         """
         Add an encounter to the patient's history
