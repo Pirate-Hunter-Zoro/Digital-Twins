@@ -5,7 +5,7 @@ class MockPatientBuilder:
     
     def __init__(self):
         self.patient = {
-            
+            'active_medications' : []
         }
     
     def add_active_med(self, name: str, start: int, end: Any, generic: str=None) -> Self:
@@ -53,9 +53,9 @@ class MockPatientBuilder:
             "details" : {
                 "start_visit" : start,
                 "end_visit" : end,
-                "diagnoses" : diagnoses,
-                "procedures" : procedures,
-            }
+            },
+            "diagnoses" : diagnoses,
+            "procedures" : procedures,
         }
         self.patient['encounters'].append(encounter_dict)
         return self # Again for command chaining
@@ -67,6 +67,7 @@ class MockPatientBuilder:
         :return: Patient dictionary of this MockPatientBuilder object
         :rtype: Dict
         """
+        return self.patient
     
 @pytest.fixture
 def builder() -> MockPatientBuilder:
