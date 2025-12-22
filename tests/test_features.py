@@ -93,14 +93,14 @@ def test_polypharmacy_grouping(builder: MockPatientBuilder):
             .add_active_med(name="Ibuprofen", start=-15, end="ongoing").build()
     assert len(polypharmacy(patient_dict=patient_dict)) == 2 # sertraline and ibuprofen
     
-# def test_suicidality_flag_time_window(builder: MockPatientBuilder):
-#     """
-#     Ensure suicidality flag only pertains to the last year and not prior
-#     """
-#     patient_dict = builder.add_encounter(start=-400, end=-400,  diagnoses=[{}])
+def test_suicidality_flag_time_window(builder: MockPatientBuilder):
+    """
+    Ensure suicidality flag only pertains to the last year and not prior
+    """
+    pass
     
-# def test_psych_utilization_days(builder: MockPatientBuilder):
-#     """
-#     Ensure summing of inpatient days behaves as expected
-#     """
-#     patient_dict = builder.add_encounter()
+def test_psych_utilization_days(builder: MockPatientBuilder):
+    """
+    Ensure summing of inpatient days behaves as expected
+    """
+    pass

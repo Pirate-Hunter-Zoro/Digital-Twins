@@ -5,3 +5,4 @@ logs/
 scratch/
 .DS_Store
 *.pyc
+.pytest_cache/
