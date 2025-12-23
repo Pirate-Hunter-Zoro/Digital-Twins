@@ -142,7 +142,6 @@ PRIOR_AD=SSRI:{adequate_trials_count.get(SSRI, 0)},BUP:{adequate_trials_count.ge
 
 if __name__ == "__main__":
     # Dry run test
-    YEARS_BACK = 2
     from pathlib import Path
     test_files = list(Path("test_data/").glob("cleaned_*.json"))
     anchor_found = False
@@ -153,7 +152,7 @@ if __name__ == "__main__":
             anchor_date, mdd_date = find_anchor_date(patient_dict)
             if anchor_date != None:
                 print(f"Found anchor date: {anchor_date}")
-                sliced_dict, unsliced_dict = slice_and_convert_time(patient_dict, anchor_date, mdd_date, YEARS_BACK)
+                sliced_dict, unsliced_dict = slice_and_convert_time(patient_dict, anchor_date, mdd_date)
                 new_file = Path(f"test_data/sliced_{id}.json")
                 unsliced_file = Path(f"test_data/unsliced_{id}.json")
                 with open(new_file, 'w') as f_new:

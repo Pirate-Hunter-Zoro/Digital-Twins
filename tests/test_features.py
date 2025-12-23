@@ -8,9 +8,20 @@ from scripts.common.data_loading.features import (
     prior_adequate_trials, 
     benzo_days, 
     augmentation_flag,
-    polypharmacy
+    polypharmacy,
+    suicidality_flag,
+    psych_utilization,
+    somatic_treatment_flag,
+    psychotherapy_count,
+    nsaid_burden,
+    psych_comorbidity
 )
 from scripts.common.data_loading.med_definitions import SSRI
+from scripts.common.data_loading.diagnoses_definitions import (
+    PTSD,
+    ANXIETY,
+    MDD
+)
 
 def test_prior_adequate_trials_just_short(builder: MockPatientBuilder):
     """
@@ -97,10 +108,48 @@ def test_suicidality_flag_time_window(builder: MockPatientBuilder):
     """
     Ensure suicidality flag only pertains to the last year and not prior
     """
-    pass
+    patient_dict = builder.add_diagnosis(code="R45.851", date=-400, description="Suicide Ideation").build()
+    assert not suicidality_flag(patient_dict=patient_dict)
+    patient_dict = builder.add_diagnosis(code="R45.851", date=-300, description="Suicide Ideation").build()
+    assert suicidality_flag(patient_dict=patient_dict)
     
 def test_psych_utilization_days(builder: MockPatientBuilder):
     """
     Ensure summing of inpatient days behaves as expected
     """
-    pass
+    patient_dict = builder.add_explicit_encounter(start=-10, end=0, patient_class="Inpatient")\
+        .add_explicit_encounter(start=-20, end=-20, patient_class="Emergency").build()
+    in_patient_days, emergencies = psych_utilization(patient_dict=patient_dict, years=1)
+    assert in_patient_days == 10 and emergencies == 1
+    
+def test_somatic_treatment_case_insensitivity(builder: MockPatientBuilder):
+    """
+    Test to ensure flag for convulsive treatment is correct
+    """
+    patient_dict = builder.add_procedure(description="Electroconvulsive therapy", date=-20).build()
+    assert somatic_treatment_flag(patient_dict=patient_dict)
+    
+def test_psychotherapy_count_case_insensitivity(builder: MockPatientBuilder):
+    """
+    Test to ensure psychotherapy count is correct
+    """
+    patient_dict = builder.add_procedure(description="Individual psychotherapy session", date=-30).build()
+    assert psychotherapy_count(patient_dict=patient_dict) == 1
+    
+def test_nsaid_burden_duration(builder: MockPatientBuilder):
+    """
+    Test to ensure medication burdens of type NSAID are 
+    """
+    patient_dict = builder.add_active_med(name="Ibuprofen", start=-10, end=-5)\
+        .add_active_med(name="Naproxen", start=-10, end=-3).build()
+    nsaid_burden_set = nsaid_burden(patient_dict=patient_dict)
+    assert len(nsaid_burden_set) == 1 and 'naproxen' in nsaid_burden_set
+    
+def test_psych_comorbidity_integration(builder: MockPatientBuilder):
+    """
+    Ensure that diagnoses with certain codes correspond to the right psych comorbidity in the patient
+    """
+    patient_dict = builder.add_diagnosis(code="F43.10", date=-40, description="PTSD")\
+        .add_diagnosis(code="F41.1", date=-300, description="Anxiety").build()
+    psych_dict = psych_comorbidity(patient_dict=patient_dict)
+    assert psych_dict[PTSD] and psych_dict[ANXIETY] and (not psych_dict[MDD])

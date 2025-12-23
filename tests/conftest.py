@@ -133,6 +133,7 @@ class MockPatientBuilder:
                 'ProcedureEndInstant': date
             }
         )
+        return self
     
     def build(self) -> Dict:
         """

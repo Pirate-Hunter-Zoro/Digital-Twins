@@ -212,7 +212,7 @@ def somatic_treatment_flag(patient_dict: dict) -> bool:
     """
     for encounter in patient_dict['encounters']:
         for procedure in encounter['procedures']:
-            description = procedure['Procedure_Description']
+            description = procedure['Procedure_Description'].upper()
             for keyword in ECT_KEYWORDS:
                 if keyword in description:
                     return True
@@ -228,7 +228,7 @@ def psychotherapy_count(patient_dict: dict) -> int:
     count = 0
     for encounter in patient_dict['encounters']:
         for procedure in encounter['procedures']:
-            if "PSYCHOTHERAPY" in procedure['Procedure_Description']:
+            if "PSYCHOTHERAPY" in procedure['Procedure_Description'].upper():
                 count += 1
     return count
 

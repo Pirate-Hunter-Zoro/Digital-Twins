@@ -2,10 +2,15 @@ from typing import Dict, Tuple, Optional
 from datetime import datetime, timedelta
 import copy
 import pandas as pd
+from dotenv import load_dotenv
+load_dotenv()
+import os
 
 MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
 WASHOUT = 180 # If a medication occurence is a candidate 'anchor date', it fails if another medication with the same ingredient occurred less than or equal to this many days before it
 DEBUG = False
+YEARS_BACK = int(os.environ['YEARS_BACK'])
+YEARS_FORWARD = int(os.environ['YEARS_FORWARD'])
 
 def find_anchor_date(patient_json: Dict, anchor_data: Optional[pd.Series], check_washout: bool = False) -> Optional[Tuple[datetime, datetime]]:
     """
@@ -87,8 +92,10 @@ def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict)
                 }
             )
 
-def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: datetime, years_back: int) -> Tuple[Dict, Dict]:
-    start_date = min(mdd_date, anchor_date - timedelta(days=years_back * 365))
+def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: datetime) -> Tuple[Dict, Dict]:
+    start_date = min(mdd_date, anchor_date - timedelta(days=YEARS_BACK * 365))
+    # For the unsliced json
+    forward_limit = anchor_date + timedelta(days=YEARS_FORWARD * 365)
     
     processed_sliced_patient = {
         'patient_id': patient_dict['patient_id'],
@@ -106,7 +113,6 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
         encounter_copy = {'details': encounter['details'], 'procedures': [], 'diagnoses': encounter['diagnoses']}
         info = encounter_copy['details']
         
-        # --- FIX 1: Verify Encounter Dates ---
         enc_start_str = info.get('start_visit')
         if not isinstance(enc_start_str, str):
             continue # Skip bad encounters
@@ -119,17 +125,20 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
         else:
             encounter_end_date = min(anchor_date, encounter_start_date)
 
-        if encounter_start_date > anchor_date:
+        if encounter_start_date > forward_limit:
             continue
         
         start_offset = -(anchor_date - encounter_start_date).days
         end_offset = -(anchor_date - encounter_end_date).days
         info['start_visit'] = start_offset
-        info['end_visit'] = end_offset
+        info['end_visit'] = min(0, end_offset)
+        
+        # Unsliced encounter
+        unsliced_encounter = copy.deepcopy(encounter_copy)
+        unsliced_encounter['details']['end_visit'] = end_offset # Don't clip the ending in the unsliced dict
         
         for procedure in encounter['procedures']:
             procedure_copy = copy.deepcopy(procedure)
-            # --- FIX 2: Verify Procedure Dates ---
             proc_start_str = procedure_copy.get('ProcedureStartInstant')
             if isinstance(proc_start_str, str):
                 procedure_start = datetime.strptime(proc_start_str, '%Y-%m-%d')
