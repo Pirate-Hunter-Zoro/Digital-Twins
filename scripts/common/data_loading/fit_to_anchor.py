@@ -110,8 +110,8 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
     sliced_med_intervals = {}
     
     for encounter in patient_dict['encounters']:
-        encounter_copy = {'details': encounter['details'], 'procedures': [], 'diagnoses': encounter['diagnoses']}
-        info = encounter_copy['details']
+        sliced_encounter = {'details': encounter['details'], 'procedures': [], 'diagnoses': encounter['diagnoses']}
+        info = sliced_encounter['details']
         
         enc_start_str = info.get('start_visit')
         if not isinstance(enc_start_str, str):
@@ -134,7 +134,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
         info['end_visit'] = min(0, end_offset)
         
         # Unsliced encounter
-        unsliced_encounter = copy.deepcopy(encounter_copy)
+        unsliced_encounter = copy.deepcopy(sliced_encounter)
         unsliced_encounter['details']['end_visit'] = end_offset # Don't clip the ending in the unsliced dict
         
         for procedure in encounter['procedures']:
@@ -152,11 +152,14 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
                 else:
                     procedure_copy['ProcedureEndInstant'] = procedure_copy['ProcedureStartInstant']
                 
-                encounter_copy['procedures'].append(procedure_copy)
+                if procedure_start <= anchor_date:
+                    sliced_procedure = copy.deepcopy(procedure_copy)
+                    sliced_procedure['ProcedureEndInstant'] = min(0, sliced_procedure['ProcedureEndInstant'])
+                    sliced_encounter['procedures'].append(sliced_procedure)
         
-        processed_patient['encounters'].append(encounter_copy)
+        processed_patient['encounters'].append(sliced_encounter)
         if encounter_start_date >= start_date:
-            processed_sliced_patient['encounters'].append(encounter_copy)
+            processed_sliced_patient['encounters'].append(sliced_encounter)
             
         for med in encounter['medications']:
             # --- Verify Medication Dates ---
