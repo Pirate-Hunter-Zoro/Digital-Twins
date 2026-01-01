@@ -9,7 +9,8 @@ from scripts.common.data_loading.diagnoses_definitions import (
     MDD, 
     SUD, 
     SUICIDE_ATTEMPT,
-    SUICIDE_IDEATION
+    SUICIDE_IDEATION,
+    get_mdd_description
 )
 
 def test_mdd_regex():
@@ -34,3 +35,14 @@ def test_suicide_regex():
     """
     assert get_diagnosis_arm(diagnosis_code="R45.851") == SUICIDE_IDEATION\
         and get_diagnosis_arm(diagnosis_code="X71") == SUICIDE_ATTEMPT
+        
+def test_mdd_severity_parsing():
+    """
+    Confirm severity and recurrence are properly parsed for given codes
+    """
+    assert get_mdd_description(code="F32.0")=="Single Episode, Mild"\
+        and get_mdd_description(code="F33.2")=="Recurrent, Severe"\
+            and get_mdd_description(code="F33.3")=="Recurrent, Psychotic"\
+                and get_mdd_description(code="F33.4")=="Recurrent, Remission"\
+                    and get_mdd_description(code="F32.9")=="Single Episode, Unspecified"\
+                        and get_mdd_description(code="F32")=="Single Episode, Unspecified"

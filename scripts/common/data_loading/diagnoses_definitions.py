@@ -1,10 +1,38 @@
 from typing import Optional
 import re
 
-# TODO function to create specific MDD stage/specifications given MDD code - goes in the 'condition' of the narrative
+# TODO - incorporate into narrative production
+MDD_SEVERITY_MAP = {
+    '0': 'Mild',
+    '1': 'Moderate',
+    '2': 'Severe',
+    '3': 'Psychotic',
+    '4': 'Remission'
+}
+MDD_RECURRENCE_MAP = {
+    'F32': 'Single Episode',
+    'F33': 'Recurrent'
+}
+
+def get_mdd_description(code: str) -> str:
+    """
+    Helper method for getting the severity and recurrence for the given MDD code
+    
+    :param code: Input MDD code
+    :type code: str
+    :return: Describes severity and recurrence of diagnosis
+    :rtype: str
+    """
+    code_segments = code.split(".")
+    if len(code_segments) > 1 and code_segments[1] in MDD_SEVERITY_MAP.keys():
+        recurrence, severity = MDD_RECURRENCE_MAP[code_segments[0]], MDD_SEVERITY_MAP[code_segments[1]]
+    else:
+        recurrence, severity = MDD_RECURRENCE_MAP[code_segments[0]], "Unspecified"
+    return f"{recurrence}, {severity}"
+    
 
 DIAGNOSIS_CODES = {
-    "MDD" : [ # TODO - characterize which stage of depression this is based on code
+    "MDD" : [
         r'F32\.\d+',
         r'F33\.\d+'
     ],
