@@ -121,9 +121,9 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
         
         enc_end_str = info.get('end_visit')
         if isinstance(enc_end_str, str):
-            encounter_end_date = min(anchor_date, datetime.strptime(enc_end_str, '%Y-%m-%d'))
+            encounter_end_date = datetime.strptime(enc_end_str, '%Y-%m-%d')
         else:
-            encounter_end_date = min(anchor_date, encounter_start_date)
+            encounter_end_date = encounter_start_date
 
         if encounter_start_date > forward_limit:
             continue
@@ -147,7 +147,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
                 # Handle End Date
                 proc_end_str = procedure_copy.get('ProcedureEndInstant')
                 if isinstance(proc_end_str, str):
-                    procedure_end = min(anchor_date, datetime.strptime(proc_end_str, '%Y-%m-%d'))
+                    procedure_end = datetime.strptime(proc_end_str, '%Y-%m-%d')
                     procedure_copy['ProcedureEndInstant'] = -(anchor_date - procedure_end).days
                 else:
                     procedure_copy['ProcedureEndInstant'] = procedure_copy['ProcedureStartInstant']
@@ -156,8 +156,11 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
                     sliced_procedure = copy.deepcopy(procedure_copy)
                     sliced_procedure['ProcedureEndInstant'] = min(0, sliced_procedure['ProcedureEndInstant'])
                     sliced_encounter['procedures'].append(sliced_procedure)
+                
+                # Append to unsliced encounter regardless
+                unsliced_encounter['procedures'].append(procedure_copy)
         
-        processed_patient['encounters'].append(sliced_encounter)
+        processed_patient['encounters'].append(unsliced_encounter)
         if encounter_start_date >= start_date:
             processed_sliced_patient['encounters'].append(sliced_encounter)
             
@@ -168,14 +171,14 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
                 continue
             
             med_start_date = datetime.strptime(med_start_str, '%Y-%m-%d')
-            if med_start_date > anchor_date:
+            if med_start_date > forward_limit:
                 continue
                 
             med_end_date_str = med.get('MedEndInstant')
             if isinstance(med_end_date_str, str):
-                med_end_date = min(anchor_date, datetime.strptime(med_end_date_str, '%Y-%m-%d'))
+                med_end_date = datetime.strptime(med_end_date_str, '%Y-%m-%d')
             else:
-                med_end_date = anchor_date
+                med_end_date = forward_limit
                 
             key = (
                 med.get("MedName"),
@@ -192,9 +195,9 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
             if key not in med_intervals: med_intervals[key] = []
             med_intervals[key].append([med_start_num, med_end_num])
             
-            if med_end_date > start_date:
+            if med_end_date > start_date and med_start_date <= anchor_date:
                 if key not in sliced_med_intervals: sliced_med_intervals[key] = []
-                sliced_med_intervals[key].append([med_start_num, med_end_num])
+                sliced_med_intervals[key].append([med_start_num, min(0, med_end_num)])
         
     merge_and_add(med_intervals, processed_patient)
     merge_and_add(sliced_med_intervals, processed_sliced_patient)
