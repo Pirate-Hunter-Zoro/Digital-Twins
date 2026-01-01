@@ -5,7 +5,7 @@ from pathlib import Path
 
 from scripts.common.data_loading.fit_to_anchor import find_anchor_date, slice_and_convert_time
 from scripts.common.data_loading.med_definitions import SSRI, BUPROPION
-from scripts.common.data_loading.diagnoses_definitions import PTSD, ANXIETY
+from scripts.common.data_loading.diagnoses_definitions import PTSD, ANXIETY, get_diagnosis_arm, get_mdd_description
 from scripts.common.data_loading.features import (
     psych_comorbidity, 
     medical_comorbidity, 
@@ -20,7 +20,7 @@ from scripts.common.data_loading.features import (
     somatic_treatment_flag,
     psychotherapy_count,
     safety_comorbidity,
-    sud_specifics
+    sud_specifics,
 )
 
 def get_bool_str(val: bool) -> str:
@@ -83,7 +83,21 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
     # Form the narrative
     
     # Header
-    condition = "MDD"
+    condition = "MDD" # Default
+    # Search for specifics
+    for encounter in sliced_json['encounters']:
+        found_mdd = False
+        for diagnosis in encounter['diagnoses']:
+            for code_dict in diagnosis['codes']:
+                code = code_dict['code']
+                description = get_mdd_description(code)
+                if description != None:
+                    condition += f" ({description})"
+                    found_mdd = True
+                    break
+            if found_mdd:
+                break 
+                
     baseline_window = f"-{365*int(os.environ['YEARS_BACK'])}...0"
     HEADER = f"### COHORT & INDEX\nCondition: {condition} | Index date: {sliced_json['anchor_date']} | Baseline window: {baseline_window} days\n"
     

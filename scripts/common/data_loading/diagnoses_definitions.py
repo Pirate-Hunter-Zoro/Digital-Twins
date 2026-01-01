@@ -26,8 +26,11 @@ def get_mdd_description(code: str) -> str:
     code_segments = code.split(".")
     if len(code_segments) > 1 and code_segments[1] in MDD_SEVERITY_MAP.keys():
         recurrence, severity = MDD_RECURRENCE_MAP[code_segments[0]], MDD_SEVERITY_MAP[code_segments[1]]
-    else:
+    elif code_segments[0] in MDD_RECURRENCE_MAP:
         recurrence, severity = MDD_RECURRENCE_MAP[code_segments[0]], "Unspecified"
+    else:
+        # Non-mdd code
+        return None
     return f"{recurrence}, {severity}"
     
 
