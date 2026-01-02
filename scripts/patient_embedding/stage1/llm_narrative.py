@@ -133,6 +133,8 @@ def generate_llm_narrative(
     patient_json: dict,
 ):
     """Rolling narrative generation and storing."""
+    if int(os.environ['USE_LLM_NARRATIVE']) == 0:
+        return
     
     # Check to see if narrative already exists
     patient_id = patient_json['patient_id']
@@ -204,21 +206,3 @@ def generate_llm_narrative(
                 f.write("\n\n\n\n=========================================================\n\n".join(sections))
         with open(narrative_save_path, 'w') as f:
             f.write(clean_response(resp))
-
-if __name__=="__main__":
-    
-    client = VllmClient()
-    id = "B51F69E061B1137C6C9881CD89E71BFE"
-    TEST_PATIENT_FILE = f"test_data/sliced_{id}.json"
-
-    # Open the file and then load its contents
-    with open(TEST_PATIENT_FILE, 'r') as f:
-        patient_json = json.load(f)
-        with open(TEST_PATIENT_FILE, 'w') as f:
-            json.dump(patient_json, f, indent=4)
-    
-    generate_llm_narrative(client, patient_json)
-    with open(Path(os.environ['NARRATIVES_DIR']) / f"{id}.md", 'r') as f:
-        narrative = "\n".join(f.readlines())
-        with open(f"test_data/patient_{id}.md", "w") as f:
-            f.write(narrative)

@@ -153,35 +153,3 @@ PRIOR_AD=SSRI:{adequate_trials_count.get(SSRI, 0)},BUP:{adequate_trials_count.ge
     os.makedirs(narrative_save_path.parent, exist_ok=True)
     with open(narrative_save_path, 'w') as f:
         f.write(result)
-
-if __name__ == "__main__":
-    # Dry run test
-    from pathlib import Path
-    test_files = list(Path("test_data/").glob("cleaned_*.json"))
-    anchor_found = False
-    for i, test_file in enumerate(test_files):
-        id = test_file.stem[8:]
-        with open(test_file, 'r') as f_orig:
-            patient_dict = json.load(f_orig)
-            anchor_date, mdd_date = find_anchor_date(patient_dict)
-            if anchor_date != None:
-                print(f"Found anchor date: {anchor_date}")
-                sliced_dict, unsliced_dict = slice_and_convert_time(patient_dict, anchor_date, mdd_date)
-                new_file = Path(f"test_data/sliced_{id}.json")
-                unsliced_file = Path(f"test_data/unsliced_{id}.json")
-                with open(new_file, 'w') as f_new:
-                    json.dump(sliced_dict, f_new, indent=4)
-                with open(unsliced_file, 'w') as f_unsliced:
-                    json.dump(unsliced_dict, f_unsliced, indent=4)
-                anchor_found = True
-                
-                # Now generate the narrative
-                narrative_file = Path(f"test_data/narrative_{id}.md")
-                with open(narrative_file, 'w') as f_narrative:
-                    f_narrative.write(generate_deterministic_narrative(sliced_dict, unsliced_dict))
-                break
-        if (i+1) % 1000 == 0:
-            print(f"Searched for an anchor in {i+1} patients so far...")
-    
-    if not anchor_found:
-        print("No anchor date found in any patients...")
