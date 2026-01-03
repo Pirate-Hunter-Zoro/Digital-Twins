@@ -3,11 +3,13 @@ from typing import List
 from pathlib import Path
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from scripts.shared.utils import generate_string_id
+import sqlite3
 import torch
 
 from dotenv import load_dotenv
 load_dotenv()
+
+from scripts.shared.utils import generate_string_id
 
 class StringEmbedder:
     """
@@ -23,7 +25,7 @@ class StringEmbedder:
         full_model_path = Path(os.environ['EMBEDDER_MODEL_PATH'])
 
         if not os.path.isdir(full_model_path):
-            raise FileNotFoundError(f"Pathetic. Model directory not found: {full_model_path}")
+            raise FileNotFoundError(f"Model directory not found: {full_model_path}")
 
         model_name = os.environ['EMBEDDER_MODEL_NAME']
         print(f"[PatientEmbedder] Loading SentenceTransformer model '{model_name}'.")
@@ -37,6 +39,17 @@ class StringEmbedder:
         self.vectors_path = Path(os.environ['VECTORS_DIR'])
         os.makedirs(self.vectors_path, exist_ok=True)
         
+        # Make connection to database
+        self.connection = sqlite3.connect(self.vectors_path / 'vectors.db')
+        self.connection.execute('''
+                                CREATE TABLE IF NOT EXISTS vectors (
+    id TEXT PRIMARY KEY,
+    vector BLOB,
+    text TEXT,
+    length INTEGER
+);
+''')
+        
         # Whether vectors are to be scrubbed and recomputing
         self.scrub_vectors = int(os.environ['SCRUB_VECTORS']) == 1
 
@@ -49,18 +62,13 @@ class StringEmbedder:
         :return: Resulting vectors
         :rtype: List
         """
-        # The encode method handles tokenization, inference, and pooling.
+        cursor = self.connection.cursor()
         vectors = [None for _ in strings]
         to_compute = []
         to_compute_indices = []
         for i, string in enumerate(strings):
             id = generate_string_id(text=string)
-            vectors_store_path = self.vectors_path / f"vector_{id}.npy"
-            if vectors_store_path.exists() and not self.scrub_vectors:
-                vectors[i] = np.load(vectors_store_path)
-            else:
-                to_compute.append(string)
-                to_compute_indices.append(i)
+            cursor.execute("SELECT vector FROM vectors WHERE id=?", (id,))
                 
         if len(to_compute) > 0:
             missing_vectors = self.model.encode(
