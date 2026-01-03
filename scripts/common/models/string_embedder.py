@@ -3,13 +3,13 @@ from typing import List
 from pathlib import Path
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from dotenv import load_dotenv
+import hashlib
 import torch
+import json
 from scripts.patient_embedding.shared.similarity import cosine
 
+from dotenv import load_dotenv
 load_dotenv()
-
-# TODO - log string and vector (create some kind of unique id)
 
 class StringEmbedder:
     """
@@ -33,23 +33,74 @@ class StringEmbedder:
         # The library handles everything: loading the model, tokenizer, and pooling configuration.
         self.model = SentenceTransformer(
             model_name_or_path = str(full_model_path),
-            device = os.environ['EMBEDDER_DEVICE'] if torch.cuda.is_available() else 'cpu'
+            device = os.environ['EMBEDDER_DEVICE'] if torch.cuda.is_available() else 'cpu',
+            trust_remote_code=True
         )
+        self.vectors_path = Path(os.environ['VECTORS_DIR'])
+        os.makedirs(self.vectors_path, exist_ok=True)
+        
+        # Whether vectors are to be scrubbed and recomputing
+        self.scrub_vectors = int(os.environ['SCRUB_VECTORS']) == 1
+        
+    def _generate_id(self, text: str) -> str:
+        """
+        Generate unique ID pertaining to the input string
+        
+        :param text: String to give ID to
+        :type text: str
+        :return: Resulting ID
+        :rtype: str
+        """
+        return hashlib.md5(text.encode('utf-8')).hexdigest()
 
-    def vectorize(self, narratives: list[str]) -> List[np.array]:
+    def vectorize(self, strings: list[str], instruction: str=None) -> List[np.array]:
         """
         Generates normalized vector embeddings for a batch of texts using a simple .encode() call.
+        
+        :param strings: List of strings to embed
+        :type strings: list[str]
+        :param instruction: Specific instructions to provide the embedder when it vectorizes
+        :type instruction: str
+        :return: Resulting vectors
+        :rtype: List
         """
         # The encode method handles tokenization, inference, and pooling.
-        # normalize_embeddings=True is the same as the manual normalization you were doing.
-        vectors = self.model.encode(
-            narratives,
-            normalize_embeddings=True,
-            show_progress_bar=True
-        )
-        
+        vectors = [None for _ in strings]
+        to_compute = []
+        to_compute_indices = []
+        for i, string in enumerate(strings):
+            id = self._generate_id(text=string)
+            vectors_store_path = self.vectors_path / f"vector_{id}.npy"
+            if vectors_store_path.exists() and not self.scrub_vectors:
+                vectors[i] = np.load(vectors_store_path)
+            else:
+                to_compute.append(string)
+                to_compute_indices.append(i)
+                
+        if instruction is not None:
+            model_input = [f"Instruct: {instruction}\nQuery: {text}" for text in to_compute]
+        else:
+            model_input = to_compute
+            
+        if len(to_compute) > 0:
+            missing_vectors = self.model.encode(
+                model_input,
+                normalize_embeddings=True,
+                show_progress_bar=True,
+                convert_to_numpy=True,
+                batch_size=int(os.environ['EMBEDDER_BATCH_SIZE'])
+            )
+            for i, missing_vector in zip(to_compute_indices, missing_vectors):
+                vectors[i] = missing_vector
+                id = self._generate_id(text=strings[i])
+                vectors_store_path = self.vectors_path / f"vector_{id}.npy"
+                np.save(vectors_store_path, missing_vector)
+                string_store_path = self.vectors_path / f"string_{id}.txt"
+                with open(string_store_path, 'w') as f:
+                    f.write(strings[i])
+                
         return [vec.astype(np.float32) for vec in vectors]
-    
+
     
 if __name__=="__main__":
     str_1 = "## Diagnostics (labs, radiology, vitals, procedures)\
@@ -114,15 +165,4 @@ if __name__=="__main__":
 - XR CHEST 1 VIEW, -665 days"
 
     embedder = StringEmbedder()
-    vec1_first = embedder.vectorize([str_1])[0]
-    vec1_second = embedder.vectorize([str_1])[0]
-    vec2_first = embedder.vectorize([str_2])[0]
-    vec2_second = embedder.vectorize([str_2])[0]
-    print(cosine(vec1_first, vec2_first))
-    print(cosine(vec2_second, vec1_second))
-    print(cosine(vec1_first, vec1_second))
-    print(cosine(vec2_first, vec2_second))
-    
-    empty_str_vec = embedder.vectorize([""])[0]
-    print(cosine(vec1_first, empty_str_vec))
-    print(cosine(empty_str_vec, empty_str_vec))
+    vecs = embedder.vectorize([str_1, str_2], instruction="Retrieve medical cases")

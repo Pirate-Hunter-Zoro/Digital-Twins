@@ -1,11 +1,9 @@
 from typing import Dict
-import json
 import os
 from pathlib import Path
 
-from scripts.common.data_loading.fit_to_anchor import find_anchor_date, slice_and_convert_time
 from scripts.common.data_loading.med_definitions import SSRI, BUPROPION
-from scripts.common.data_loading.diagnoses_definitions import PTSD, ANXIETY, get_diagnosis_arm, get_mdd_description
+from scripts.common.data_loading.diagnoses_definitions import PTSD, ANXIETY, get_mdd_description
 from scripts.common.data_loading.features import (
     psych_comorbidity, 
     medical_comorbidity, 

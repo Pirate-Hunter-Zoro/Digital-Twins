@@ -79,13 +79,9 @@ def load_patient_data() -> Iterator[Tuple[Dict, Dict]]:
     patients_with_anchor = MED_DATE_DF.loc[MED_DATE_DF.index.isin(cohort_ids)]
     print(f"Found {len(patients_with_anchor)} patients with anchor dates in the cohort of {len(cohort_ids)} patients.", flush=True)
     
-    # We need to create a random sample of these patients
-    sampled_patients = patients_with_anchor.sample(n=min(NUM_PATIENTS, len(patients_with_anchor)), random_state=SEED)
-    print(f"Sampling {len(sampled_patients)} patients for processing...", flush=True)
-    
     # In multiprocessing, each worker will need arguments to do its job
     worker_args = []
-    for patient_id, patient_info in sampled_patients.iterrows():
+    for patient_id, patient_info in patients_with_anchor.iterrows():
         anchor_data = patient_info.to_dict()
         
         worker_args.append((
