@@ -42,7 +42,7 @@ class StringEmbedder:
         # Make connection to database
         self.connection = sqlite3.connect(self.vectors_path / 'vectors.db')
         self.connection.execute('''
-                                CREATE TABLE IF NOT EXISTS vectors (
+CREATE TABLE IF NOT EXISTS vectors (
     id TEXT PRIMARY KEY,
     vector BLOB,
     text TEXT,
@@ -69,6 +69,14 @@ class StringEmbedder:
         for i, string in enumerate(strings):
             id = generate_string_id(text=string)
             cursor.execute("SELECT vector FROM vectors WHERE id=?", (id,))
+            # See if we already have this string vectorized (and we're not scrubbing)
+            row = cursor.fetchone()
+            if row == None or self.scrub_vectors:
+                # Need to recompute vector
+                to_compute_indices.append(i)
+                to_compute.append(string)
+            else:
+                vectors[i] = np.frombuffer(row[0], dtype=np.float32)
                 
         if len(to_compute) > 0:
             missing_vectors = self.model.encode(
@@ -78,13 +86,19 @@ class StringEmbedder:
                 convert_to_numpy=True,
                 batch_size=int(os.environ['EMBEDDER_BATCH_SIZE'])
             )
+            new_records = []
             for i, missing_vector in zip(to_compute_indices, missing_vectors):
                 vectors[i] = missing_vector
                 id = generate_string_id(text=strings[i])
-                vectors_store_path = self.vectors_path / f"vector_{id}.npy"
-                np.save(vectors_store_path, missing_vector)
-                string_store_path = self.vectors_path / f"string_{id}.txt"
-                with open(string_store_path, 'w') as f:
-                    f.write(strings[i])
+                vector_bytes = missing_vector.tobytes()
+                new_records.append((id, vector_bytes, strings[i], len(strings[i])))
+                
+            self.connection.executemany(
+                sql='''
+INSERT OR REPLACE INTO vectors (id, vector, text, length) VALUES (?, ?, ?, ?)
+''',
+                parameters = new_records
+            )
+            self.connection.commit()
                 
         return [vec.astype(np.float32) for vec in vectors]
