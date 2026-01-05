@@ -30,7 +30,7 @@ def generate_llm_narratives():
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker_llm) as thread_pool:
         for i, _ in enumerate(thread_pool.imap_unordered(_get_llm_narrative, load_patient_data())):
             if (i + 1) % RECORD_EVERY == 0:
-                print(f"Created {i+1} llm narratives out of {int(os.environ['NUM_PATIENTS'])}...", flush=True)
+                print(f"Created {i+1} llm narratives...", flush=True)
 
 # Now deterministically parsed narratives
 
@@ -47,4 +47,4 @@ def generate_deterministic_narratives():
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as thread_pool:
         for i, _ in enumerate(thread_pool.imap_unordered(_get_deterministic_narrative, load_patient_data())):
             if (i + 1) % RECORD_EVERY == 0:
-                print(f"Created {i+1} deterministic narratives out of {int(os.environ['NUM_PATIENTS'])}...", flush=True)
+                print(f"Created {i+1} deterministic narratives...", flush=True)

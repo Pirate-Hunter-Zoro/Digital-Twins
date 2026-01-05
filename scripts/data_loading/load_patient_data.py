@@ -20,7 +20,6 @@ if not COHORT_PATH.exists():
 COHORT_DF = pd.read_csv(COHORT_PATH, escapechar='\\', low_memory=False)
 
 SEED = int(os.environ['SEED'])
-NUM_PATIENTS = int(os.environ['NUM_PATIENTS'])
 YEARS_BACK = int(os.environ['YEARS_BACK'])
 RAW_JSON_PATH = Path(os.environ['PATIENT_JSON_DIR'])
 UNSLICED_JSON_PATH = Path(os.environ['UNSLICED_PATIENT_JSON_DIR'])
