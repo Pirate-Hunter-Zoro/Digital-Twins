@@ -212,7 +212,7 @@ def somatic_treatment_flag(patient_dict: dict) -> bool:
     """
     for encounter in patient_dict['encounters']:
         for procedure in encounter['procedures']:
-            description = procedure['Procedure_Description'].upper()
+            description = str(procedure['Procedure_Description']).upper()
             for keyword in ECT_KEYWORDS:
                 if keyword in description:
                     return True
