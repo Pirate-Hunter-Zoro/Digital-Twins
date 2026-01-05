@@ -1,11 +1,12 @@
 import os
 from typing import Tuple, Iterator, Dict
 from pathlib import Path
-from dotenv import load_dotenv
-load_dotenv()
 import pandas as pd
 import json
 import multiprocessing
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from scripts.data_loading.fit_to_anchor import slice_and_convert_time, find_anchor_date
 from scripts.data_loading.create_cohort import create_cohort
@@ -19,8 +20,6 @@ if not COHORT_PATH.exists():
     create_cohort()
 COHORT_DF = pd.read_csv(COHORT_PATH, escapechar='\\', low_memory=False)
 
-SEED = int(os.environ['SEED'])
-YEARS_BACK = int(os.environ['YEARS_BACK'])
 RAW_JSON_PATH = Path(os.environ['PATIENT_JSON_DIR'])
 UNSLICED_JSON_PATH = Path(os.environ['UNSLICED_PATIENT_JSON_DIR'])
 SLICED_JSON_PATH = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
@@ -55,7 +54,7 @@ def _load_one_patient(patient_args: Tuple[str, Path, Path, Path, Dict]) -> Tuple
     if verified_anchor is not None:
         os.makedirs(UNSLICED_JSON_PATH, exist_ok=True)
         os.makedirs(SLICED_JSON_PATH, exist_ok=True)
-        sliced_json, unsliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=verified_anchor[0], mdd_date=verified_anchor[1], years_back=YEARS_BACK)
+        sliced_json, unsliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=verified_anchor[0], mdd_date=verified_anchor[1])
         # Save the json to avoid re-computation
         with open(sliced_path, 'w') as f:
             json.dump(sliced_json, f)
