@@ -3,7 +3,7 @@
 ENV_FILE=".env"
 
 echo "Submitting the vLLM server job..."
-sbatch slurm_jobs/patient_embedding/start_vllm_server.sbatch
+sbatch slurm_jobs/digital_twins/start_vllm_server.sbatch
 
 # We need to ensure the server starts AND updates the file before we try to source it.
 echo "Waiting for vLLM server to become reachable..."
@@ -26,6 +26,6 @@ while true; do
 done
 
 echo "Launching the rest of the pipeline..."
-sbatch slurm_jobs/patient_embedding/run_pipeline.sbatch
+sbatch slurm_jobs/digital_twins/run_pipeline.sbatch
 
 echo "Done."

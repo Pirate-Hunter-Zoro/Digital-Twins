@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
-#SBATCH -o slurm_jobs/patient_embedding/logs/test_vllm_client_out.txt
-#SBATCH -e slurm_jobs/patient_embedding/logs/test_vllm_client_err.txt
+#SBATCH -o slurm_jobs/digital_twins/logs/test_vllm_client_out.txt
+#SBATCH -e slurm_jobs/digital_twins/logs/test_vllm_client_err.txt
 
 # Exit immediately if command fails
 set -e

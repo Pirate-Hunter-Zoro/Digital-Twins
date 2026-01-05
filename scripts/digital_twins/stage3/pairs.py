@@ -6,7 +6,7 @@ import random
 from typing import Callable, List, Tuple
 from itertools import combinations
 from pathlib import Path
-from patient_embedding.shared.plots import histogram
+from digital_twins.shared.plots import histogram
 from dotenv import load_dotenv
 
 load_dotenv()
