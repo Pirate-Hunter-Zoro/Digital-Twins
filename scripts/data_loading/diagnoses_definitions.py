@@ -24,9 +24,9 @@ def get_mdd_description(code: str) -> str:
     :rtype: str
     """
     code_segments = code.split(".")
-    if len(code_segments) > 1 and code_segments[1] in MDD_SEVERITY_MAP.keys():
+    if len(code_segments) > 1 and code_segments[0] in MDD_RECURRENCE_MAP.keys() and code_segments[1] in MDD_SEVERITY_MAP.keys():
         recurrence, severity = MDD_RECURRENCE_MAP[code_segments[0]], MDD_SEVERITY_MAP[code_segments[1]]
-    elif code_segments[0] in MDD_RECURRENCE_MAP:
+    elif code_segments[0] in MDD_RECURRENCE_MAP.keys():
         recurrence, severity = MDD_RECURRENCE_MAP[code_segments[0]], "Unspecified"
     else:
         # Non-mdd code
