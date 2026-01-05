@@ -6,12 +6,11 @@ import os
 import re
 from typing import Iterator
 import copy
-import json
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.common.models.vllm_client import VllmClient  
-from scripts.patient_embedding.shared.prompts import PromptLoader
+from scripts.models.vllm_client import VllmClient  
+from scripts.shared.prompts import PromptLoader
 prompt_loader = PromptLoader()
 DEBUG = False
 DEBUG_FILE = Path("test_data/debug.txt")

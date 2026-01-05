@@ -8,7 +8,7 @@ from typing import List, Optional
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt 
-from scripts.patient_embedding.shared.io import ensure_dir
+from scripts.shared.io import ensure_dir
 
 def histogram(x: List[float], title: str, outpath: Path) -> None:
     # Create a new figure

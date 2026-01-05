@@ -11,8 +11,8 @@ import json
 
 from scripts.common.models.vllm_client import VllmClient
 
-from scripts.patient_embedding.shared.prompts import PromptLoader, SCORE_PATTERN, EXPLANATION_PATTERN
-from scripts.patient_embedding.shared.io import read_text
+from scripts.digital_twins.shared.prompts import PromptLoader, SCORE_PATTERN, EXPLANATION_PATTERN
+from scripts.digital_twins.shared.io import read_text
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -24,7 +24,7 @@ def init_worker(scr: bool=False):
     global scrub
     client = VllmClient()
     prompt_loader = PromptLoader()
-    out_dir  = Path(os.environ['ANALYSIS_DIR'])
+    out_dir  = Path(os.environ['RESULTS_DIR'])
     scrub = scr
     
 def judge_similarity(pid: str, na: str, nb: str) -> Tuple[float, str]:
@@ -72,7 +72,7 @@ def score_pair(patient_pair_tuple: Tuple[str,str,float]) -> Dict[str, Any]:
     pid = f"{patient_a_id}:{patient_b_id}"
     
     # The LLM judgement score is stored based on which segments of the narrative we are scoring
-    judge_score_path = Path(os.environ['ANALYSIS_DIR']) / "judge_scores" / f"{pid.replace(':','_')}.json"
+    judge_score_path = Path(os.environ['RESULTS_DIR']) / "judge_scores" / f"{pid.replace(':','_')}.json"
     if judge_score_path.exists() and not scrub:
         # The judge already gave us a score
         with open(judge_score_path, 'r') as f:

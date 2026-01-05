@@ -7,14 +7,14 @@ from pathlib import Path
 import numpy as np, pandas as pd
 from typing import Callable
 
-from scripts.patient_embedding.shared.io import ensure_dir
-from scripts.patient_embedding.shared.plots import scatter
-from scripts.patient_embedding.shared.metrics import write_spearman
-from scripts.patient_embedding.stage3.cosine_calculator import create_cos_factory
-from scripts.patient_embedding.stage3.pairs import build_pairs, pair_id
-from scripts.patient_embedding.stage3.persist import read_existing_pairs, write_pairs
-from scripts.patient_embedding.stage3.judging import score_pairs
-from scripts.patient_embedding.stage3.discordant import write_discordant
+from scripts.digital_twins.shared.io import ensure_dir
+from scripts.digital_twins.shared.plots import scatter
+from scripts.digital_twins.shared.metrics import write_spearman
+from scripts.digital_twins.stage3.cosine_calculator import create_cos_factory
+from scripts.digital_twins.stage3.pairs import build_pairs, pair_id
+from scripts.digital_twins.stage3.persist import read_existing_pairs, write_pairs
+from scripts.digital_twins.stage3.judging import score_pairs
+from scripts.digital_twins.stage3.discordant import write_discordant
 
 COUNTER_INTERVAL = 5
 
@@ -75,7 +75,7 @@ def run_analysis(rnd: random.Random, cos_func: Callable[[str, str], float], out_
 
 def run() -> None:
     vec_dir  = Path(os.environ['VECTORS_DIR'])
-    out_dir  = Path(os.environ['ANALYSIS_DIR'])
+    out_dir  = Path(os.environ['RESULTS_DIR'])
     ensure_dir(out_dir)
     
     vec_files = vec_dir.glob("*.npy")

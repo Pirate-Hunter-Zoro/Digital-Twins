@@ -2,9 +2,9 @@ from typing import Dict
 import os
 from pathlib import Path
 
-from scripts.common.data_loading.med_definitions import SSRI, BUPROPION
-from scripts.common.data_loading.diagnoses_definitions import PTSD, ANXIETY, get_mdd_description
-from scripts.common.data_loading.features import (
+from scripts.data_loading.med_definitions import SSRI, BUPROPION
+from scripts.data_loading.diagnoses_definitions import PTSD, ANXIETY, get_mdd_description
+from scripts.data_loading.features import (
     psych_comorbidity, 
     medical_comorbidity, 
     suicidality_flag,

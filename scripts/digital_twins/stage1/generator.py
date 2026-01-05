@@ -6,10 +6,10 @@ import os
 from typing import Dict, Tuple
 import multiprocessing
 
-from scripts.patient_embedding.stage1.llm_narrative import generate_llm_narrative
-from scripts.patient_embedding.stage1.deterministic_narrative import generate_deterministic_narrative
-from scripts.common.data_loading.load_patient_data import load_patient_data
-from scripts.common.models.vllm_client import VllmClient
+from scripts.digital_twins.stage1.llm_narrative import generate_llm_narrative
+from scripts.digital_twins.stage1.deterministic_narrative import generate_deterministic_narrative
+from scripts.data_loading.load_patient_data import load_patient_data
+from scripts.models.vllm_client import VllmClient
 
 RECORD_EVERY = 20
 

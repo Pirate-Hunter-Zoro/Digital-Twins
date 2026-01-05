@@ -5,7 +5,7 @@ from __future__ import annotations
 from multiprocessing import Process
 import time
 
-from scripts.patient_embedding.stage1.generator import generate_llm_narratives, generate_deterministic_narratives
+from scripts.digital_twins.stage1.generator import generate_llm_narratives, generate_deterministic_narratives
 
 def run() -> None:
     print("Running deterministic and LLM narrative generation...", flush=True)
