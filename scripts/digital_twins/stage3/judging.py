@@ -9,7 +9,7 @@ import multiprocessing
 import re
 import json
 
-from scripts.common.models.vllm_client import VllmClient
+from scripts.models.vllm_client import VllmClient
 
 from scripts.digital_twins.shared.prompts import PromptLoader, SCORE_PATTERN, EXPLANATION_PATTERN
 from scripts.digital_twins.shared.io import read_text

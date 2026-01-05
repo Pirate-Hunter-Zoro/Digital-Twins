@@ -4,7 +4,7 @@ from pathlib import Path
 # We need to tell python where the scripts directory is - the root project directory
 sys.path.append(Path(__file__).parent.parent)
 
-from scripts.common.data_loading.diagnoses_definitions import (
+from scripts.data_loading.diagnoses_definitions import (
     get_diagnosis_arm,
     MDD, 
     SUD, 

@@ -4,7 +4,7 @@ from tests.conftest import MockPatientBuilder
 
 # We need to tell python where the scripts directory is - the root project directory
 sys.path.append(Path(__file__).parent.parent)
-from scripts.common.data_loading.features import (
+from scripts.data_loading.features import (
     prior_adequate_trials, 
     benzo_days, 
     augmentation_flag,
@@ -16,8 +16,8 @@ from scripts.common.data_loading.features import (
     nsaid_burden,
     psych_comorbidity
 )
-from scripts.common.data_loading.med_definitions import SSRI
-from scripts.common.data_loading.diagnoses_definitions import (
+from scripts.data_loading.med_definitions import SSRI
+from scripts.data_loading.diagnoses_definitions import (
     PTSD,
     ANXIETY,
     MDD

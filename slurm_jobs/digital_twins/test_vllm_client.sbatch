@@ -34,4 +34,4 @@ set -a; source "${ENV_FILE}"; set +a
 # Threading sanity
 export OMP_NUM_THREADS="${N_THREADS}"
 
-srun python -m scripts.common.models.llm_narrative_generation
+srun python -m scripts.models.llm_narrative_generation

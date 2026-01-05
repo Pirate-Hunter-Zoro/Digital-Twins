@@ -7,8 +7,8 @@ import pandas as pd
 import json
 import multiprocessing
 
-from scripts.common.data_loading.fit_to_anchor import slice_and_convert_time, find_anchor_date
-from scripts.common.data_loading.create_cohort import create_cohort
+from scripts.data_loading.fit_to_anchor import slice_and_convert_time, find_anchor_date
+from scripts.data_loading.create_cohort import create_cohort
 
 MED_DATE_CSV = Path(os.environ['MDD_MED_DATE_CSV_PATH'])
 MED_DATE_DF = pd.read_csv(MED_DATE_CSV, escapechar='\\', low_memory=False)

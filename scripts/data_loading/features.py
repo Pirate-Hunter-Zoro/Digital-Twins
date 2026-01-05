@@ -1,8 +1,8 @@
 from typing import Dict, Set, Tuple
 
-from scripts.common.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, get_diagnosis_arm, SUICIDE_ARMS, SAFETY_ARMS, SUD_MAP
-from scripts.common.data_loading.med_definitions import NSAID_INGREDIENTS, BENZODIAZEPINE_INGREDIENTS, get_med_arm, ALL_ARMS, AUGMENTATION_INGREDIENTS, ALL_ARM_INGREDIENTS, HYPNOTICS_INGREDIENTS, MASTER_INGREDIENTS_MAP
-from scripts.common.data_loading.procedure_definitions import ECT_KEYWORDS, TMS_KEYWORDS
+from scripts.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, get_diagnosis_arm, SUICIDE_ARMS, SAFETY_ARMS, SUD_MAP
+from scripts.data_loading.med_definitions import NSAID_INGREDIENTS, BENZODIAZEPINE_INGREDIENTS, get_med_arm, ALL_ARMS, AUGMENTATION_INGREDIENTS, ALL_ARM_INGREDIENTS, HYPNOTICS_INGREDIENTS, MASTER_INGREDIENTS_MAP
+from scripts.data_loading.procedure_definitions import ECT_KEYWORDS, TMS_KEYWORDS
 
 def comorbidity(patient_dict: Dict, arm_set: Set[str]) -> Dict[str, bool]:
     """
