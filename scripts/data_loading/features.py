@@ -228,7 +228,7 @@ def psychotherapy_count(patient_dict: dict) -> int:
     count = 0
     for encounter in patient_dict['encounters']:
         for procedure in encounter['procedures']:
-            if "PSYCHOTHERAPY" in procedure['Procedure_Description'].upper():
+            if "PSYCHOTHERAPY" in str(procedure['Procedure_Description']).upper():
                 count += 1
     return count
 
