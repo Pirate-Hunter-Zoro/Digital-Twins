@@ -66,11 +66,11 @@ SELECT full_response FROM llm_judgements WHERE id_a=? AND id_b=?
         :param id_b: String id of second patient
         :type id_b: str
         :param response_json: Response from the LLM
-        :type id_b: Dict
+        :type response_json: Dict
         """
         pair = (id_a, id_b) if id_a <= id_b else (id_b, id_a)
         score = response_json['overall_similarity']
-        self.connection.executemany('''
+        self.connection.execute('''
 INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response) VALUES (?, ?, ?, ?)
 ''',
                 (pair[0], pair[1], score, json.dumps(response_json))
@@ -121,7 +121,8 @@ INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response)
             response_json = json.loads(cleaned_response)
             self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
             return response_json
-        except json.JSONDecodeError:
-            print(f"BAD RESPONSE FROM LLM:\nIDs: {index_id}, {candidate_id}\nResponse: {response}")
+        except json.JSONDecodeError as e:
+            print(f"BAD RESPONSE FROM LLM:\nIDs: {index_id}, {candidate_id}\nResponse: {response}", flush=True)
+            raise e
         except Exception as e:
             raise e

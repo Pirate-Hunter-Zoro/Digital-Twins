@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import requests
 from typing import Dict, List
+import re
 
 load_dotenv()
 
@@ -9,6 +10,16 @@ class VllmClient:
     def __init__(self) -> None:
         # Save for parity with callers that may introspect these attrs
         self.base_url = os.environ['VLLM_URL']
+        
+    def _clean_response(self, response: str) -> str:
+        """Cleans response text from the llm server by removing thought sections
+        """
+        return re.sub(
+            r"<(think|thought).*?>.*?</\1.*?>", 
+            "", 
+            response, 
+            flags=re.DOTALL | re.IGNORECASE
+        ).strip()
         
     def chat(
         self,
@@ -34,4 +45,4 @@ class VllmClient:
         
         json_response = response.json()
         llm_response_text = json_response["choices"][0]["message"]["content"]
-        return llm_response_text
+        return self._clean_response(llm_response_text)
