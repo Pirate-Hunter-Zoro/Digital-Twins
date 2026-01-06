@@ -1,6 +1,10 @@
 from typing import Dict
 import os
 from pathlib import Path
+import random
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from scripts.data_loading.med_definitions import SSRI, BUPROPION
 from scripts.data_loading.diagnoses_definitions import PTSD, ANXIETY, get_mdd_description
@@ -83,8 +87,8 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
     # Header
     condition = "MDD" # Default
     # Search for specifics
+    found_mdd = False
     for encounter in sliced_json['encounters']:
-        found_mdd = False
         for diagnosis in encounter['diagnoses']:
             for code_dict in diagnosis['codes']:
                 code = code_dict['code']
@@ -95,6 +99,8 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
                     break
             if found_mdd:
                 break 
+        if found_mdd:
+            break
                 
     baseline_window = f"-{365*int(os.environ['YEARS_BACK'])}...0"
     HEADER = f"### COHORT & INDEX\nCondition: {condition} | Index date: {sliced_json['anchor_date']} | Baseline window: {baseline_window} days\n"
@@ -151,3 +157,14 @@ PRIOR_AD=SSRI:{adequate_trials_count.get(SSRI, 0)},BUP:{adequate_trials_count.ge
     os.makedirs(narrative_save_path.parent, exist_ok=True)
     with open(narrative_save_path, 'w') as f:
         f.write(result)
+
+
+if __name__=="__main__":
+    # Take a sample of produced narratives and put them in the local test_data directory
+    all_narratives = list(Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']).glob("*.md"))
+    for narrative in random.sample(all_narratives, 10):
+        with open(narrative, 'r') as f:
+            content = f.read()
+            new_file = Path("test_data") / narrative.name
+            with open(new_file, 'w') as nf:
+                nf.write(content)

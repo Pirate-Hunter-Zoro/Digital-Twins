@@ -2,7 +2,7 @@ import sqlite3
 import json
 import os
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -70,10 +70,58 @@ SELECT full_response FROM llm_judgements WHERE id_a=? AND id_b=?
         """
         pair = (id_a, id_b) if id_a <= id_b else (id_b, id_a)
         score = response_json['overall_similarity']
-        self.connection.executemany(
-                '''
-INSERT OR REPLACE INTO llm_judgements (id, vector, text, length) VALUES (?, ?, ?, ?)
+        self.connection.executemany('''
+INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response) VALUES (?, ?, ?, ?)
 ''',
                 (pair[0], pair[1], score, json.dumps(response_json))
         )
         self.connection.commit()
+        
+    def judge(self, index_narrative: str, candidate_narrative: str, index_id: str, candidate_id: str) -> Dict[str, Any]:
+        """
+        Query the LLM judge (if necessary) to retrieve a similarity scoring between the two patients
+        
+        :param index_narrative: Narrative of patient of interest
+        :type index_narrative: str
+        :param candidate_narrative: Narrative of neighbor patient
+        :type candidate_narrative: str
+        :param index_id: String id of the patient of interest
+        :type index_id: str
+        :param candidate_id: String id of the neighbor patient
+        :type candidate_id: str
+        :return: LLM response parsed as a dictionary
+        :rtype: Dict[str, Any]
+        """
+        cached = self._get_cached_judgement(id_a=index_id, id_b=candidate_id)
+        if cached != None:
+            return cached
+        # Otherwise we need to ask the LLM for a judgement
+        system_prompt = self.prompt_loader.get_judge_system()
+        user_prompt = self.prompt_loader.render_judge_user(narrative_a=index_narrative, narrative_b=candidate_narrative)
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": user_prompt,
+            }
+        ]
+        
+        # Try to get a judgement
+        try:
+            response = self.client.chat(messages=messages)
+            cleaned_response = response.strip()
+            if "```json" in cleaned_response:
+                cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
+            elif "```" in cleaned_response:
+                cleaned_response = cleaned_response.split("```")[1].split("```")[0]
+            
+            response_json = json.loads(cleaned_response)
+            self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
+            return response_json
+        except json.JSONDecodeError:
+            print(f"BAD RESPONSE FROM LLM:\nIDs: {index_id}, {candidate_id}\nResponse: {response}")
+        except Exception as e:
+            raise e
