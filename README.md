@@ -1,6 +1,6 @@
 # Digital Twins: Patient Representation & Embedding Pipeline
 
-This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"—vectorized representations of patient narratives capable of semantic search and cohort analysis. 
+This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"—vectorized representations of patient narratives capable of semantic search and cohort analysis.
 
 The pipeline is divided into **Data Loading**, **Stage 1 (Narrative Generation)**, and **Stage 2 (Vector Embedding)**.
 
@@ -21,22 +21,34 @@ Transforms the structured JSONs into textual narratives.
 
 ### 3. Stage 2: Vector Embedding (`scripts/digital_twins/embeddings`)
 **The Forge.** Converts text narratives into high-dimensional vectors using the `StringEmbedder`.
-* **`forge_vectors.py`**: The main driver. 
+* **`forge_vectors.py`**: The main driver.
     1.  Reads `.md` files from Stage 1.
     2.  Batches them (CPU-bound or GPU-bound).
     3.  Feeds them to the `StringEmbedder`.
 * **Artifacts**: This stage populates the SQLite database `vectors.db`.
 
-### 4. Models (`scripts/models`)
+### 4. Stage 3: Retrieval & Inference (`scripts/digital_twins/retrieval`)
+**The Judge.** Finds and scores patient similarity.
+* **`retriever.py`**:
+    * Loads the entire `vectors.db` into memory as a normalized matrix.
+    * Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
+* **`scorer.py`**:
+    * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
+    * **Caching**: Stores expensive LLM outputs in `judgements.db` (Table: `llm_judgements`) to prevent redundant inference.
+    * **Logic**: Checks cache -> Formats Prompt -> Calls vLLM -> Parses JSON -> Saves Result.
+    * **Critical**: This script enforces strict validation. If the LLM returns malformed JSON, the process raises an exception and halts to prevent data corruption.
+* **`pipeline_runner.py`**: (Coming Soon) Orchestrates the end-to-end flow: `Index Patient -> Vector Search -> Top Candidates -> LLM Scoring -> Final Report`.
+
+### 5. Models (`scripts/models`)
 Interfaces for the neural networks.
-* **`string_embedder.py`**: 
+* **`string_embedder.py`**:
     * Wraps `SentenceTransformer` (e.g., Qwen).
     * **Storage**: Manages a SQLite connection to `vectors.db`.
     * **Logic**: Checks the DB for existing IDs (MD5 hash of text). If missing, computes the embedding and inserts it as a binary BLOB.
     * **Scrubbing**: Respects `SCRUB_VECTORS` env var to force re-computation.
 * **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation).
 
-### 5. Shared Utilities (`scripts/shared`)
+### 6. Shared Utilities (`scripts/shared`)
 * **`similarity.py`**: **The Search Engine.**
     * Computes Cosine Similarity between patient IDs.
     * **Caching**: Uses the `similarities` table in `vectors.db` to store `(id_a, id_b, score)`.
@@ -46,11 +58,10 @@ Interfaces for the neural networks.
 
 ---
 
-## The Vault: `vectors.db`
+## The Vault: Databases
 
-The embedding system relies on a single SQLite database located at `VECTORS_DIR/vectors.db` to handle the scale of 50,000+ patients without file system overhead.
-
-### Schema
+### Vector Storage (`vectors.db`)
+Located at `ARTIFACTS_DIR/vectors.db` (specific path depends on embedding model). Handles scale without file system overhead.
 
 **Table: `vectors`**
 Stores the raw embeddings.
@@ -69,37 +80,68 @@ Caches comparison scores to avoid re-computing dot products (billions of potenti
 | `id_b` | `TEXT (PK)` | Second Patient ID. |
 | `score` | `REAL` | Cosine similarity (0.0 - 1.0). |
 
-*Note: The `similarities` table includes an index on `score` for rapid outlier analysis.*
+### Judgement Storage (`judgements.db`)
+Located at `JUDGEMENTS_DIR`.
+
+**Table: `llm_judgements`**
+Caches the expensive qualitative evaluations from the LLM.
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id_a` | `TEXT (PK)` | First Patient ID. |
+| `id_b` | `TEXT (PK)` | Second Patient ID. |
+| `overall_score` | `INTEGER` | Numeric Similarity Score |
+| `full_response` | `TEXT`| Full Response from LLM Including Justification |
 
 ---
 
-## Configuration (.env)
+## Configuration
 
-The pipeline requires the following environment variables:
+The pipeline requires a `.env` file. Below are the standard configurations:
 
-```bash
-# Directories
-VECTORS_DIR="/path/to/storage/vectors"
-SLICED_PATIENT_JSON_DIR="/path/to/data/sliced_jsons"
-UNSLICED_PATIENT_JSON_DIR="/path/to/data/unsliced_jsons"
-DETERMINISTIC_NARRATIVES_DIR="/path/to/data/narratives_md"
+### General & Reproducibility
+* `SEED`: 42 (Ensures deterministic behavior).
 
-# Model Configuration
-EMBEDDER_MODEL_PATH="/path/to/local/model/weights"
-EMBEDDER_MODEL_NAME="Qwen-Embedding-Checkpoint"
-EMBEDDER_DEVICE="cpu" # or "cuda"
-EMBEDDER_BATCH_SIZE="32"
+### Data Paths (Input)
+* `PREP_DATA_DIR`: `/media/studies/ehr_study/data-EHR-prepped/DV250901v1-PV251208v1/PrepData/`
+* `PROCEDURE_CSV_PATH`: Path to `Procedure_Table.csv`
+* `MEDICATION_CSV_PATH`: Path to `Medication_Table.csv`
+* `DIAGNOSIS_CSV_PATH`: Path to `Diagnosis_Table.csv`
+* `ENCOUNTER_CSV_PATH`: Path to `Encounter_Table.csv`
+* `PERSON_CSV_PATH`: Path to `Person_Table.csv`
 
-# Operations
-SCRUB_VECTORS="0"      # Set to "1" to force re-embedding
-SCRUB_SIMILARITY="0"   # Set to "1" to force re-calculation of scores
+### Analysis & Cohorts
+* `ANALYSIS_DIR`: `/media/studies/ehr_study/analysis/mferguson/`
+* `MDD_MED_DATE_CSV_PATH`: `${ANALYSIS_DIR}/post_mdd_ad_index.csv`
+* `COHORT_PATH`: `${ANALYSIS_DIR}/mdd_only_patients.csv`
+* `PATIENT_JSON_DIR`: `${ANALYSIS_DIR}/patient_json`
+* `SLICED_PATIENT_JSON_DIR`: `${ANALYSIS_DIR}/sliced_patient_json`
 
-```
+### Models
+
+**Embedding Model**
+* `EMBEDDER_MODEL_NAME`: `Qwen-Qwen3-Embedding-8B`
+* `EMBEDDER_MODEL_PATH`: `${ANALYSIS_DIR}/models/${EMBEDDER_MODEL_NAME}`
+* `EMBEDDER_DEVICE`: `cpu` (Avoid `cuda` for large strings to prevent OOM).
+* `EMBEDDER_BATCH_SIZE`: 32
+
+**Generative Model (vLLM)**
+* `VLLM_MODEL_NAME`: `google_medgemma-27b-text-it`
+* `VLLM_URL`: `http://compute306:8000`
+* `MAX_TOKENS`: 8192
+
+### Artifacts & Output
+* `ARTIFACTS_DIR`: `${ANALYSIS_DIR}/artifacts/`
+* `VECTORS_DIR`: `${ARTIFACTS_DIR}/${EMBEDDER_MODEL_NAME}/`
+* `JUDGEMENTS_DIR`: `${ARTIFACTS_DIR}/${VLLM_MODEL_NAME}/`
+* `SCRUB_VECTORS`: 0 (Set to 1 to force re-embedding).
+
+### Concurrency
+* `NUM_WORKERS_NON_LLM_TASK`: 16
+* `NUM_WORKERS_LLM_TASK`: 2 (Keep low to avoid overwhelming vLLM).
 
 ## Usage
 
 **To Forge Vectors (Stage 2):**
-
 ```bash
 python -m scripts.digital_twins.embeddings.forge_vectors
 
