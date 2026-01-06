@@ -18,6 +18,7 @@ class PromptLoader:
     _NARRATIVE_USER_FINALIZATION = "narrative_user_finalization.txt"
     _NARRATIVE_SYSTEM_FINALIZATION = "narrative_system_finalization.txt"
     _JUDGE_SYSTEM = "judge_system.txt"
+    _JUDGE_USER = "judge_user.txt"
 
     def __init__(self) -> None:
         pass
@@ -51,11 +52,8 @@ class PromptLoader:
         """
         Formats the two narratives into the user prompt for the judging task.
         """
-        # This is the simple, direct format the user prompt should have.
-        return (
-            f"PATIENT NARRATIVE 1:\n---\n{narrative_a}\n---\n\n"
-            f"PATIENT NARRATIVE 2:\n---\n{narrative_b}\n---"
-        )
+        template = self._read(filename=self._JUDGE_USER)
+        return template.replace("{narrative_a}", narrative_a).replace("{narrative_b}", narrative_b)
 
     # -------- internals --------
 

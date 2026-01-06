@@ -1,0 +1,23 @@
+INDEX PATIENT:
+{narrative_a}
+
+CANDIDATE PATIENT:
+{narrative_b}
+
+Return this JSON:
+{
+    "overall_similarity": 0-100,
+    "phenotype": 0-100,
+    "psych_comorbidity": 0-100,
+    "metabolic_pain": 0-100,
+    "treatment_burden": 0-100,
+    "social_functional": 0-100,
+    "safety": 0-100,
+    "top_similarity_drivers": ["short phrase x5-8"],
+    "key_mismatches": ["short phrase x3-5"]
+}
+
+Scoring rules:
+- Same band (e.g., NSAID 0 vs 1) = small penalty; different band (0 vs >=2) = large penalty.
+- Reward matches on polypharmacy, pain/NSAIDs, anxiety/fatigue most.
+- If a dimension has any "Missing", exclude that dimension and renormalize the weights.
