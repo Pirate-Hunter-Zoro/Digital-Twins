@@ -1,54 +1,114 @@
-# The Digital Twin Stack: A Causal Implementation
+# Digital Twins: Patient Representation & Embedding Pipeline
 
-## 1. The Core Philosophy: From Statistical to Causal Twins
+This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"—vectorized representations of patient narratives capable of semantic search and cohort analysis. 
 
-This project moves beyond finding mere "statistical twins" based on superficial similarity. The fundamental goal is to construct a "causal twin" by using a rigorous statistical backbone.  We are not just asking "who looks like this patient?" but rather, "what would happen to this patient under a different course of action, accounting for all confounding factors?"  This is achieved by integrating a propensity-weighted causal layer at every step, transforming simple retrieval into a robust "what-if" engine. 
+The pipeline is divided into **Data Loading**, **Stage 1 (Narrative Generation)**, and **Stage 2 (Vector Embedding)**.
+
+## Project Structure
+
+### 1. Data Loading (`scripts/data_loading`)
+The foundation. These scripts ingest raw EHR exports and structure them into usable patient objects.
+* **`build_jsons.py`**: The initial ETL step. Converts raw CSVs/SQL dumps into per-patient JSON files.
+* **`create_cohort.py`**: Filters the total population down to the study cohort (e.g., MDD patients).
+* **`deterministic_narrative.py`**: The logic that deterministically translates structured JSON features (labs, meds, diagnoses) into a human-readable Markdown narrative.
+* **`features.py`**: Extractors for specific clinical features.
+* **Definitions**: `diagnoses_definitions.py`, `med_definitions.py`, etc., map codes to clinical text.
+
+### 2. Stage 1: Narrative Generation (`scripts/digital_twins/stage1`)
+Transforms the structured JSONs into textual narratives.
+* **`generator.py`**: Iterates through the cohort, applies the `deterministic_narrative` logic, and saves `.md` files to the `DETERMINISTIC_NARRATIVES_DIR`.
+* **`runner.py`**: Orchestrates the generation job via Slurm.
+
+### 3. Stage 2: Vector Embedding (`scripts/digital_twins/stage2`)
+**The Forge.** Converts text narratives into high-dimensional vectors using the `StringEmbedder`.
+* **`forge_vectors.py`**: The main driver. 
+    1.  Reads `.md` files from Stage 1.
+    2.  Batches them (CPU-bound or GPU-bound).
+    3.  Feeds them to the `StringEmbedder`.
+* **Artifacts**: This stage populates the SQLite database `vectors.db`.
+
+### 4. Models (`scripts/models`)
+Interfaces for the neural networks.
+* **`string_embedder.py`**: 
+    * Wraps `SentenceTransformer` (e.g., Qwen).
+    * **Storage**: Manages a SQLite connection to `vectors.db`.
+    * **Logic**: Checks the DB for existing IDs (MD5 hash of text). If missing, computes the embedding and inserts it as a binary BLOB.
+    * **Scrubbing**: Respects `SCRUB_VECTORS` env var to force re-computation.
+* **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation).
+
+### 5. Shared Utilities (`scripts/shared`)
+* **`similarity.py`**: **The Search Engine.**
+    * Computes Cosine Similarity between patient IDs.
+    * **Caching**: Uses the `similarities` table in `vectors.db` to store `(id_a, id_b, score)`.
+    * **Efficiency**: Checks the DB cache first. If a miss, loads vector BLOBs, computes dot product, and saves the result.
+* **`utils.py`**: Core helpers (hashing logic `generate_string_id`, etc.).
+* **`io.py`**: Standardized file handling.
 
 ---
 
-## 2. The Foundation: A Disciplined and Reproducible Workflow
+## The Vault: `vectors.db`
 
-Before any analysis, a rigid structure is established to ensure perfect reproducibility and prevent "data creep." 
+The embedding system relies on a single SQLite database located at `VECTORS_DIR/vectors.db` to handle the scale of 50,000+ patients without file system overhead.
 
-1.  **Directory Structure:** A predictable folder layout is created to house all artifacts, from raw data to final models, ensuring any team member can navigate the project. 
-2.  **Cohort Freeze:** The patient population (72,168 individuals) is defined and locked on day one.  This guarantees that all subsequent model improvements are due to the methods, not a shifting dataset. 
-3.  **Deterministic Serializer:** Patient histories are converted into a standardized, human-readable Markdown format.  Each visit becomes a consistent line of text, ensuring that the same patient record always produces the exact same input for the models. 
+### Schema
 
----
+**Table: `vectors`**
+Stores the raw embeddings.
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `TEXT (PK)` | MD5 Hash of the narrative text. |
+| `vector` | `BLOB` | The numpy array (`float32`) serialized to bytes. |
+| `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
+| `length` | `INTEGER` | Character count of the text. |
 
-## 3. The Causal Engine: Building the Backbone
+**Table: `similarities`**
+Caches comparison scores to avoid re-computing dot products (billions of potential pairs).
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id_a` | `TEXT (PK)` | First Patient ID (alphabetically sorted). |
+| `id_b` | `TEXT (PK)` | Second Patient ID. |
+| `score` | `REAL` | Cosine similarity (0.0 - 1.0). |
 
-This is the critical layer that separates this plan from simple similarity searching.
-
-1.  **Propensity Scores:** An XGBoost model is trained to calculate the probability that a patient would receive a certain treatment (e.g., a medication switch) based on their history and characteristics.  This creates inverse-propensity weights (IPW) that can be used to balance the treatment and control groups, mimicking a randomized trial. 
-2.  **Causal Forest:** A causal forest model is then trained, using the patient embeddings as input.  This model estimates the Individualized Treatment Effect (ITE) by predicting outcomes under both possible actions (e.g., "switch" vs. "stay"). 
-
----
-
-## 4. The Two Paths to Prediction
-
-With the causal foundation in place, two retrieval methods are employed to find twins and predict outcomes.
-
-### Method 1: The Encoder Path (Causally-Adjusted k-Nearest Neighbors)
-
-1.  **Embedding:** A BEHRT model creates a mathematical signature for each patient. 
-2.  **Retrieval:** FAISS is used to find a set of nearest neighbors (e.g., k=50) for a target patient. 
-3.  **The Verdict:** The prediction is **not** a simple average. An Augmented Inverse Propensity Weighting (AIPW) estimator is applied to this group of 50 neighbors, using the pre-computed IPW weights.  This provides a causally-adjusted risk estimate with confidence intervals, such as "Switch → TRD 18% (±4%)". 
-
-### Method 2: The LLM Path (Clinician-Expert with Guardrails)
-
-1.  **Pre-Filtering:** The encoder first identifies the 1,000 closest neighbors to narrow the search space. 
-2.  **The Model's Judgment:** A fine-tuned Mistral-7B model, acting as a clinical expert, reviews the target patient and the 1,000 candidates to select the single best match. 
-3.  **The Verdict:** The LLM generates a structured JSON output, including its chosen twin, risk scores for different actions, and the textual evidence for its decision.  Crucially, these risk numbers are cross-checked against the causal backbone's calculations by a guard script to prevent hallucination and ensure statistical validity. 
+*Note: The `similarities` table includes an index on `score` for rapid outlier analysis.*
 
 ---
 
-## 5. The "What-If" Workflow & Evaluation
+## Configuration (.env)
 
-The system is designed for interactive, counterfactual analysis.
+The pipeline requires the following environment variables:
 
-* **Simulation:** A user can propose a hypothetical action (e.g., "switch to bupropion").  For the encoder, this action is added to the patient's record, which is re-embedded, and a new set of neighbors is analyzed with the AIPW estimator.  For the LLM, the instruction is simply prepended to its prompt. 
-* **Evaluation:** The entire pipeline is subject to nightly regression tests, monitoring for model degradation, fairness, and calibration to ensure the system remains robust and reliable without constant human oversight. 
+```bash
+# Directories
+VECTORS_DIR="/path/to/storage/vectors"
+SLICED_PATIENT_JSON_DIR="/path/to/data/sliced_jsons"
+UNSLICED_PATIENT_JSON_DIR="/path/to/data/unsliced_jsons"
+DETERMINISTIC_NARRATIVES_DIR="/path/to/data/narratives_md"
 
-### Investigate
-Multiple concurrent queries running on a server at once - langchain has asyncronous module - take one patient, submit all those queries (sequences) into the server and let it queue - vllm will tell you what the best number of submissions is for peak performance (e.g. 8-10 queries at a time)
+# Model Configuration
+EMBEDDER_MODEL_PATH="/path/to/local/model/weights"
+EMBEDDER_MODEL_NAME="Qwen-Embedding-Checkpoint"
+EMBEDDER_DEVICE="cpu" # or "cuda"
+EMBEDDER_BATCH_SIZE="32"
+
+# Operations
+SCRUB_VECTORS="0"      # Set to "1" to force re-embedding
+SCRUB_SIMILARITY="0"   # Set to "1" to force re-calculation of scores
+
+```
+
+## Usage
+
+**To Forge Vectors (Stage 2):**
+
+```bash
+python -m scripts.digital_twins.stage2.forge_vectors
+
+```
+
+**To Calculate Similarity:**
+
+```python
+from scripts.shared.similarity import cosine
+score = cosine("patient_id_A", "patient_id_B")
+
+```
