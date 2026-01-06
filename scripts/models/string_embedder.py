@@ -94,10 +94,10 @@ CREATE TABLE IF NOT EXISTS vectors (
                 new_records.append((id, vector_bytes, strings[i], len(strings[i])))
                 
             self.connection.executemany(
-                sql='''
+                '''
 INSERT OR REPLACE INTO vectors (id, vector, text, length) VALUES (?, ?, ?, ?)
 ''',
-                parameters = new_records
+                new_records
             )
             self.connection.commit()
                 
