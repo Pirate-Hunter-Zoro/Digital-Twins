@@ -26,7 +26,7 @@ set +u; conda activate "${CONDA_ENV}"; set -u || exit 10
 # Load live vLLM endpoint 
 ENV_FILE="${SLURM_SUBMIT_DIR}/.env"
 if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "ERROR: ${ENV_FILE} not found. The server job must run first." >&2
+  echo "ERROR: ${ENV_FILE} not found." >&2
   exit 11
 fi
 set -a; source "${ENV_FILE}"; set +a
@@ -37,5 +37,3 @@ export OMP_NUM_THREADS="${N_THREADS}"
 python -m scripts.digital_twins.forge_narratives
 
 python -m scripts.digital_twins.forge_vectors
-  
-# python -m scripts.digital_twins.analyze_and_plot

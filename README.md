@@ -14,12 +14,12 @@ The foundation. These scripts ingest raw EHR exports and structure them into usa
 * **`features.py`**: Extractors for specific clinical features.
 * **Definitions**: `diagnoses_definitions.py`, `med_definitions.py`, etc., map codes to clinical text.
 
-### 2. Stage 1: Narrative Generation (`scripts/digital_twins/stage1`)
+### 2. Stage 1: Narrative Generation (`scripts/digital_twins/narratives`)
 Transforms the structured JSONs into textual narratives.
 * **`generator.py`**: Iterates through the cohort, applies the `deterministic_narrative` logic, and saves `.md` files to the `DETERMINISTIC_NARRATIVES_DIR`.
 * **`runner.py`**: Orchestrates the generation job via Slurm.
 
-### 3. Stage 2: Vector Embedding (`scripts/digital_twins/stage2`)
+### 3. Stage 2: Vector Embedding (`scripts/digital_twins/embeddings`)
 **The Forge.** Converts text narratives into high-dimensional vectors using the `StringEmbedder`.
 * **`forge_vectors.py`**: The main driver. 
     1.  Reads `.md` files from Stage 1.
@@ -101,7 +101,7 @@ SCRUB_SIMILARITY="0"   # Set to "1" to force re-calculation of scores
 **To Forge Vectors (Stage 2):**
 
 ```bash
-python -m scripts.digital_twins.stage2.forge_vectors
+python -m scripts.digital_twins.embeddings.forge_vectors
 
 ```
 
