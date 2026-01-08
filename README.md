@@ -9,7 +9,7 @@ The pipeline is divided into **Data Loading**, **Stage 1 (Narrative Generation)*
 ### 1. Data Loading (`scripts/data_loading`)
 The foundation. These scripts ingest raw EHR exports and structure them into usable patient objects.
 * **`build_jsons.py`**: The initial ETL step. Converts raw CSVs/SQL dumps into per-patient JSON files.
-* **`create_cohort.py`**: Filters the total population down to the study cohort (e.g., MDD patients).
+* **`create_cohort.py`**: Filters the total population down to the study cohort (e.g., MDD patients who are not schizophrenic or bipolar).
 * **`deterministic_narrative.py`**: The logic that deterministically translates structured JSON features (labs, meds, diagnoses) into a human-readable Markdown narrative.
 * **`features.py`**: Extractors for specific clinical features.
 * **Definitions**: `diagnoses_definitions.py`, `med_definitions.py`, etc., map codes to clinical text.
