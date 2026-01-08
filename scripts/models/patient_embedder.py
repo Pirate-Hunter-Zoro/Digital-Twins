@@ -11,7 +11,7 @@ load_dotenv()
 
 from scripts.shared.utils import generate_string_id
 
-class StringEmbedder:
+class PatientEmbedder:
     """
     A simplified class that uses the sentence-transformers library to embed text.
     It handles all the underlying complexity.
@@ -44,6 +44,7 @@ class StringEmbedder:
         self.connection.execute('''
 CREATE TABLE IF NOT EXISTS vectors (
     id TEXT PRIMARY KEY,
+    patient_id TEXT,
     vector BLOB,
     text TEXT,
     length INTEGER
@@ -53,20 +54,22 @@ CREATE TABLE IF NOT EXISTS vectors (
         # Whether vectors are to be scrubbed and recomputing
         self.scrub_vectors = int(os.environ['SCRUB_VECTORS']) == 1
 
-    def vectorize(self, strings: list[str]) -> List[np.array]:
+    def vectorize(self, patients: tuple[list[str], list[str]]) -> List[np.array]:
         """
         Generates normalized vector embeddings for a batch of texts using a simple .encode() call.
         
-        :param strings: List of strings to embed
-        :type strings: list[str]
+        :param strings: List of patient ids along with narratives to embed to embed
+        :type strings: tuple[list[str], list[str]]
         :return: Resulting vectors
         :rtype: List
         """
         cursor = self.connection.cursor()
-        vectors = [None for _ in strings]
+        vectors = [None for _ in patients]
+        patient_ids = patients[0]
+        narratives = patients[1]
         to_compute = []
         to_compute_indices = []
-        for i, string in enumerate(strings):
+        for i, string in enumerate(narratives):
             id = generate_string_id(text=string)
             cursor.execute("SELECT vector FROM vectors WHERE id=?", (id,))
             # See if we already have this string vectorized (and we're not scrubbing)
@@ -89,13 +92,13 @@ CREATE TABLE IF NOT EXISTS vectors (
             new_records = []
             for i, missing_vector in zip(to_compute_indices, missing_vectors):
                 vectors[i] = missing_vector
-                id = generate_string_id(text=strings[i])
+                id = generate_string_id(text=narratives[i])
                 vector_bytes = missing_vector.tobytes()
-                new_records.append((id, vector_bytes, strings[i], len(strings[i])))
+                new_records.append((id, patient_ids[i], vector_bytes, narratives[i], len(narratives[i])))
                 
             self.connection.executemany(
                 '''
-INSERT OR REPLACE INTO vectors (id, vector, text, length) VALUES (?, ?, ?, ?)
+INSERT OR REPLACE INTO vectors (id, patient_id, vector, text, length) VALUES (?, ?, ?, ?, ?)
 ''',
                 new_records
             )

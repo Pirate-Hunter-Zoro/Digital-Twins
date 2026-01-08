@@ -2,7 +2,7 @@ import sqlite3
 import numpy as np
 from pathlib import Path
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -27,7 +27,6 @@ SELECT id, vector FROM vectors
         )
         # List of tuples - (id string of narrative, vector in bytes)
         self.patient_vectors = self.cursor.fetchall()
-        self.connection.close()
         
         self.ids = []
         vectors = []
@@ -38,6 +37,22 @@ SELECT id, vector FROM vectors
         # Normalize each vector
         norms = np.linalg.norm(self.vectors, axis=1, keepdims=True)
         self.vectors /= norms
+        
+    def get_narrative(self, id: str) -> Optional[str]:
+        """
+        Helper method to return the narrative corresponding with the input hashed ID calculated from the narrative
+        
+        :param id: Hashed ID from narrative
+        :type id: str
+        :return: Narrative producing inputted hash ID
+        :rtype: str
+        """
+        self.cursor.execute(
+            """
+SELECT text FROM vectors WHERE id=?
+            """,
+            (id,))
+        return self.cursor.fetchone()
         
     def search(self, query_vector: np.array) -> List[Tuple[str, float]]:
         """

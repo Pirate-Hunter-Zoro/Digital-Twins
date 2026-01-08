@@ -41,7 +41,7 @@ Transforms the structured JSONs into textual narratives.
 
 ### 5. Models (`scripts/models`)
 Interfaces for the neural networks.
-* **`string_embedder.py`**:
+* **`patient_embedder.py`**:
     * Wraps `SentenceTransformer` (e.g., Qwen).
     * **Storage**: Manages a SQLite connection to `vectors.db`.
     * **Logic**: Checks the DB for existing IDs (MD5 hash of text). If missing, computes the embedding and inserts it as a binary BLOB.
@@ -68,6 +68,7 @@ Stores the raw embeddings.
 | Column | Type | Description |
 | :--- | :--- | :--- |
 | `id` | `TEXT (PK)` | MD5 Hash of the narrative text. |
+| `patient_id` | `TEXT` | Patient ID of the corresponding narrative. |
 | `vector` | `BLOB` | The numpy array (`float32`) serialized to bytes. |
 | `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
 | `length` | `INTEGER` | Character count of the text. |
