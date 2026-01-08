@@ -1,8 +1,8 @@
 # Digital Twins: Patient Representation & Embedding Pipeline
 
-This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"—vectorized representations of patient narratives capable of semantic search and cohort analysis.
+This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"—vectorized representations of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
 
-The pipeline is divided into **Data Loading**, **Stage 1 (Narrative Generation)**, and **Stage 2 (Vector Embedding)**.
+The pipeline is divided into **Data Loading**, **Stage 1 (Narrative Generation)**, **Stage 2 (Vector Embedding)**, **Stage 3 (Neighbor Retrieval)**, and **Stage 4 (Prediction)**.
 
 ## Project Structure
 
@@ -20,39 +20,50 @@ Transforms the structured JSONs into textual narratives.
 * **`runner.py`**: Orchestrates the generation job via Slurm.
 
 ### 3. Stage 2: Vector Embedding (`scripts/digital_twins/embeddings`)
-**The Forge.** Converts text narratives into high-dimensional vectors using the `StringEmbedder`.
+**The Forge.** Converts text narratives into high-dimensional vectors using the `PatientEmbedder`.
 * **`forge_vectors.py`**: The main driver.
     1.  Reads `.md` files from Stage 1.
-    2.  Batches them (CPU-bound or GPU-bound).
-    3.  Feeds them to the `StringEmbedder`.
+    2.  Batches them.
+    3.  Feeds them to the `PatientEmbedder` to generate embeddings.
 * **Artifacts**: This stage populates the SQLite database `vectors.db`.
 
-### 4. Stage 3: Retrieval & Inference (`scripts/digital_twins/retrieval`)
+### 4. Stage 3: Retrieval & Scoring (`scripts/digital_twins/neighbors`)
 **The Judge.** Finds and scores patient similarity.
 * **`retriever.py`**:
     * Loads the entire `vectors.db` into memory as a normalized matrix.
     * Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
+    * **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
 * **`scorer.py`**:
     * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
     * **Caching**: Stores expensive LLM outputs in `judgements.db` (Table: `llm_judgements`) to prevent redundant inference.
     * **Logic**: Checks cache -> Formats Prompt -> Calls vLLM -> Parses JSON -> Saves Result.
-    * **Critical**: This script enforces strict validation. If the LLM returns malformed JSON, the process raises an exception and halts to prevent data corruption.
-* **`pipeline_runner.py`**: (Coming Soon) Orchestrates the end-to-end flow: `Index Patient -> Vector Search -> Top Candidates -> LLM Scoring -> Final Report`.
 
-### 5. Models (`scripts/models`)
+### 5. Stage 4: Prediction & Evaluation (`scripts/digital_twins/predictions`)
+**The Oracle.** Uses the retrieved neighbors to predict clinical outcomes.
+* **`trd_predictor.py`**:
+    * Implements the **Digital Twin Matcher** logic for Treatment-Resistant Depression (TRD).
+    * **Workflow**:
+        1.  Retrieves top-K neighbors via `retriever.py`.
+        2.  Scores neighbors via `scorer.py`.
+        3.  Applies exponential weighting ($w = score^\alpha$) to emphasize strong matches.
+        4.  Computes weighted probability of TRD risk ($P(TRD)$).
+    * **Safety**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions.
+* **`evaluate_trd.py`**:
+    * Backtesting script. Runs the `trd_predictor` against historical patients with known outcomes to measure accuracy (AUC, Brier Score, etc.).
+
+### 6. Models (`scripts/models`)
 Interfaces for the neural networks.
 * **`patient_embedder.py`**:
     * Wraps `SentenceTransformer` (e.g., Qwen).
     * **Storage**: Manages a SQLite connection to `vectors.db`.
     * **Logic**: Checks the DB for existing IDs (MD5 hash of text). If missing, computes the embedding and inserts it as a binary BLOB.
     * **Scrubbing**: Respects `SCRUB_VECTORS` env var to force re-computation.
-* **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation).
+* **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation or scoring).
 
-### 6. Shared Utilities (`scripts/shared`)
+### 7. Shared Utilities (`scripts/shared`)
 * **`similarity.py`**: **The Search Engine.**
     * Computes Cosine Similarity between patient IDs.
-    * **Caching**: Uses the `similarities` table in `vectors.db` to store `(id_a, id_b, score)`.
-    * **Efficiency**: Checks the DB cache first. If a miss, loads vector BLOBs, computes dot product, and saves the result.
+    * **Caching**: Uses the `similarities` table in `vectors.db`.
 * **`utils.py`**: Core helpers (hashing logic `generate_string_id`, etc.).
 * **`io.py`**: Standardized file handling.
 
@@ -61,7 +72,7 @@ Interfaces for the neural networks.
 ## The Vault: Databases
 
 ### Vector Storage (`vectors.db`)
-Located at `ARTIFACTS_DIR/vectors.db` (specific path depends on embedding model). Handles scale without file system overhead.
+Located at `ARTIFACTS_DIR/vectors.db`.
 
 **Table: `vectors`**
 Stores the raw embeddings.
@@ -72,14 +83,6 @@ Stores the raw embeddings.
 | `vector` | `BLOB` | The numpy array (`float32`) serialized to bytes. |
 | `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
 | `length` | `INTEGER` | Character count of the text. |
-
-**Table: `similarities`**
-Caches comparison scores to avoid re-computing dot products (billions of potential pairs).
-| Column | Type | Description |
-| :--- | :--- | :--- |
-| `id_a` | `TEXT (PK)` | First Patient ID (alphabetically sorted). |
-| `id_b` | `TEXT (PK)` | Second Patient ID. |
-| `score` | `REAL` | Cosine similarity (0.0 - 1.0). |
 
 ### Judgement Storage (`judgements.db`)
 Located at `JUDGEMENTS_DIR`.
@@ -101,21 +104,12 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 
 ### General & Reproducibility
 * `SEED`: 42 (Ensures deterministic behavior).
+* `WEIGHTING_EXPONENT`: 4.0 (Alpha value for weighting similarity scores in TRD prediction).
 
 ### Data Paths (Input)
-* `PREP_DATA_DIR`: `/media/studies/ehr_study/data-EHR-prepped/DV250901v1-PV251208v1/PrepData/`
-* `PROCEDURE_CSV_PATH`: Path to `Procedure_Table.csv`
-* `MEDICATION_CSV_PATH`: Path to `Medication_Table.csv`
-* `DIAGNOSIS_CSV_PATH`: Path to `Diagnosis_Table.csv`
-* `ENCOUNTER_CSV_PATH`: Path to `Encounter_Table.csv`
-* `PERSON_CSV_PATH`: Path to `Person_Table.csv`
-
-### Analysis & Cohorts
-* `ANALYSIS_DIR`: `/media/studies/ehr_study/analysis/mferguson/`
-* `MDD_MED_DATE_CSV_PATH`: `${ANALYSIS_DIR}/post_mdd_ad_index.csv`
+* `TRD_LIST_PATH`: Path to the text file containing IDs of TRD-positive patients.
+* `PREP_DATA_DIR`: Raw data directory.
 * `COHORT_PATH`: `${ANALYSIS_DIR}/mdd_only_patients.csv`
-* `PATIENT_JSON_DIR`: `${ANALYSIS_DIR}/patient_json`
-* `SLICED_PATIENT_JSON_DIR`: `${ANALYSIS_DIR}/sliced_patient_json`
 
 ### Models
 
@@ -134,11 +128,9 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `ARTIFACTS_DIR`: `${ANALYSIS_DIR}/artifacts/`
 * `VECTORS_DIR`: `${ARTIFACTS_DIR}/${EMBEDDER_MODEL_NAME}/`
 * `JUDGEMENTS_DIR`: `${ARTIFACTS_DIR}/${VLLM_MODEL_NAME}/`
-* `SCRUB_VECTORS`: 0 (Set to 1 to force re-embedding).
 
-### Concurrency
-* `NUM_WORKERS_NON_LLM_TASK`: 16
-* `NUM_WORKERS_LLM_TASK`: 2 (Keep low to avoid overwhelming vLLM).
+### Retrieval & Search
+* `NUM_NEIGHBOR_PATIENTS`: 200 (Number of candidates to retrieve before LLM scoring).
 
 ## Usage
 
@@ -148,10 +140,9 @@ python -m scripts.digital_twins.embeddings.forge_vectors
 
 ```
 
-**To Calculate Similarity:**
+**To Evaluate TRD Prediction (Stage 4):**
 
-```python
-from scripts.shared.similarity import cosine
-score = cosine("patient_id_A", "patient_id_B")
+```bash
+python -m scripts.digital_twins.predictions.evaluate_trd
 
 ```
