@@ -46,6 +46,9 @@ class TRDPredictor:
         :return: Information on TRD risk probability along with predictor information
         :rtype: Dict
         """
-        index_vector = self.embedder.vectorize([index_narrative])[0]
+        patient_id = self.retriever.get_patient_id(id=index_id)
+        index_vector = self.embedder.vectorize(([patient_id], [index_narrative]))[0]
         nearest_neighbors = self.retriever.search(query_vector=index_vector)
+        for neighbor in nearest_neighbors:
+            pass
         
