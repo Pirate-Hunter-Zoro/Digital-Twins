@@ -7,6 +7,7 @@
 #SBATCH --mem=256G
 #SBATCH -o slurm_jobs/digital_twins/logs/pipeline_out.txt
 #SBATCH -e slurm_jobs/digital_twins/logs/pipeline_err.txt
+#SBATCH --gres=gpu:1
 
 # Exit immediately if command fails
 set -e

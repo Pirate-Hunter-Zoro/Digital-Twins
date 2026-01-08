@@ -52,7 +52,11 @@ SELECT id, vector FROM vectors
 SELECT text FROM vectors WHERE id=?
             """,
             (id,))
-        return self.cursor.fetchone()
+        row = self.cursor.fetchone()
+        if row is not None:
+            return row[0]
+        else:
+            return None
     
     def get_patient_id(self, id: str) -> Optional[str]:
         """
@@ -68,7 +72,11 @@ SELECT text FROM vectors WHERE id=?
 SELECT patient_id FROM vectors WHERE id=?
             """,
             (id,))
-        return self.cursor.fetchone()
+        row = self.cursor.fetchone()
+        if row is not None:
+            return row[0]
+        else:
+            return None
         
     def search(self, query_vector: np.array) -> List[Tuple[str, float]]:
         """
