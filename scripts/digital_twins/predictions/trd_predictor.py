@@ -22,7 +22,7 @@ class TRDPredictor:
         trd_file = Path(os.environ['TRD_LIST_PATH'])
         self.trd_set = set(trd_file.read_text().splitlines())
         
-    def _get_trd_status(self, candidate_id: str) -> int:
+    def get_trd_status(self, candidate_id: str) -> int:
         """
         Return 1 if the patient is in the list of TRD positive patients, and 0 otherwise
         
@@ -45,7 +45,8 @@ class TRDPredictor:
         patient_id = self.retriever.get_patient_id(id=index_id)
         index_narrative = self.retriever.get_narrative(id=index_id)
         index_vector = self.embedder.vectorize(([patient_id], [index_narrative]))[0]
-        nearest_neighbors = self.retriever.search(query_vector=index_vector)
+        # NOTE - be sure to exclude this patient from the list of viable neighbors
+        nearest_neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id)
         weights = np.zeros(shape=(len(nearest_neighbors),), dtype=np.float32) # Weights associated with each neighbor
         trds = np.zeros_like(a=weights) # TRD 0/1 flag associated with each neighbor
         neighbor_patient_ids = [] 
@@ -58,7 +59,7 @@ class TRDPredictor:
             score = self.scorer.judge(index_narrative=index_narrative, candidate_narrative=neighbor_narrative, index_id=index_id, candidate_id=neighbor_narrative_string_id)['overall_similarity']
             neighbor_scores[i] = score
             weights[i] = np.power(score/100, self.alpha)
-            trds[i] = self._get_trd_status(candidate_id=neighbor_patient_id)
+            trds[i] = self.get_trd_status(candidate_id=neighbor_patient_id)
         
         # Calculate predicted TRD probability
         trd_prob = np.dot(a=weights, b=trds.T) / np.sum(a=weights)

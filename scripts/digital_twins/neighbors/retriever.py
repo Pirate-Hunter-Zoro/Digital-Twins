@@ -33,6 +33,7 @@ SELECT id, vector FROM vectors
         for row in self.patient_vectors:
             self.ids.append(row[0])
             vectors.append(np.frombuffer(row[1], dtype=np.float32))
+        self.ids_to_index = {id: i for i, id in enumerate(self.ids)}
         self.vectors = np.vstack(vectors)
         # Normalize each vector
         norms = np.linalg.norm(self.vectors, axis=1, keepdims=True)
@@ -78,12 +79,14 @@ SELECT patient_id FROM vectors WHERE id=?
         else:
             return None
         
-    def search(self, query_vector: np.array) -> List[Tuple[str, float]]:
+    def search(self, query_vector: np.array, exclude_id: str=None) -> List[Tuple[str, float]]:
         """
         Find the nearest patients to this patient in terms of cosine similarity of the vectors
         
         :param query_vector: Vector of interest which came from a patient
         :type query_vector: np.array
+        :param exclude_id: ID to exclude when considering nearby neighbors (e.g. don't let the patient themself count as a neighbor)
+        :type query_vector: str
         :return: Resulting nearest patients and their similarity scores
         :rtype: List[Tuple[str, float]]
         """
@@ -94,6 +97,11 @@ SELECT patient_id FROM vectors WHERE id=?
             query_vector /= np.linalg.norm(query_vector)
         # Find the cosine similarity of this vector with all other vectors in our database
         similarities = self.vectors @ query_vector # NOTE - due to normalization, dot product IS cosine similarity
+        if exclude_id != None and exclude_id in self.ids_to_index.keys():
+            # Kill this similarity score so it won't be one of the top ones
+            idx = self.ids_to_index[exclude_id]
+            similarities[idx] = -1.0
+        
         # Go through and find the kth largest value, and ensure everything to the right is bigger than it, so grab the last k values of this partitioned array to get the largest similarity values
         unsorted_top_k_indices = np.argpartition(similarities, -k)[-k:]
         unsorted_top_k_scores = similarities[unsorted_top_k_indices]

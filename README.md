@@ -32,6 +32,7 @@ Transforms the structured JSONs into textual narratives.
 * **`retriever.py`**:
     * Loads the entire `vectors.db` into memory as a normalized matrix.
     * Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
+    * **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
     * **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
 * **`scorer.py`**:
     * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
@@ -43,13 +44,16 @@ Transforms the structured JSONs into textual narratives.
 * **`trd_predictor.py`**:
     * Implements the **Digital Twin Matcher** logic for Treatment-Resistant Depression (TRD).
     * **Workflow**:
-        1.  Retrieves top-K neighbors via `retriever.py`.
+        1.  Retrieves top-K neighbors via `retriever.py` (excluding the query patient).
         2.  Scores neighbors via `scorer.py`.
         3.  Applies exponential weighting ($w = score^\alpha$) to emphasize strong matches.
         4.  Computes weighted probability of TRD risk ($P(TRD)$).
     * **Safety**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions.
 * **`evaluate_trd.py`**:
-    * Backtesting script. Runs the `trd_predictor` against historical patients with known outcomes to measure accuracy (AUC, Brier Score, etc.).
+    * Backtesting script.
+    * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
+    * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence).
+    * **Output**: Saves a summary text file and a full CSV log of every prediction (`trd_evaluation_results.csv`).
 
 ### 6. Models (`scripts/models`)
 Interfaces for the neural networks.
@@ -105,6 +109,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 ### General & Reproducibility
 * `SEED`: 42 (Ensures deterministic behavior).
 * `WEIGHTING_EXPONENT`: 4.0 (Alpha value for weighting similarity scores in TRD prediction).
+* `TRD_TEST_COUNT`: 50 (Number of patients to sample for evaluation).
 
 ### Data Paths (Input)
 * `TRD_LIST_PATH`: Path to the text file containing IDs of TRD-positive patients.
@@ -128,6 +133,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `ARTIFACTS_DIR`: `${ANALYSIS_DIR}/artifacts/`
 * `VECTORS_DIR`: `${ARTIFACTS_DIR}/${EMBEDDER_MODEL_NAME}/`
 * `JUDGEMENTS_DIR`: `${ARTIFACTS_DIR}/${VLLM_MODEL_NAME}/`
+* `RESULTS_DIR`: `${ARTIFACTS_DIR}/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}/`
 
 ### Retrieval & Search
 * `NUM_NEIGHBOR_PATIENTS`: 200 (Number of candidates to retrieve before LLM scoring).
