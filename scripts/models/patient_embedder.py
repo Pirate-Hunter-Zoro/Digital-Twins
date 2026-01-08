@@ -64,9 +64,9 @@ CREATE TABLE IF NOT EXISTS vectors (
         :rtype: List
         """
         cursor = self.connection.cursor()
-        vectors = [None for _ in patients]
         patient_ids = patients[0]
         narratives = patients[1]
+        vectors = [None for _ in patient_ids]
         to_compute = []
         to_compute_indices = []
         for i, string in enumerate(narratives):
