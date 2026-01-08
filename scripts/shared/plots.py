@@ -1,85 +1,74 @@
-"""Matplotlib plotting helpers (headless).
-Used by Stage-3 judge–cosine plots."""
-
-from __future__ import annotations
-import math
 from pathlib import Path
-from typing import List, Optional
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt 
-from scripts.shared.io import ensure_dir
+import seaborn
+import sklearn.metrics
+import sklearn.calibration as calibration
+import numpy as np
+import os
 
-def histogram(x: List[float], title: str, outpath: Path) -> None:
-    # Create a new figure
-    x = [v for v in x if (isinstance(v, float) and (not math.isnan(v)) and (not math.isinf(v)))]
-    if len(x) > 0:
-        plt.figure(figsize=(10, 6))
+from dotenv import load_dotenv
+load_dotenv()
+
+RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
+
+def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array):
+    """
+    Create and save the ROC area under curve graph for the given values and predictions
     
-        # Plot the histogram
-        # 'bins='auto'' lets matplotlib decide the optimal number of bins
-        plt.hist(x, bins=100, edgecolor='black', alpha=0.7)
-        
-        # Set the title and labels
-        plt.title(title)
-        plt.xlabel("Value")
-        plt.ylabel("Frequency")
-        
-        # Add a grid for better readability
-        plt.grid(axis='y', alpha=0.75)
-        
-        # Ensure the parent directory exists
-        outpath.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Save the figure to the specified Path object
-        # bbox_inches='tight' helps prevent the title or labels from being cut off
-        plt.savefig(outpath, format='png', bbox_inches='tight')
-        
-        # Close the plot to free up memory
-        plt.close()
+    :param y_true: Actual labels
+    :type y_true: np.array
+    :param y_prob: Predicted probability labels
+    :type y_prob: np.array
+    """
+    score = sklearn.metrics.roc_auc_score(y_true=y_true, y_score=y_prob)
+    false_positive_rate, true_positive_rate, _ = sklearn.metrics.roc_curve(y_true=y_true, y_score=y_prob)
+    plt.plot(false_positive_rate, true_positive_rate, color='red', label=f'ROC curve (score {score:.2f})')
+    plt.plot([0,1], [0,1], color='green', linestyle='--')
+    plt.title("Receiver Operating Characteristic")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.savefig(f"{str(RESULTS_DIR)}/roc_curve.png")
+    plt.close()
 
-def scatter(xs: List[Optional[float]], ys: List[Optional[float]], title: str, outpath: Path,
-           xlabel: str, ylabel: str) -> None:
-    X, Y = [], []
-    for a, b in zip(xs, ys):
-        if a is None or b is None:
-            continue
-        if isinstance(a, float) and math.isnan(a):
-            continue
-        if isinstance(b, float) and math.isnan(b):
-            continue
-        X.append(float(a)); Y.append(float(b))
+def plot_precision_recall(y_true: np.array, y_prob: np.array):
+    """
+    Create and save the precision recall graph for the given values and predictions
+    
+    :param y_true: Actual labels
+    :type y_true: np.array
+    :param y_prob: Predicted probability labels
+    :type y_prob: np.array
+    """
+    score = sklearn.metrics.average_precision_score(y_true=y_true, y_score=y_prob)
+    precision, recall, _ = sklearn.metrics.precision_recall_curve(y_true=y_true, probas_pred=y_prob)
+    plt.plot(recall, precision, label=f'PR Curve (Average Precision = {score:.2f})')
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision Recall Curve")
+    plt.savefig(f"{str(RESULTS_DIR)}/pr_curve.png")
+    plt.close()
 
-    ensure_dir(outpath.parent)
+def plot_calibration(y_true: np.array, y_prob: np.array):
+    """
+    Create and save the calibration graph for the given values and predictions
+    
+    :param y_true: Actual labels
+    :type y_true: np.array
+    :param y_prob: Predicted probability labels
+    :type y_prob: np.array
+    """
+    # For each bin, calculate average probability, and calculate true probability (average positive rating)
+    prob_true_per_bin, prob_pred_per_bin = calibration.calibration_curve(y_true=y_true, y_prob=y_prob, n_bins=10)
+    plt.plot(prob_true_per_bin, prob_pred_per_bin, marker='o', label="Model")
+    plt.plot([0,1],[0,1]) # Representing perfect calibration
+    plt.xlabel("Mean Predicted Probability")
+    plt.ylabel("Fraction of Positives")
+    plt.title("Calibration Curve")
+    plt.savefig(f"{str(RESULTS_DIR)}/calibration_curve.png")
+    plt.close()
 
-    # Set up a figure with 2 side axes for histograms
-    from matplotlib import gridspec
+def plot_decision_curve_analysis():
+    pass
 
-    fig = plt.figure(figsize=(6, 6))
-    gs = gridspec.GridSpec(4, 4, figure=fig)
-    ax_scatter = fig.add_subplot(gs[1:,:3])   # main scatter
-    ax_histx   = fig.add_subplot(gs[0,:3], sharex=ax_scatter)  # top histogram
-    ax_histy   = fig.add_subplot(gs[1:,3], sharey=ax_scatter)  # right histogram
-
-    if X and Y:
-        ax_scatter.scatter(X, Y, s=8)
-    else:
-        ax_scatter.scatter([0], [0], s=8)
-
-    ax_scatter.set_xlabel(xlabel)
-    ax_scatter.set_ylabel(ylabel)
-    fig.suptitle(title)
-
-    # histograms
-    if X:
-        ax_histx.hist(X, bins=50, color="gray")
-    if Y:
-        ax_histy.hist(Y, bins=50, orientation="horizontal", color="gray")
-
-    # Clean up tick labels on marginal axes
-    plt.setp(ax_histx.get_xticklabels(), visible=False)
-    plt.setp(ax_histy.get_yticklabels(), visible=False)
-
-    plt.tight_layout()
-    plt.savefig(outpath, bbox_inches="tight")
-    plt.close(fig)
+def plot_effective_sample_size_distribution():
+    pass
