@@ -7,6 +7,7 @@ import os
 from tqdm import tqdm
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
+from scripts.shared.plots import plot_calibration, plot_precision_recall, plot_receiving_operator_characteristic, plot_decision_curve_analysis, plot_ess_distribution
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -43,6 +44,14 @@ SELECT id, patient_id FROM vectors
     roc = roc_auc_score(y_true=results_df['actual_trd_status'], y_score=results_df['trd_risk_score'])
     brier = brier_score_loss(y_true=results_df['actual_trd_status'], y_prob=results_df['trd_risk_score'])
     mean_ess = results_df['ess'].mean()
+
+    # Generate and save plots
+    plot_receiving_operator_characteristic(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
+    plot_precision_recall(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
+    plot_calibration(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
+    plot_decision_curve_analysis(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
+    plot_ess_distribution(ess_values=results_df['ess'].to_numpy())
+    
     # Save dataframe to a .csv and the results to a .txt
     results_dir = Path(os.environ['RESULTS_DIR'])
     results_csv = results_dir / 'trd_evaluation_results.csv'
