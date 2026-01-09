@@ -12,6 +12,8 @@ from scripts.shared.plots import plot_calibration, plot_precision_recall, plot_r
 from dotenv import load_dotenv
 load_dotenv()
 
+
+
 def run():
     vector_db = Path(os.environ['VECTORS_DIR']) / 'vectors.db'
     connection = sqlite3.connect(vector_db)

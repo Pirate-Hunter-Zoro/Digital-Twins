@@ -54,7 +54,7 @@ Transforms the structured JSONs into textual narratives.
     * Backtesting script.
     * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
     * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence).
-    * **Output**: Saves a summary text file and a full CSV log of every prediction (`trd_evaluation_results.csv`).
+    * **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and ROC-AUC, Precision-Recall, Calibration, Decision Curve, and ESS Histogram plots. 
 
 ### 6. Models (`scripts/models`)
 Interfaces for the neural networks.
