@@ -29,6 +29,7 @@ SELECT id, patient_id FROM vectors
     patient_sample = random.sample(trd_positive, min(len(trd_positive), n//2)) + random.sample(trd_negative, min(len(trd_negative), n//2))
     results = []
     for narrative_hash_id, patient_id in tqdm(patient_sample):
+        print("Predicting TRD risk for patient ID:", patient_id, flush=True)
         trd_status = predictor.get_trd_status(candidate_id=patient_id)
         prediction = predictor.predict_risk(index_id=narrative_hash_id)
         results.append(
