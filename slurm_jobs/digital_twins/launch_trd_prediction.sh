@@ -11,7 +11,6 @@ echo "Waiting for vLLM server to become reachable..."
 while true; do
   
   # 1. Source the file to load the VLLM_URL into our environment.
-  # The file will contain the correct URL once the SLURM job updates it.
   set -a; source "${ENV_FILE}"; set +a
 
   if curl -sf "${VLLM_URL}/health" >/dev/null; then
@@ -26,6 +25,6 @@ while true; do
 done
 
 echo "Launching the rest of the pipeline..."
-sbatch slurm_jobs/digital_twins/run_pipeline.sbatch
+sbatch slurm_jobs/digital_twins/run_trd_prediction_pipeline.sbatch
 
 echo "Done."

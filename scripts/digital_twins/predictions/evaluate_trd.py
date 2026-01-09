@@ -7,12 +7,12 @@ import os
 from tqdm import tqdm
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
-from scripts.shared.plots import plot_calibration, plot_precision_recall, plot_receiving_operator_characteristic, plot_decision_curve_analysis, plot_ess_distribution
+from scripts.shared.plots import plot_calibration, plot_precision_recall, plot_receiving_operator_characteristic, plot_decision_curve_analysis, plot_effective_sample_size_distribution
 
 from dotenv import load_dotenv
 load_dotenv()
 
-def main():
+def run():
     vector_db = Path(os.environ['VECTORS_DIR']) / 'vectors.db'
     connection = sqlite3.connect(vector_db)
     cursor = connection.cursor()
@@ -50,7 +50,7 @@ SELECT id, patient_id FROM vectors
     plot_precision_recall(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     plot_calibration(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     plot_decision_curve_analysis(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
-    plot_ess_distribution(ess_values=results_df['ess'].to_numpy())
+    plot_effective_sample_size_distribution(ess_values=results_df['ess'].to_numpy())
     
     # Save dataframe to a .csv and the results to a .txt
     results_dir = Path(os.environ['RESULTS_DIR'])
@@ -65,6 +65,3 @@ SELECT id, patient_id FROM vectors
     print(f"ROC AUC: {roc}", flush=True)
     print(f"Brier Score: {brier}", flush=True)
     print(f"Mean ESS: {mean_ess}", flush=True)
-
-if __name__=="__main__":
-    main()
