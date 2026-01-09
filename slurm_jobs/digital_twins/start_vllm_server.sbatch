@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH -o slurm_jobs/digital_twins/logs/vllm-medgemma_out.txt
-#SBATCH -e slurm_jobs/digital_twins/logs/vllm-medgemma_err.txt
+#SBATCH -o slurm_jobs/digital_twins/logs/vllm_out.txt
+#SBATCH -e slurm_jobs/digital_twins/logs/vllm_err.txt
 #SBATCH --gres=gpu:2
   
 GPUS=2                      

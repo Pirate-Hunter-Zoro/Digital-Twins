@@ -88,6 +88,14 @@ Stores the raw embeddings.
 | `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
 | `length` | `INTEGER` | Character count of the text. |
 
+**Table: `similarities`**
+Stores the cosine similarity of the embeddings associated with the string hash ids.
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id_a` | `TEXT (PK)` | MD5 Hash (alphabetically first) of one of the narrative texts. |
+| `id_b` | `TEXT (PK)` | MD5 Hash (alphabetically second) of the other narrative text. |
+| `score` | `REAL` | The cosine similarity between the two embeddings. |
+
 ### Judgement Storage (`judgements.db`)
 Located at `JUDGEMENTS_DIR`.
 

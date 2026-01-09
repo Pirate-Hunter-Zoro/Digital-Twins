@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=pipeline
+#SBATCH --job-name=trd_prediction_pipeline
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
