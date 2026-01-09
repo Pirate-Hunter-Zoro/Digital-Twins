@@ -39,7 +39,7 @@ SELECT id, patient_id FROM vectors
                 'patient_id' : patient_id,
                 'actual_trd_status' : trd_status,
                 'trd_risk_score' : prediction['risk_score'],
-                'ess' : prediction['ess']
+                'ess' : prediction['confidence_ess']
             }
         )
     # Turn results into a dataframe
