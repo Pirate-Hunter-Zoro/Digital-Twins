@@ -135,7 +135,7 @@ NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingr
     # Utilization
     UTILIZATION = f"### UTILIZATION\nPsych inpatient days: {in_patient_days_1_yr} (12m) / {in_patient_days_3_yr} (3y) | ED psych visits: {num_emergency_1_yr} (12m) / {num_emergency_3_yr} (3y)\n"
         
-    # Safety
+    # Safety - TODO - why did MDD show up in this list?
     SAFETY = f"### SAFETY\n{' | '.join([f'{safety_arm}: {get_bool_str(safety_comorbidity_dict[safety_arm])}' for safety_arm in safety_comorbidity_dict.keys()])}\n"
     
     # Suicide

@@ -49,7 +49,7 @@ Transforms the structured JSONs into textual narratives.
         3.  Applies exponential weighting ($w = score^\alpha\text{ }\forall \text{ neighbors}$) to emphasize strong matches.
         4.  Take TRD flags for neigbhors ($f = 1\text{ if TRD else } 0\text{ }\forall \text{ neighbors}$)
         5.  Computes weighted probability of TRD risk ($P(TRD)=w\bullet f$).
-    * **Safety**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions ($\text{ESS}=\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$).
+    * **Confidence**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions ($\text{ESS}=\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$).
 * **`evaluate_trd.py`**:
     * Backtesting script.
     * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
@@ -161,3 +161,7 @@ sbatch slurm_jobs/digital_twins/run_embedding_pipeline.sbatch
 bash slurm_jobs/digital_twins/launch_trd_prediction.sh
 
 ```
+
+# TODO - overlapping diagnoses in histories and different comorbidities
+# TODO - why do we have the machine code in the narrative
+# TODO - suicidality flag 3 years in narrative but 12m in machine code - also True/False in narrative but y/n in machine code
