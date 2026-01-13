@@ -6,8 +6,7 @@ import random
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.data_loading.med_definitions import SSRI, BUPROPION
-from scripts.data_loading.diagnoses_definitions import PTSD, ANXIETY, get_mdd_description
+from scripts.data_loading.diagnoses_definitions import get_mdd_description
 from scripts.data_loading.features import (
     psych_comorbidity, 
     medical_comorbidity, 
@@ -23,6 +22,7 @@ from scripts.data_loading.features import (
     psychotherapy_count,
     safety_comorbidity,
     sud_specifics,
+    get_sdoh,
 )
 
 def get_bool_str(val: bool) -> str:
@@ -41,7 +41,7 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
     """
     # First check for pre-existence
     narrative_save_path = Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']) / f"{sliced_json['patient_id']}.md"
-    if narrative_save_path.exists():
+    if narrative_save_path.exists() and int(os.environ['SCRUB_NARRATIVES']) == 0:
         return
     
     demographics_of_interests = [
@@ -107,11 +107,13 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
     
     # Demographics
     demographics = [f'{demographic}: {sliced_json["demographics"].get(demographic, "Missing")}' for demographic in demographics_of_interests]
-    DEMOGRAPHICS = f"### DEMOGRAPHICS\n{' | '.join(demographics)}\n"
+    sdoh_categories = get_sdoh(patient_dict=sliced_json)
+    DEMOGRAPHICS = f"### SOCIODEMOGRAPHICS / ACCESS\n{' | '.join(demographics)}\nSDOH: {' | '.join(sdoh_categories)}"
     
     # Psych history
+    substances = ' | '.join([sud_name for sud_name in sorted(list(sud_names_dict.keys())) if sud_names_dict[sud_name]])
     psych_comorbidities = [f'{psych_arm}: {get_bool_str(psych_comorbidity_dict[psych_arm])}' for psych_arm in psych_comorbidity_dict.keys()]
-    PSYCH_HISTORY = f"### PSYCH HISTORY\n{' | '.join(psych_comorbidities)}\n"
+    PSYCH_HISTORY = f"### PSYCH HISTORY\n{' | '.join(psych_comorbidities)}\nSUICIDE FLAG (12m):{get_bool_str(suicide_flag)}\nSUBSTANCE ABUSE: {substances if len(substances) > 0 else 'None'}\n"
     
     # Medical comorbidity
     med_comorbidities = [f'{med_arm}: {get_bool_str(medical_comorbidity_dict[med_arm])}' for med_arm in medical_comorbidity_dict.keys()]
@@ -127,21 +129,14 @@ Somatic treatments: {get_bool_str(somatic_flag)} | Psychotherapy visits (12m): {
     # Medication burden
     MED_BURDEN = f"### MEDICATION BURDEN\nActive meds at baseline: {len(distinct_ingredients)} ({', '.join([ingredient for ingredient in distinct_ingredients]) if len(distinct_ingredients) > 0 else 'Absent'})\n\
 NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingredient in distinct_nsaid_ingredients]) if len(distinct_nsaid_ingredients) > 0 else 'Absent'})\n"
-    
-    # Specific substance abuse types
-    substances = ' | '.join([sud_name for sud_name in sorted(list(sud_names_dict.keys())) if sud_names_dict[sud_name]])
-    SUBSTANCE_ABUSE = f"### SUBSTANCE ABUSE\nSubstances abused by patient: {substances if len(substances) > 0 else 'None'}\n"
-    
+     
     # Utilization
     UTILIZATION = f"### UTILIZATION\nPsych inpatient days: {in_patient_days_1_yr} (12m) / {in_patient_days_3_yr} (3y) | ED psych visits: {num_emergency_1_yr} (12m) / {num_emergency_3_yr} (3y)\n"
         
-    # Safety - TODO - why did MDD show up in this list?
+    # Safety
     SAFETY = f"### SAFETY\n{' | '.join([f'{safety_arm}: {get_bool_str(safety_comorbidity_dict[safety_arm])}' for safety_arm in safety_comorbidity_dict.keys()])}\n"
     
-    # Suicide
-    SUICIDE = f"### SUICIDE FLAG (3y)\n{get_bool_str(suicide_flag)}\n"
-    
-    result = "\n".join([HEADER, DEMOGRAPHICS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, SUBSTANCE_ABUSE, UTILIZATION, SAFETY, SUICIDE])
+    result = "\n".join([HEADER, DEMOGRAPHICS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, UTILIZATION, SAFETY])
     # Record the narrative
     os.makedirs(narrative_save_path.parent, exist_ok=True)
     with open(narrative_save_path, 'w') as f:

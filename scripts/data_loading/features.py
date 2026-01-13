@@ -1,6 +1,6 @@
 from typing import Dict, Set, Tuple
 
-from scripts.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, get_diagnosis_arm, SUICIDE_ARMS, SAFETY_ARMS, SUD_MAP
+from scripts.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, get_diagnosis_arm, SUICIDE_ARMS, SAFETY_ARMS, SUD_MAP, SDOH_MAP
 from scripts.data_loading.med_definitions import NSAID_INGREDIENTS, BENZODIAZEPINE_INGREDIENTS, get_med_arm, ALL_ARMS, AUGMENTATION_INGREDIENTS, ALL_ARM_INGREDIENTS, HYPNOTICS_INGREDIENTS, MASTER_INGREDIENTS_MAP
 from scripts.data_loading.procedure_definitions import ECT_KEYWORDS, TMS_KEYWORDS
 
@@ -13,7 +13,7 @@ def comorbidity(patient_dict: Dict, arm_set: Set[str]) -> Dict[str, bool]:
         for diagnosis in encounter['diagnoses']:
             for diagnosis_code in diagnosis['codes']:
                 arm = get_diagnosis_arm(diagnosis_code['code'])
-                if arm != None:
+                if arm != None and arm in comorbidity.keys():
                     comorbidity[arm] = True
     
     return comorbidity
@@ -241,4 +241,16 @@ def sud_specifics(patient_dict: dict) -> dict[str, bool]:
                 for code_prefix in SUD_MAP.keys():
                     if code_prefix in code:
                         result[SUD_MAP[code_prefix]] = True
+    return result
+
+def get_sdoh(patient_dict: dict) -> set[str]:
+    result = set()
+    for encounter in patient_dict['encounters']:
+        for diagnosis in encounter['diagnoses']:
+            for code_dict in diagnosis['codes']:
+                code = code_dict['code'].split('.')[0] # Only care about prefix
+                if code in SDOH_MAP.keys():
+                    result.add(SDOH_MAP[code])
+    if len(result) == 0:
+        result.add("None Recorded")
     return result

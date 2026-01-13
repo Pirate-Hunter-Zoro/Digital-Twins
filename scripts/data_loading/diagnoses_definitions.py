@@ -1,7 +1,6 @@
 from typing import Optional
 import re
 
-# TODO - incorporate into narrative production
 MDD_SEVERITY_MAP = {
     '0': 'Mild',
     '1': 'Moderate',
@@ -95,10 +94,6 @@ DIAGNOSIS_CODES = {
     "UNCONTROLLED_HTN" : [
         r'I16\.\d'
     ],
-    "SDOH" : [
-        r'Z5[56789]\.\d',
-        r'Z6[012345]\.\d'
-    ]
 }
 MDD = "MDD"
 SOCIAL_ANXIETY = "SOCIAL_ANXIETY"
@@ -117,7 +112,6 @@ CHRONIC_PAIN = "CHRONIC_PAIN"
 INSOMNIA = "INSOMNIA"
 EPILEPSY = "EPILEPSY"
 UNCONTROLLED_HTN = "UNCONTROLLED_HTN"
-SDOH = "SDOH"
 
 # When caring about a particular substance abuse
 SUD_MAP = {
@@ -133,13 +127,14 @@ SUD_MAP = {
     "F19": "Other Substance"
 }
 
-PSYCH_ARMS = set([MDD, SOCIAL_ANXIETY, ADJUSTMENT_DISORDER, ANXIETY, PTSD, OCD, DYSTHYMIA, SUD])
+# NOTE - by design all patients have MDD, so we are omitting that here
+PSYCH_ARMS = set([SOCIAL_ANXIETY, ADJUSTMENT_DISORDER, ANXIETY, PTSD, OCD, DYSTHYMIA, SUD, INSOMNIA])
 
 SUICIDE_ARMS = set([SUICIDE_IDEATION, SUICIDE_ATTEMPT])
 
 SAFETY_ARMS = set([EPILEPSY, UNCONTROLLED_HTN])
 
-MEDICAL_ARMS = set([DIABETES, HYPERLIPIDEMIA, THYROID, CHRONIC_PAIN, UNCONTROLLED_HTN])
+MEDICAL_ARMS = set([DIABETES, HYPERLIPIDEMIA, THYROID, CHRONIC_PAIN])
 
 def get_diagnosis_arm(diagnosis_code: str) -> Optional[str]:
     for arm, regex_codes in DIAGNOSIS_CODES.items():
@@ -148,3 +143,15 @@ def get_diagnosis_arm(diagnosis_code: str) -> Optional[str]:
             if re.match(pattern, diagnosis_code) != None:
                 return arm
     return None
+
+SDOH_MAP = {
+    "Z55": "Education/Literacy",
+    "Z56": "Employment",
+    "Z57": "Occupational Exposure",
+    "Z59": "Housing/Economic",
+    "Z60": "Social Environment",
+    "Z62": "Upbringing", # NOTE: Often pediatric, but keep if cohort includes it in history
+    "Z63": "Primary Support Group/Family",
+    "Z64": "Psychosocial Circumstances", # e.g. Unwanted pregnancy
+    "Z65": "Legal/Crime/Other Psychosocial"
+}
