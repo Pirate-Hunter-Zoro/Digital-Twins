@@ -5,6 +5,7 @@ from sklearn.metrics import roc_auc_score, brier_score_loss
 from pathlib import Path
 import os
 from tqdm import tqdm
+import multiprocessing
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 from scripts.shared.plots import plot_calibration, plot_precision_recall, plot_receiving_operator_characteristic, plot_decision_curve_analysis, plot_effective_sample_size_distribution
@@ -12,7 +13,26 @@ from scripts.shared.plots import plot_calibration, plot_precision_recall, plot_r
 from dotenv import load_dotenv
 load_dotenv()
 
-
+def evaluate_patient(patient_info: tuple[str, str]) -> dict:
+    """
+    Evaluate TRD prediction for the patient with the given narrative hash id and patient id
+    
+    :param patient_info: narrative hash ID and patient ID
+    :type patient_info: tuple[str, str]
+    :return: TRD prediction results
+    :rtype: dict
+    """
+    predictor = TRDPredictor()
+    narrative_hash_id, patient_id = patient_info
+    print("Predicting TRD risk for patient ID:", patient_id, flush=True)
+    trd_status = predictor.get_trd_status(candidate_id=patient_id)
+    prediction = predictor.predict_risk(index_id=narrative_hash_id)
+    return {
+        'patient_id' : patient_id,
+        'actual_trd_status' : trd_status,
+        'trd_risk_score' : prediction['risk_score'],
+        'ess' : prediction['confidence_ess']
+    }
 
 def run():
     vector_db = Path(os.environ['VECTORS_DIR']) / 'vectors.db'
@@ -30,18 +50,9 @@ SELECT id, patient_id FROM vectors
     trd_negative = [row for row in rows if predictor.get_trd_status(candidate_id=row[1]) == 0]
     patient_sample = random.sample(trd_positive, min(len(trd_positive), n//2)) + random.sample(trd_negative, min(len(trd_negative), n//2))
     results = []
-    for narrative_hash_id, patient_id in tqdm(patient_sample):
-        print("Predicting TRD risk for patient ID:", patient_id, flush=True)
-        trd_status = predictor.get_trd_status(candidate_id=patient_id)
-        prediction = predictor.predict_risk(index_id=narrative_hash_id)
-        results.append(
-            {
-                'patient_id' : patient_id,
-                'actual_trd_status' : trd_status,
-                'trd_risk_score' : prediction['risk_score'],
-                'ess' : prediction['confidence_ess']
-            }
-        )
+    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK'])) as pool:
+        for result in tqdm(pool.imap_unordered(evaluate_patient, patient_sample), total=len(patient_sample)):
+            results.append(result)
     # Turn results into a dataframe
     results_df = pd.DataFrame(results)
     roc = roc_auc_score(y_true=results_df['actual_trd_status'], y_score=results_df['trd_risk_score'])
