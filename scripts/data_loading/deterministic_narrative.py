@@ -139,20 +139,9 @@ NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingr
     SAFETY = f"### SAFETY\n{' | '.join([f'{safety_arm}: {get_bool_str(safety_comorbidity_dict[safety_arm])}' for safety_arm in safety_comorbidity_dict.keys()])}\n"
     
     # Suicide
-    SUICIDE = f"### SUICIDE FLAG (3y)\n{suicide_flag}\n"
+    SUICIDE = f"### SUICIDE FLAG (3y)\n{get_bool_str(suicide_flag)}\n"
     
-    # Machine flag
-    MACHINE_FLAG = f"AGE={sliced_json['demographics']['AgeInYears']};\
-SEX={'F' if sliced_json['demographics']['Sex']=='Female' else 'M'};\
-ANXIETY={'Y' if psych_comorbidity_dict[ANXIETY] else 'N'};\
-PTSD={'Y' if psych_comorbidity_dict[PTSD] else 'N'};\
-SUD={'Y' if len(substances) > 0 else 'N'};\
-SUICIDALITY12M={'Y' if suicide_flag else 'N'};\
-NSAID_CT={len(distinct_nsaid_ingredients)};\
-POLYPHARM_CT={len(distinct_ingredients)};\
-PRIOR_AD=SSRI:{adequate_trials_count.get(SSRI, 0)},BUP:{adequate_trials_count.get(BUPROPION, 0)};"
-                    
-    result = "\n".join([HEADER, DEMOGRAPHICS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, SUBSTANCE_ABUSE, UTILIZATION, SAFETY, SUICIDE, MACHINE_FLAG])
+    result = "\n".join([HEADER, DEMOGRAPHICS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, SUBSTANCE_ABUSE, UTILIZATION, SAFETY, SUICIDE])
     # Record the narrative
     os.makedirs(narrative_save_path.parent, exist_ok=True)
     with open(narrative_save_path, 'w') as f:
