@@ -1,6 +1,6 @@
 from typing import Dict, Set, Tuple
 
-from scripts.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, get_diagnosis_arm, SUICIDE_ARMS, SAFETY_ARMS, SUD_MAP, SDOH_MAP
+from scripts.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, get_diagnosis_arm, SUICIDE_ARMS, SAFETY_ARMS, get_sud_substance, SDOH_MAP
 from scripts.data_loading.med_definitions import NSAID_INGREDIENTS, BENZODIAZEPINE_INGREDIENTS, get_med_arm, ALL_ARMS, AUGMENTATION_INGREDIENTS, ALL_ARM_INGREDIENTS, HYPNOTICS_INGREDIENTS, MASTER_INGREDIENTS_MAP
 from scripts.data_loading.procedure_definitions import ECT_KEYWORDS, TMS_KEYWORDS
 
@@ -233,14 +233,14 @@ def psychotherapy_count(patient_dict: dict) -> int:
     return count
 
 def sud_specifics(patient_dict: dict) -> dict[str, bool]:
-    result = {sud_type: False for sud_type in SUD_MAP.values()}
+    result = {}
     for encounter in patient_dict['encounters']:
         for diagnosis in encounter['diagnoses']:
             for code_dict in diagnosis['codes']:
                 code = code_dict['code']
-                for code_prefix in SUD_MAP.keys():
-                    if code_prefix in code:
-                        result[SUD_MAP[code_prefix]] = True
+                substance = get_sud_substance(code=code)
+                if substance != "Other Substance":
+                    result[substance] = True
     return result
 
 def get_sdoh(patient_dict: dict) -> set[str]:

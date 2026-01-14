@@ -5,8 +5,9 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=256G
-#SBATCH -o slurm_jobs/digital_twins/logs/trd_prediction_pipeline_out.txt
-#SBATCH -e slurm_jobs/digital_twins/logs/trd_prediction_pipeline_err.txt
+#SBATCH -o slurm_jobs/digital_twins/logs/trd_prediction_pipeline_%a_out.txt
+#SBATCH -e slurm_jobs/digital_twins/logs/trd_prediction_pipeline_%a_err.txt
+#SBATCH --array=0-19
 
 # Exit immediately if command fails
 set -e

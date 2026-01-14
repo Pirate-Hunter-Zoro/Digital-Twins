@@ -48,7 +48,15 @@ SELECT id, patient_id FROM vectors
     n = int(os.environ['TRD_TEST_COUNT'])
     trd_positive = [row for row in rows if predictor.get_trd_status(candidate_id=row[1]) == 1]
     trd_negative = [row for row in rows if predictor.get_trd_status(candidate_id=row[1]) == 0]
+    random.seed(int(os.environ['SEED']))
     patient_sample = random.sample(trd_positive, min(len(trd_positive), n//2)) + random.sample(trd_negative, min(len(trd_negative), n//2))
+    
+    # Now break up the patient sample to different workers
+    slurm_task_id = int(os.environ['SLURM_ARRAY_TASK_ID'])
+    slurm_task_count = int(os.environ['SLURM_ARRAY_TASK_COUNT'])
+    
+    # TODO - lost now
+    
     results = []
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK'])) as pool:
         for result in tqdm(pool.imap_unordered(evaluate_patient, patient_sample), total=len(patient_sample)):

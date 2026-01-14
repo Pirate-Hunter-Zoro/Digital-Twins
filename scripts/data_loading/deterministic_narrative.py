@@ -108,7 +108,7 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
     # Demographics
     demographics = [f'{demographic}: {sliced_json["demographics"].get(demographic, "Missing")}' for demographic in demographics_of_interests]
     sdoh_categories = get_sdoh(patient_dict=sliced_json)
-    DEMOGRAPHICS = f"### SOCIODEMOGRAPHICS / ACCESS\n{' | '.join(demographics)}\nSDOH: {' | '.join(sdoh_categories)}"
+    DEMOGRAPHICS = f"### SOCIODEMOGRAPHICS / ACCESS\n{' | '.join(demographics)}\nSDOH: {' | '.join(sdoh_categories)}\n"
     
     # Psych history
     substances = ' | '.join([sud_name for sud_name in sorted(list(sud_names_dict.keys())) if sud_names_dict[sud_name]])

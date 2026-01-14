@@ -161,7 +161,3 @@ sbatch slurm_jobs/digital_twins/run_embedding_pipeline.sbatch
 bash slurm_jobs/digital_twins/launch_trd_prediction.sh
 
 ```
-
-# TODO - overlapping diagnoses in histories and different comorbidities
-# TODO - why do we have the machine code in the narrative
-# TODO - suicidality flag 3 years in narrative but 12m in machine code - also True/False in narrative but y/n in machine code
