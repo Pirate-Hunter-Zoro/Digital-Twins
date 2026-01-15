@@ -149,13 +149,13 @@ def psych_utilization(patient_dict: dict, years: int) -> Tuple[int, int]:
     in_patient_days = 0
     emergency_visits = 0
     for encounter in patient_dict['encounters']:
-        if encounter['details']['end_visit'] > start:
+        if encounter['details']['start_visit'] < 0 and encounter['details']['end_visit'] > start:
             # In relevant time window
             if encounter['details']['patient_class'] == 'Inpatient':
                 # Increment the in_patient_days
                 end = min(0, encounter['details']['end_visit'])
                 effective_start = max(start, encounter['details']['start_visit'])
-                in_patient_days += end - effective_start
+                in_patient_days += max(end - effective_start, 0)
             elif encounter['details']['patient_class'] == 'Emergency':
                 emergency_visits += 1
             
