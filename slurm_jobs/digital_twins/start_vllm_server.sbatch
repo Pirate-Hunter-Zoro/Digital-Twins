@@ -41,6 +41,7 @@ else
 fi
 
 # ---- Start the server ----
+export VLLM_USE_V1=0
 python -m vllm.entrypoints.openai.api_server \
   --model "${VLLM_MODEL_PATH}" \
   --tensor-parallel-size "${TP_SIZE}" \
