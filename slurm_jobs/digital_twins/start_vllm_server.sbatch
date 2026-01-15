@@ -28,8 +28,9 @@ nvidia-smi -L
 # Modify the .env to contain the correct VLLM URL so other jobs send requests to the server
 ENV_FILE="${SLURM_SUBMIT_DIR}/.env"
 HEAD_NODE=$(hostname)
-sed -i '/^VLLM_URL=/d' "${ENV_FILE}"
-echo "VLLM_URL=http://${HEAD_NODE}:${PORT}" >> "${ENV_FILE}"
+sed -i '/^VLLM_URL=/d' "${ENV_FILE}" # Remove existing VLLM_URL line if present
+echo "" >> "${ENV_FILE}" # Ensure there's a newline before appending
+echo "VLLM_URL=http://${HEAD_NODE}:${PORT}" >> "${ENV_FILE}" # Append the new VLLM_URL line
 
 # Source file to load its variables (like VLLM_MODEL_PATH and MAX_MODEL_LEN)
 if [[ -f "${ENV_FILE}" ]]; then
@@ -40,7 +41,7 @@ else
 fi
 
 # ---- Start the server ----
-srun python -m vllm.entrypoints.openai.api_server \
+python -m vllm.entrypoints.openai.api_server \
   --model "${VLLM_MODEL_PATH}" \
   --tensor-parallel-size "${TP_SIZE}" \
   --pipeline-parallel-size "${PP_SIZE}" \
