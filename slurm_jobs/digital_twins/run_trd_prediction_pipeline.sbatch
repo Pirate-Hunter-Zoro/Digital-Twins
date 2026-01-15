@@ -3,7 +3,7 @@
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=256G
 #SBATCH -o slurm_jobs/digital_twins/logs/trd_prediction_pipeline_%a_out.txt
 #SBATCH -e slurm_jobs/digital_twins/logs/trd_prediction_pipeline_%a_err.txt
@@ -14,7 +14,6 @@ set -e
 
 # ---- Conda configuration ----
 CONDA_ENV=ehr_env
-N_THREADS="${SLURM_CPUS_PER_TASK}"
 
 # ---- Boilerplate env/bootstrap ----
 module purge
@@ -31,8 +30,5 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 11
 fi
 set -a; source "${ENV_FILE}"; set +a
-
-# Threading sanity
-export OMP_NUM_THREADS="${N_THREADS}"
 
 python -m scripts.digital_twins.predict_trd

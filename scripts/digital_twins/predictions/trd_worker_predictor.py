@@ -63,7 +63,7 @@ SELECT id, patient_id FROM vectors
     
     # Chunk patient sample for this worker
     start_idx = slurm_task_id*chunk_length
-    end_idx = start_idx + chunk_length
+    end_idx = len(patient_sample) if slurm_task_id == slurm_task_count - 1 else start_idx + chunk_length
     # Python handles out of range end_idx
     patient_chunk_for_worker = patient_sample[start_idx: end_idx]
     

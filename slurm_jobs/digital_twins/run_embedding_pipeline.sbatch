@@ -32,9 +32,6 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-# Threading sanity
-export OMP_NUM_THREADS="${N_THREADS}"
-
 python -m scripts.digital_twins.forge_narratives
 
 python -m scripts.digital_twins.forge_vectors

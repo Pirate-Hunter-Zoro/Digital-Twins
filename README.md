@@ -212,16 +212,9 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 
 ## Usage
 
-**To Forge Vectors (Stage 2):**
+**To Launch the Pipeline:**
 
 ```bash
-sbatch slurm_jobs/digital_twins/run_embedding_pipeline.sbatch
-
-```
-
-**To Evaluate TRD Prediction (Stage 4):**
-
-```bash
-bash slurm_jobs/digital_twins/launch_trd_prediction.sh
+sbatch slurm_jobs/digital_twins/run_trd_prediction_orchestrator.sbatch
 
 ```
