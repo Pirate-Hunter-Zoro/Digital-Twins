@@ -24,7 +24,10 @@ while true; do
   sleep 10
 done
 
-echo "Launching the rest of the pipeline..."
-sbatch slurm_jobs/digital_twins/run_trd_prediction_pipeline.sbatch
+echo "Launching the prediction pipeline..."
+JOB_ID=$(sbatch --parsable slurm_jobs/digital_twins/run_trd_prediction_pipeline.sbatch)
+
+echo "Launching evaluation pipeline to run once prediction is complete..."
+sbatch --dependency=afterok:$JOB_ID slurm_jobs/digital_twins/run_trd_prediction_analysis.sbatch
 
 echo "Done."
