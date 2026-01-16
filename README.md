@@ -218,3 +218,9 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 sbatch slurm_jobs/digital_twins/run_trd_prediction_orchestrator.sbatch
 
 ```
+
+
+# TODO
+# Histogram of LLM similarities of 200 nearest cosine neighbors
+# Histogram of LLM similarities of random neighbors
+# Try different LLM model

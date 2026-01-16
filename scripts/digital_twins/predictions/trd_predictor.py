@@ -18,7 +18,7 @@ class TRDPredictor:
         
         self.trd_set = set()
         trd_file = Path(os.environ['TRD_LIST_PATH'])
-        self.trd_set = set(trd_file.read_text().splitlines())
+        self.trd_set = set([l.strip('"') for l in trd_file.read_text().splitlines()])
         
     def get_trd_status(self, candidate_id: str) -> int:
         """
