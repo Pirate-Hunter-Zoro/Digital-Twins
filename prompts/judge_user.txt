@@ -13,8 +13,18 @@ Return this JSON:
     "treatment_burden": 0-100,
     "social_functional": 0-100,
     "safety": 0-100,
-    "top_similarity_drivers": ["short phrase x5-8"],
-    "key_mismatches": ["short phrase x3-5"]
+    "top_similarity_drivers": [
+        "driver 1",
+        "driver 2",
+        "driver 3",
+        "driver 4",
+        "driver 5"
+    ],
+    "key_mismatches": [
+        "mismatch 1",
+        "mismatch 2",
+        "mismatch 3"
+    ]
 }
 
 Scoring rules:

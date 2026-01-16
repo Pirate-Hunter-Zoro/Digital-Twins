@@ -13,3 +13,6 @@ Weight these dimensions when scoring (sum=100):
 6. Safety flags (contraindications): 5 points
 
 Return JSON only.
+Do not repeat items in lists.
+Limit "top_similarity_drivers" and "key_mismatches" to at most 5 items each.
+Stop generating immediately after the closing brace }.
