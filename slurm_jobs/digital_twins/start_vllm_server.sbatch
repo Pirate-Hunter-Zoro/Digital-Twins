@@ -8,6 +8,7 @@
 #SBATCH -o slurm_jobs/digital_twins/logs/vllm_out.txt
 #SBATCH -e slurm_jobs/digital_twins/logs/vllm_err.txt
 #SBATCH --gres=gpu:2
+#SBATCH --exclude=compute306
   
 GPUS=2                      
 CONDA_ENV=ehr_env
