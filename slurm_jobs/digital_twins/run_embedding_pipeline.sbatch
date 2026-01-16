@@ -32,6 +32,5 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-python -m scripts.digital_twins.forge_narratives
-
-python -m scripts.digital_twins.forge_vectors
+srun python -m scripts.digital_twins.forge_narratives
+srun python -m scripts.digital_twins.forge_vectors
