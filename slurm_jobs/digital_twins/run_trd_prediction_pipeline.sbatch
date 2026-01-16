@@ -7,7 +7,7 @@
 #SBATCH --mem=64G
 #SBATCH -o slurm_jobs/digital_twins/logs/trd_prediction_pipeline_%a_out.txt
 #SBATCH -e slurm_jobs/digital_twins/logs/trd_prediction_pipeline_%a_err.txt
-#SBATCH --array=0-4
+#SBATCH --array=0-2
 
 # Exit immediately if command fails
 set -e
