@@ -114,9 +114,9 @@ SELECT vector FROM vectors WHERE id=?
         # Normalize query vector
         mag = np.linalg.norm(query_vector)
         if mag > 0:
-            query_vector /= np.linalg.norm(query_vector)
+            normalized_vector = query_vector / mag
         # Find the cosine similarity of this vector with all other vectors in our database
-        similarities = self.vectors @ query_vector # NOTE - due to normalization, dot product IS cosine similarity
+        similarities = self.vectors @ normalized_vector # NOTE - due to normalization, dot product IS cosine similarity
         if exclude_id != None and exclude_id in self.ids_to_index.keys():
             # Kill this similarity score so it won't be one of the top ones
             idx = self.ids_to_index[exclude_id]
