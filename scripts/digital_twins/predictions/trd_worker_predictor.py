@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 def evaluate_patient(patient_info: tuple[str, str]) -> dict:
     """

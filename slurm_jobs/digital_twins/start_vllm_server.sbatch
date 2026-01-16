@@ -29,7 +29,6 @@ nvidia-smi -L
 ENV_FILE="${SLURM_SUBMIT_DIR}/.env"
 HEAD_NODE=$(hostname)
 sed -i '/^VLLM_URL=/d' "${ENV_FILE}" # Remove existing VLLM_URL line if present
-echo "" >> "${ENV_FILE}" # Ensure there's a newline before appending
 echo "VLLM_URL=http://${HEAD_NODE}:${PORT}" >> "${ENV_FILE}" # Append the new VLLM_URL line
 
 # Source file to load its variables (like VLLM_MODEL_PATH and MAX_MODEL_LEN)
