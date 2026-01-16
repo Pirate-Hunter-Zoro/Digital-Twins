@@ -32,5 +32,6 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-srun python -m scripts.digital_twins.forge_narratives
-srun python -m scripts.digital_twins.forge_vectors
+# Explicitly pass the memory limit to srun to resolve the conflict
+srun --mem=256G python -m scripts.digital_twins.forge_narratives
+srun --mem=256G python -m scripts.digital_twins.forge_vectors
