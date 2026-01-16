@@ -78,6 +78,26 @@ SELECT patient_id FROM vectors WHERE id=?
             return row[0]
         else:
             return None
+
+    def get_vector(self, id: str) -> np.array:
+        """
+        Helper method to return the vectir corresponding with the narrative that has the input hashed ID calculated from the narrative
+        
+        :param id: Hashed ID from narrative of patient
+        :type id: str
+        :return: Respective vector
+        :rtype: np.array
+        """
+        self.cursor.execute(
+            """
+SELECT vector FROM vectors WHERE id=?
+            """,
+            (id,))
+        row = self.cursor.fetchone()
+        if row is not None:
+            return np.frombuffer(row[0], dtype=np.float32)
+        else:
+            return None
         
     def search(self, query_vector: np.array, exclude_id: str=None) -> List[Tuple[str, float]]:
         """

@@ -8,14 +8,12 @@ load_dotenv()
 
 from scripts.digital_twins.neighbors.retriever import Retriever
 from scripts.digital_twins.neighbors.scorer import Scorer
-from scripts.models.patient_embedder import PatientEmbedder
 
 class TRDPredictor:
     
     def __init__(self):
         self.retriever = Retriever()
         self.scorer = Scorer()
-        self.embedder = PatientEmbedder()
         self.alpha = float(os.environ['WEIGHTING_EXPONENT'])
         
         self.trd_set = set()
@@ -44,7 +42,7 @@ class TRDPredictor:
         """
         patient_id = self.retriever.get_patient_id(id=index_id)
         index_narrative = self.retriever.get_narrative(id=index_id)
-        index_vector = self.embedder.vectorize(([patient_id], [index_narrative]))[0]
+        index_vector = self.retriever.get_vector(id=index_id)
         # NOTE - be sure to exclude this patient from the list of viable neighbors
         nearest_neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id)
         weights = np.zeros(shape=(len(nearest_neighbors),), dtype=np.float32) # Weights associated with each neighbor
