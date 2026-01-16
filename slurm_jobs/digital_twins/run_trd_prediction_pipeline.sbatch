@@ -4,7 +4,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=256G
+#SBATCH --mem=64G
 #SBATCH -o slurm_jobs/digital_twins/logs/trd_prediction_pipeline_%a_out.txt
 #SBATCH -e slurm_jobs/digital_twins/logs/trd_prediction_pipeline_%a_err.txt
 #SBATCH --array=0-19
