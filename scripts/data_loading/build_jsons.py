@@ -12,6 +12,7 @@ ENCOUNTER_CSV_PATH = Path(os.environ['ENCOUNTER_CSV_PATH'])
 DIAGNOSIS_CSV_PATH = Path(os.environ['DIAGNOSIS_CSV_PATH'])
 MEDICATION_CSV_PATH = Path(os.environ['MEDICATION_CSV_PATH'])
 PROCEDURE_CSV_PATH = Path(os.environ['PROCEDURE_CSV_PATH'])
+VITALS_CSV_PATH = Path(os.environ['VITALS_CSV_PATH'])
 PATIENT_JSON_DIR = Path(os.environ['PATIENT_JSON_DIR'])
 
 CHECKPOINT = 1
@@ -111,7 +112,9 @@ def process_patient(patient_id: str, raw: bool=False) -> bool:
         # Cleaned patient json already exists - return value to indicate we did NOT have to process this patient
         return False
         
+    # TODO - vitals df
     global people_df
+    global vitals_df
     global encounters_df
     global diagnoses_df
     global medications_df
@@ -203,6 +206,7 @@ def load_all_patient_json():
 DRY_RUN = True
 if __name__ == "__main__":
     global people_df
+    global vitals_df
     global encounters_df
     global diagnoses_df
     global medications_df
@@ -213,6 +217,8 @@ if __name__ == "__main__":
     people_df = pd.read_csv(PERSON_CSV_PATH, dtype={23: str}, escapechar='\\', low_memory=False) # PatientStatus is a string
     print("Loaded people dataframe...", flush=True)
     # Now for the other dataframes
+    vitals_df = pd.read_csv(VITALS_CSV_PATH, escapechar='\\', low_memory=False)
+    print("Loaded vitals dataframe...", flush=True)
     encounters_df = pd.read_csv(ENCOUNTER_CSV_PATH, escapechar='\\', low_memory=False)
     print("Loaded encounters dataframe...", flush=True)
     diagnoses_df = pd.read_csv(DIAGNOSIS_CSV_PATH, escapechar='\\', low_memory=False)
@@ -222,7 +228,7 @@ if __name__ == "__main__":
     procedures_df = pd.read_csv(PROCEDURE_CSV_PATH, escapechar='\\', low_memory=False)
     print("Loaded procedures dataframe...", flush=True)
     
-    dfs = [people_df, encounters_df, diagnoses_df, medications_df, procedures_df]
+    dfs = [people_df, vitals_df, encounters_df, diagnoses_df, medications_df, procedures_df]
     for df in dfs:
         df.set_index('PatientEpicId_SH', inplace=True)
         df.sort_index(inplace=True)
