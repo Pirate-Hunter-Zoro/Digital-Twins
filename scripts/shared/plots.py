@@ -40,7 +40,7 @@ def plot_precision_recall(y_true: np.array, y_prob: np.array):
     :type y_prob: np.array
     """
     score = sklearn.metrics.average_precision_score(y_true=y_true, y_score=y_prob)
-    precision, recall, _ = sklearn.metrics.precision_recall_curve(y_true=y_true, probas_pred=y_prob)
+    precision, recall, _ = sklearn.metrics.precision_recall_curve(y_true=y_true, y_score=y_prob)
     plt.plot(recall, precision, label=f'PR Curve (Average Precision = {score:.2f})')
     plt.xlabel("Recall")
     plt.ylabel("Precision")
@@ -83,14 +83,14 @@ def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array):
     FP_ASSIGN_ALL_POSITIVE = np.sum(1-y_true)
     N = y_true.shape[0]
     
-    def positive_all_benefit(threshold: float) -> float:
+    def positive_all_benefit(threshold: np.array) -> np.array:
         """
         Helper method to return the benefit attributed with applying the given threshold/penalty classifying all observations as positive
         
         :param threshold: Penalty for false positive
-        :type threshold: float
+        :type threshold: np.array
         :return: Resulting benefit
-        :rtype: float
+        :rtype: np.array
         """
         return TP_ASSIGN_ALL_POSITIVE/N - FP_ASSIGN_ALL_POSITIVE/N*threshold/(1-threshold)
      

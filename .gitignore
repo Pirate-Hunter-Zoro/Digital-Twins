@@ -7,3 +7,4 @@ scratch/
 *.pyc
 .pytest_cache/
 slurm_jobs/digital_twins/cancel_pipeline.sh
+results/

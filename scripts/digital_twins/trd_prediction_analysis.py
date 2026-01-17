@@ -19,9 +19,10 @@ def run_analysis():
     results_df = pd.concat([pd.read_csv(f) for f in results_files], ignore_index=True)
     
     roc = roc_auc_score(y_true=results_df['actual_trd_status'], y_score=results_df['trd_risk_score'])
-    brier = brier_score_loss(y_true=results_df['actual_trd_status'], y_prob=results_df['trd_risk_score'])
+    brier = brier_score_loss(y_true=results_df['actual_trd_status'], y_proba=results_df['trd_risk_score'])
     mean_ess = results_df['ess'].mean()
     results_txt = RESULTS_DIR / f'trd_evaluation_results.txt'
+    print(f"Writing TRD prediction evaluation results to {str(results_txt)}...")
     with open(results_txt, 'w') as f:
         f.write(f"TRD Prediction Evaluation Results\n")
         f.write(f"ROC AUC: {roc:.4f}\n")
@@ -29,11 +30,13 @@ def run_analysis():
         f.write(f"Mean Effective Sample Size (ESS): {mean_ess:.2f}\n")
 
     # Generate and save plots
+    print("Generating TRD prediction evaluation plots...", flush=True)
     plot_receiving_operator_characteristic(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     plot_precision_recall(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     plot_calibration(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     plot_decision_curve_analysis(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     plot_effective_sample_size_distribution(ess_values=results_df['ess'].to_numpy())
+    print("TRD prediction evaluation analysis complete.", flush=True)
     
 if __name__=="__main__":
     run_analysis()
