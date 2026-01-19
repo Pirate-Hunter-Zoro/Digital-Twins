@@ -37,6 +37,17 @@ IMPORTANT_PROCEDURE_FIELDS = [
     "ProcedureEndInstant"
 ]
 
+IMPORTANT_VITAL_FIELDS = [
+    "SystolicBloodPressure",
+    "DiastolicBloodPressure",
+    "PulseRate",
+    "RespirationRate",
+    "WeightInGrams",
+    "HeightInInches",
+    "TemperatureInFahrenheit",
+    "BodyMassIndex"
+]
+
 SCRUB = True
     
 def clean_encounter(encounter: dict) -> dict:
@@ -86,13 +97,22 @@ def clean_encounter(encounter: dict) -> dict:
         for key in IMPORTANT_PROCEDURE_FIELDS:
             trimmed_procedure[key] = procedure[key]
         cleaned_procedures.append(trimmed_procedure)
+        
+    # Clean vitals in the same way
+    cleaned_vitals = []
+    for vital in encounter['vitals']:
+        trimmed_vital = {}
+        for key in IMPORTANT_VITAL_FIELDS:
+            trimmed_vital[key] = vital[key]
+        cleaned_vitals.append(trimmed_vital)
 
     # Put all cleaned information together
     return {
         "details": details,
         "diagnoses": cleaned_diagnoses,
         "medications": cleaned_medications,
-        "procedures": cleaned_procedures
+        "procedures": cleaned_procedures,
+        "vitals": cleaned_vitals
     }
     
 
@@ -154,6 +174,13 @@ def process_patient(patient_id: str, raw: bool=False) -> bool:
         patient_procedures = patient_procedures.to_dict('records')
     except KeyError:
         patient_procedures = []
+    try:
+        patient_vitals = vitals_df.loc[patient_id]
+        if isinstance(patient_vitals, pd.Series):
+            patient_vitals = patient_vitals.to_frame().T
+        patient_vitals = patient_vitals.to_dict('records')
+    except KeyError:
+        patient_vitals = []
         
     # Now we construct the json based on all the patient's information
     patient_dict['encounters'] = []
@@ -165,11 +192,13 @@ def process_patient(patient_id: str, raw: bool=False) -> bool:
         relevant_meds = [med for med in patient_medications if med['EncounterId_SH'] == encounter_id]
         relevant_diagnoses = [diagnosis for diagnosis in patient_diagnoses if diagnosis['EncounterId_SH'] == encounter_id]
         relevant_procedures = [procedure for procedure in patient_procedures if procedure['EncounterId_SH'] == encounter_id]
+        relevant_vitals = [vital for vital in patient_vitals if vital['EncounterId_SH'] == encounter_id]
         raw_encounter_dict = {
             'details': encounter,
             'medications': relevant_meds,
             'diagnoses': relevant_diagnoses,
-            'procedures': relevant_procedures
+            'procedures': relevant_procedures,
+            'vitals': relevant_vitals
         }
         patient_dict['encounters'].append((clean_encounter(raw_encounter_dict) if not raw else raw_encounter_dict))
     
