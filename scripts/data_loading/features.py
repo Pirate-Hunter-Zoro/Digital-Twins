@@ -282,5 +282,5 @@ def get_vitals_average(patient_dict: dict) -> dict:
     return {
         'bmi': sum(bmi_values) / len(bmi_values) if len(bmi_values) > 0 else "Missing", 
         'bp_sys': sum(systolic_values) / len(systolic_values) if len(systolic_values) > 0 else "Missing",
-        'bp_dias': sum(diastolic_values) / len(diastolic_values)
+        'bp_dias': sum(diastolic_values) / len(diastolic_values) if len(diastolic_values) > 0 else "Missing"
     }
