@@ -110,7 +110,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
     sliced_med_intervals = {}
     
     for encounter in patient_dict['encounters']:
-        sliced_encounter = {'details': encounter['details'], 'procedures': [], 'diagnoses': encounter['diagnoses']}
+        sliced_encounter = {'details': encounter['details'], 'procedures': [], 'diagnoses': encounter['diagnoses'], 'vitals': encounter['vitals'],}
         info = sliced_encounter['details']
         
         enc_start_str = info.get('start_visit')

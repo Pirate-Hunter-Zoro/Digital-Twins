@@ -13,6 +13,11 @@ load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 os.makedirs(RESULTS_DIR, exist_ok=True)
+predictor = None
+
+def init_worker():
+    global predictor
+    predictor = TRDPredictor()
 
 def evaluate_patient(patient_info: tuple[str, str]) -> dict:
     """
@@ -23,16 +28,19 @@ def evaluate_patient(patient_info: tuple[str, str]) -> dict:
     :return: TRD prediction results
     :rtype: dict
     """
-    predictor = TRDPredictor()
+    global predictor
     narrative_hash_id, patient_id = patient_info
     print("Predicting TRD risk for patient ID:", patient_id, flush=True)
     trd_status = predictor.get_trd_status(candidate_id=patient_id)
     prediction = predictor.predict_risk(index_id=narrative_hash_id)
+    random_llm_similarity_scores = predictor.get_random_sample_judge_scores(index_id=narrative_hash_id)
     return {
         'patient_id' : patient_id,
         'actual_trd_status' : trd_status,
         'trd_risk_score' : prediction['risk_score'],
-        'ess' : prediction['confidence_ess']
+        'ess' : prediction['confidence_ess'],
+        'nearest_scores' : str(prediction['nearest_scores']),
+        'random_scores' : str(random_llm_similarity_scores)
     }
 
 def run():
@@ -70,7 +78,7 @@ SELECT id, patient_id FROM vectors
     patient_chunk_for_worker = patient_sample[start_idx: end_idx]
     
     results = []
-    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK'])) as pool:
+    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker) as pool:
         for result in tqdm(pool.imap_unordered(evaluate_patient, patient_chunk_for_worker), total=len(patient_chunk_for_worker)):
             results.append(result)
     # Turn results into a dataframe

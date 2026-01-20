@@ -23,6 +23,7 @@ from scripts.data_loading.features import (
     safety_comorbidity,
     sud_specifics,
     get_sdoh,
+    get_vitals_average,
 )
 
 def get_bool_str(val: bool) -> str:
@@ -109,6 +110,25 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
     demographics = [f'{demographic}: {sliced_json["demographics"].get(demographic, "Missing")}' for demographic in demographics_of_interests]
     sdoh_categories = get_sdoh(patient_dict=sliced_json)
     DEMOGRAPHICS = f"### SOCIODEMOGRAPHICS / ACCESS\n{' | '.join(demographics)}\nSDOH: {' | '.join(sdoh_categories)}\n"
+    
+    # Vitals
+    vitals_avg_dict = get_vitals_average(sliced_json)
+    vitals_strs = []
+    
+    # Handle BMI formatting
+    bmi_val = vitals_avg_dict['bmi']
+    bmi_str = f"{bmi_val:.1f}" if isinstance(bmi_val, (int, float)) else "Missing"
+    
+    # Handle BP formatting
+    sys_val = vitals_avg_dict['bp_sys']
+    dia_val = vitals_avg_dict['bp_dias']
+    
+    if isinstance(sys_val, (int, float)) and isinstance(dia_val, (int, float)):
+        bp_str = f"{sys_val:.0f}/{dia_val:.0f}"
+    else:
+        bp_str = "Missing"
+
+    VITALS = f"### PHYSICAL HEALTH\nBMI: {bmi_str} | BP (mean): {bp_str}\n"
     
     # Psych history
     substances = ' | '.join([sud_name for sud_name in sorted(list(sud_names_dict.keys())) if sud_names_dict[sud_name]])

@@ -233,6 +233,9 @@ def psychotherapy_count(patient_dict: dict) -> int:
     return count
 
 def sud_specifics(patient_dict: dict) -> dict[str, bool]:
+    """
+    Determine exact ingredients of substances abused by patient
+    """
     result = {}
     for encounter in patient_dict['encounters']:
         for diagnosis in encounter['diagnoses']:
@@ -244,6 +247,9 @@ def sud_specifics(patient_dict: dict) -> dict[str, bool]:
     return result
 
 def get_sdoh(patient_dict: dict) -> set[str]:
+    """
+    Retrieve available sociodemographic flags from patient
+    """
     result = set()
     for encounter in patient_dict['encounters']:
         for diagnosis in encounter['diagnoses']:
@@ -254,3 +260,27 @@ def get_sdoh(patient_dict: dict) -> set[str]:
     if len(result) == 0:
         result.add("None Recorded")
     return result
+
+def get_vitals_average(patient_dict: dict) -> dict:
+    """
+    Determine average vital readings over various encounters
+    """
+    systolic_values = [] # blood pressure
+    diastolic_values = [] # blood pressure
+    bmi_values = []
+    for encounter in patient_dict['encounters']:
+        for vital in encounter['vitals']:
+            sys_bp = vital['SystolicBloodPressure']
+            dias_bp = vital['DiastolicBloodPressure']
+            bmi = vital['BodyMassIndex']
+            if isinstance(sys_bp, (int, float)) and sys_bp > 0:
+                systolic_values.append(sys_bp)
+            if isinstance(dias_bp, (int, float)) and dias_bp > 0:
+                diastolic_values.append(dias_bp)
+            if isinstance(bmi, (int, float)) and bmi > 0:
+                bmi_values.append(bmi)
+    return {
+        'bmi': sum(bmi_values) / len(bmi_values) if len(bmi_values) > 0 else "Missing", 
+        'bp_sys': sum(systolic_values) / len(systolic_values) if len(systolic_values) > 0 else "Missing",
+        'bp_dias': sum(diastolic_values) / len(diastolic_values)
+    }

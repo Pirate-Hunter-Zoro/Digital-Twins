@@ -1,7 +1,8 @@
 import numpy as np
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
+import random
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -31,16 +32,35 @@ class TRDPredictor:
         """
         return 1 if candidate_id in self.trd_set else 0
     
+    def get_random_sample_judge_scores(self, index_id: str) -> List[float]:
+        """
+        Retrieve random neighbor patients and compute all of their LLM-judged similarities
+
+        :param index_id: Hashed ID of the narrative of the patient of interest
+        :type index_id: str
+        :return: All LLM-judged similarities of neighbors
+        :rtype: List[float]
+        """
+        k = int(os.environ['NUM_NEIGHBOR_PATIENTS'])
+        all_ids = [id for id in self.retriever.ids if id != index_id]
+        sampled_ids = random.sample(all_ids, min(k, len(all_ids)))
+        scores = []
+        index_narrative = self.retriever.get_narrative(id=index_id)
+        for neighbor_id in sampled_ids:
+            neighbor_narrative = self.retriever.get_narrative(id=neighbor_id)
+            score_report = self.scorer.judge(index_narrative=index_narrative, candidate_narrative=neighbor_narrative, index_id=index_id, candidate_id=neighbor_id)
+            scores.append(score_report['overall_similarity'])
+        return scores
+    
     def predict_risk(self, index_id: str) -> Dict:
         """
-        Docstring for predict_risk
+        Predict the TRD risk for the given patient
         
         :param index_id: Hashed ID of the narrative of the patient of interest
         :type index_id: str
         :return: Information on TRD risk probability along with predictor information
         :rtype: Dict
         """
-        patient_id = self.retriever.get_patient_id(id=index_id)
         index_narrative = self.retriever.get_narrative(id=index_id)
         index_vector = self.retriever.get_vector(id=index_id)
         # NOTE - be sure to exclude this patient from the list of viable neighbors
@@ -86,5 +106,6 @@ class TRDPredictor:
                     'score' : score
                 }
                 for patient_id, score in zip(top_5_ids, top_5_scores)
-            ]
+            ],
+            'nearest_scores' : neighbor_scores.tolist()
         }
