@@ -48,7 +48,7 @@ IMPORTANT_VITAL_FIELDS = [
     "BodyMassIndex"
 ]
 
-SCRUB = True
+SCRUB = int(os.environ['SCRUB_PATIENT_JSON']) == 1
     
 def clean_encounter(encounter: dict) -> dict:
     # Omit useless bloated information and grab only the details that matter
@@ -132,7 +132,6 @@ def process_patient(patient_id: str, raw: bool=False) -> bool:
         # Cleaned patient json already exists - return value to indicate we did NOT have to process this patient
         return False
         
-    # TODO - vitals df
     global people_df
     global vitals_df
     global encounters_df
