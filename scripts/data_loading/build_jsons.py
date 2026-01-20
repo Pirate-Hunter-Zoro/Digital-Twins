@@ -15,7 +15,7 @@ PROCEDURE_CSV_PATH = Path(os.environ['PROCEDURE_CSV_PATH'])
 VITALS_CSV_PATH = Path(os.environ['VITALS_CSV_PATH'])
 PATIENT_JSON_DIR = Path(os.environ['PATIENT_JSON_DIR'])
 
-CHECKPOINT = 1
+CHECKPOINT = 10000
 
 DIAGNOSIS_CODE_PATTERN = re.compile(r"Diagnosis_(\d+)_Code")
 
@@ -231,7 +231,6 @@ def load_all_patient_json():
                 if num_completed % CHECKPOINT == 0:
                     print(f"Completed {num_completed} patient jsons...")
 
-DRY_RUN = True
 if __name__ == "__main__":
     global people_df
     global vitals_df
@@ -261,25 +260,4 @@ if __name__ == "__main__":
         df.set_index('PatientEpicId_SH', inplace=True)
         df.sort_index(inplace=True)
     
-    if DRY_RUN:
-        patient_id = "B51F69E061B1137C6C9881CD89E71BFE"
-        raw_json_path = Path(f"test_data/raw_{patient_id}.json")
-        os.makedirs(raw_json_path.parent, exist_ok=True)
-        cleaned_json_path = Path(f"test_data/cleaned_{patient_id}.json")
-        
-        output_file_path = PATIENT_JSON_DIR / f'patient_{patient_id}.json'
-        os.makedirs(output_file_path.parent, exist_ok=True)
-        process_patient(patient_id=patient_id, raw=True)
-        with open(output_file_path, 'r') as f:
-            raw_json = json.load(f)
-        process_patient(patient_id=patient_id, raw=False)
-        with open(output_file_path, 'r') as f:
-            cleaned_json = json.load(f)
-        
-        with open(raw_json_path, 'w') as f:
-            json.dump(raw_json, f, indent=4)
-        with open(cleaned_json_path, 'w') as f:
-            json.dump(cleaned_json, f, indent=4)
-        
-    else:
-        load_all_patient_json()
+    load_all_patient_json()
