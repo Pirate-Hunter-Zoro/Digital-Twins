@@ -36,7 +36,7 @@ def _load_one_patient(patient_args: Tuple[str, Path, Path, Path, Dict]) -> Tuple
     """
     sliced_path, unsliced_path, raw_path, anchor_data = patient_args
     sliced_json, unsliced_json = None, None
-    if sliced_path.exists() and unsliced_path.exists():
+    if sliced_path.exists() and unsliced_path.exists() and int(os.environ['SCRUB_PATIENT_JSON']) == 0:
         try:
             with open(sliced_path, 'r') as f:
                 sliced_json = json.load(f)
@@ -50,7 +50,7 @@ def _load_one_patient(patient_args: Tuple[str, Path, Path, Path, Dict]) -> Tuple
     with open(raw_path, 'r') as f:
         raw_json = json.load(f)
     # Verify the anchor date and create the sliced dictionary
-    verified_anchor = find_anchor_date(patient_json=raw_json, anchor_data=anchor_data)
+    verified_anchor = find_anchor_date(anchor_data=anchor_data)
     if verified_anchor is not None:
         os.makedirs(UNSLICED_JSON_PATH, exist_ok=True)
         os.makedirs(SLICED_JSON_PATH, exist_ok=True)

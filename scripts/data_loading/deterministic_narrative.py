@@ -113,7 +113,6 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
     
     # Vitals
     vitals_avg_dict = get_vitals_average(sliced_json)
-    vitals_strs = []
     
     # Handle BMI formatting
     bmi_val = vitals_avg_dict['bmi']
@@ -156,7 +155,7 @@ NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingr
     # Safety
     SAFETY = f"### SAFETY\n{' | '.join([f'{safety_arm}: {get_bool_str(safety_comorbidity_dict[safety_arm])}' for safety_arm in safety_comorbidity_dict.keys()])}\n"
     
-    result = "\n".join([HEADER, DEMOGRAPHICS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, UTILIZATION, SAFETY])
+    result = "\n".join([HEADER, DEMOGRAPHICS, VITALS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, UTILIZATION, SAFETY])
     # Record the narrative
     os.makedirs(narrative_save_path.parent, exist_ok=True)
     with open(narrative_save_path, 'w') as f:
