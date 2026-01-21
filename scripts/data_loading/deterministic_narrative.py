@@ -132,7 +132,7 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
     # Psych history
     substances = ' | '.join([sud_name for sud_name in sorted(list(sud_names_dict.keys())) if sud_names_dict[sud_name]])
     psych_comorbidities = [f'{psych_arm}: {get_bool_str(psych_comorbidity_dict[psych_arm])}' for psych_arm in psych_comorbidity_dict.keys()]
-    PSYCH_HISTORY = f"### PSYCH HISTORY\n{' | '.join(psych_comorbidities)}\nSUICIDE FLAG (12m):{get_bool_str(suicide_flag)}\nSUBSTANCE ABUSE: {substances if len(substances) > 0 else 'None'}\n"
+    PSYCH_HISTORY = f"### PSYCH HISTORY\n{' | '.join(psych_comorbidities)}\nSUICIDE FLAG (12m): {get_bool_str(suicide_flag)}\nSUBSTANCE ABUSE: {substances if len(substances) > 0 else 'None'}\n"
     
     # Medical comorbidity
     med_comorbidities = [f'{med_arm}: {get_bool_str(medical_comorbidity_dict[med_arm])}' for med_arm in medical_comorbidity_dict.keys()]

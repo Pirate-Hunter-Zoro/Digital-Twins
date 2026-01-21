@@ -41,10 +41,10 @@ Transforms the structured JSONs into textual narratives.
 **The Forge.** Converts text narratives into high-dimensional vectors using the `PatientEmbedder`.
 
 * **`forge_vectors.py`**: The main driver.
+
 1. Reads `.md` files from Stage 1.
 2. Batches them.
 3. Feeds them to the `PatientEmbedder` to generate embeddings.
-
 
 * **Artifacts**: This stage populates the SQLite database `vectors.db`.
 
@@ -58,13 +58,10 @@ Transforms the structured JSONs into textual narratives.
 * **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
 * **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
 
-
 * **`scorer.py`**:
 * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
 * **Caching**: Stores expensive LLM outputs in `judgements.db` (Table: `llm_judgements`) to prevent redundant inference.
 * **Logic**: Checks cache -> Formats Prompt -> Calls vLLM -> Parses JSON -> Saves Result.
-
-
 
 ### 5. Stage 4: Prediction & Evaluation (`scripts/digital_twins/predictions`)
 
@@ -83,28 +80,25 @@ graph TD
 ```
 
 * **`trd_predictor.py`**:
-    * Implements the **Digital Twin Matcher** logic for Treatment-Resistant Depression (TRD).
-    * **Workflow**:
-        1.  Retrieves top-K neighbors via `retriever.py` (excluding the query patient) by largest cosine similarity.
-        2.  Scores neighbors via `scorer.py` (raw score from the LLM is at most 100, so divide by 100 before preceding).
-        3.  Applies exponential weighting ($w = score^\alpha\text{ }\forall \text{ neighbors}$) to emphasize strong matches.
-        4.  Take TRD flags for neigbhors ($f = 1\text{ if TRD else } 0\text{ }\forall \text{ neighbors}$)
-        5.  Computes weighted probability of TRD risk ($P(TRD)=w\bullet f$).
-    * **Confidence**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions ($\text{ESS}=\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$).
+  * Implements the **Digital Twin Matcher** logic for Treatment-Resistant Depression (TRD).
+  * **Workflow**:
+        1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient) by largest cosine similarity.
+        2. Scores neighbors via `scorer.py` (raw score from the LLM is at most 100, so divide by 100 before preceding).
+        3. Applies exponential weighting ($w = score^\alpha\text{ }\forall \text{ neighbors}$) to emphasize strong matches.
+        4. Take TRD flags for neigbhors ($f = 1\text{ if TRD else } 0\text{ }\forall \text{ neighbors}$)
+        5. Computes weighted probability of TRD risk ($P(TRD)=w\bullet f$).
+  * **Confidence**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions ($\text{ESS}=\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$).
 * **`evaluate_trd.py`**:
-    * Backtesting script.
-    * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
-    * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence).
-    * **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and ROC-AUC, Precision-Recall, Calibration, Decision Curve, and ESS Histogram plots.
-
+  * Backtesting script.
+  * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
+  * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence).
+  * **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and ROC-AUC, Precision-Recall, Calibration, Decision Curve, and ESS Histogram plots.
 
 * **`evaluate_trd.py`**:
 * Backtesting script.
 * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
 * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence).
 * **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and ROC-AUC, Precision-Recall, Calibration, Decision Curve, and ESS Histogram plots.
-
-
 
 ### 6. Models (`scripts/models`)
 
@@ -116,7 +110,6 @@ Interfaces for the neural networks.
 * **Logic**: Checks the DB for existing IDs (MD5 hash of text). If missing, computes the embedding and inserts it as a binary BLOB.
 * **Scrubbing**: Respects `SCRUB_VECTORS` env var to force re-computation.
 
-
 * **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation or scoring).
 
 ### 7. Shared Utilities (`scripts/shared`)
@@ -124,7 +117,6 @@ Interfaces for the neural networks.
 * **`similarity.py`**: **The Search Engine.**
 * Computes Cosine Similarity between patient IDs.
 * **Caching**: Uses the `similarities` table in `vectors.db`.
-
 
 * **`utils.py`**: Core helpers (hashing logic `generate_string_id`, etc.).
 * **`io.py`**: Standardized file handling.
@@ -134,10 +126,12 @@ Interfaces for the neural networks.
 ## The Vault: Databases
 
 ### Vector Storage (`vectors.db`)
+
 Located at `ARTIFACTS_DIR/vectors.db`.
 
 **Table: `vectors`**
 Stores the raw embeddings.
+
 | Column | Type | Description |
 | :--- | :--- | :--- |
 | `id` | `TEXT (PK)` | MD5 Hash of the narrative text. |
@@ -148,6 +142,7 @@ Stores the raw embeddings.
 
 **Table: `similarities`**
 Stores the cosine similarity of the embeddings associated with the string hash ids.
+
 | Column | Type | Description |
 | :--- | :--- | :--- |
 | `id_a` | `TEXT (PK)` | MD5 Hash (alphabetically first) of one of the narrative texts. |
@@ -155,16 +150,18 @@ Stores the cosine similarity of the embeddings associated with the string hash i
 | `score` | `REAL` | The cosine similarity between the two embeddings. |
 
 ### Judgement Storage (`judgements.db`)
+
 Located at `JUDGEMENTS_DIR`.
 
 **Table: `llm_judgements`**
 Caches the expensive qualitative evaluations from the LLM.
+
 | Column | Type | Description |
 | :--- | :--- | :--- |
 | `id_a` | `TEXT (PK)` | First Patient ID. |
 | `id_b` | `TEXT (PK)` | Second Patient ID. |
 | `overall_score` | `INTEGER` | Numeric Similarity Score |
-| `full_response` | `TEXT`| Full Response from LLM Including Justification |
+| `full_response` | `TEXT` | Full Response from LLM Including Justification |
 
 ---
 
@@ -176,7 +173,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 
 * `SEED`: 42 (Ensures deterministic behavior).
 * `WEIGHTING_EXPONENT`: 4.0 (Alpha value for weighting similarity scores in TRD prediction).
-* `TRD_TEST_COUNT`: 50 (Number of patients to sample for evaluation).
+* `TRD_TEST_COUNT`: 200 (Number of patients to sample for evaluation).
 
 ### Data Paths (Input)
 
@@ -186,14 +183,14 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 
 ### Models
 
-**Embedding Model**
+#### Embedding Model
 
 * `EMBEDDER_MODEL_NAME`: `Qwen-Qwen3-Embedding-8B`
 * `EMBEDDER_MODEL_PATH`: `${ANALYSIS_DIR}/models/${EMBEDDER_MODEL_NAME}`
 * `EMBEDDER_DEVICE`: `cuda` (Use `cpu` for large strings to prevent OOM).
 * `EMBEDDER_BATCH_SIZE`: 32
 
-**Generative Model (vLLM)**
+#### Generative Model (vLLM)
 
 * `VLLM_MODEL_NAME`: `google_medgemma-27b-text-it`
 * `VLLM_URL`: `http://compute306:8000`

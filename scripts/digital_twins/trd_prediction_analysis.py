@@ -3,7 +3,14 @@ import os
 from sklearn.metrics import roc_auc_score, brier_score_loss
 import pandas as pd
 
-from scripts.shared.plots import plot_calibration, plot_precision_recall, plot_receiving_operator_characteristic, plot_decision_curve_analysis, plot_effective_sample_size_distribution
+from scripts.shared.plots import (
+    plot_calibration, 
+    plot_precision_recall, 
+    plot_receiving_operator_characteristic, 
+    plot_decision_curve_analysis, 
+    plot_effective_sample_size_distribution,
+    plot_optimal_confusion_matrix
+)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -36,6 +43,7 @@ def run_analysis():
     plot_calibration(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     plot_decision_curve_analysis(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     plot_effective_sample_size_distribution(ess_values=results_df['ess'].to_numpy())
+    plot_optimal_confusion_matrix(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df['trd_risk_score'].to_numpy())
     print("TRD prediction evaluation analysis complete.", flush=True)
     
 if __name__=="__main__":

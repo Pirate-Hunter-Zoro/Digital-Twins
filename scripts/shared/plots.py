@@ -133,3 +133,25 @@ def plot_effective_sample_size_distribution(ess_values: np.array):
     plt.legend()
     plt.savefig(f"{str(RESULTS_DIR)}/effective_sample_size_distribution.png")
     plt.close()
+    
+def plot_optimal_confusion_matrix(y_true: np.array, y_prob: np.array):
+    """
+    Create confusion matrix for the given probability estimates with the optimal threshold
+    
+    :param y_true: Actual labels
+    :type y_true: np.array
+    :param y_prob: Predicted probability labels
+    :type y_prob: np.array
+    """
+    false_positive_rates, true_positive_rates, thresholds = sklearn.metrics.roc_curve(y_true=y_true, y_score=y_prob)
+    # Find threshold that accomplished peak model performance
+    j_statistics = true_positive_rates - false_positive_rates
+    threshold = thresholds[np.argmax(j_statistics)]
+    # Use threshold to make predictions
+    predictions = np.where(y_prob >= threshold, 1, 0)
+    matrix = sklearn.metrics.confusion_matrix(y_true=y_true, y_pred=predictions)
+    display = sklearn.metrics.ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=['Non-TRD', 'TRD'])
+    display.plot(cmap='Blues')
+    plt.title(f'Threshold: {threshold}')
+    plt.savefig(f"{str(RESULTS_DIR)}/optimal_threshold_confusion_matrix.png")
+    plt.close()
