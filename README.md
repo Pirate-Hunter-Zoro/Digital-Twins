@@ -86,7 +86,7 @@ graph TD
         2. Scores neighbors via `scorer.py` (raw score from the LLM is at most 100, so divide by 100 before preceding).
         3. Applies exponential weighting ($w = score^\alpha\text{ }\forall \text{ neighbors}$) to emphasize strong matches.
         4. Take TRD flags for neigbhors ($f = 1\text{ if TRD else } 0\text{ }\forall \text{ neighbors}$)
-        5. Computes weighted probability of TRD risk ($P(TRD)=w\bullet f$).
+        5. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$). If the total 
   * **Confidence**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions ($\text{ESS}=\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$).
 * **`evaluate_trd.py`**:
   * Backtesting script.

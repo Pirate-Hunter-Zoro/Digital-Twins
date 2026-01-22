@@ -80,11 +80,16 @@ class TRDPredictor:
             trds[i] = self.get_trd_status(candidate_id=neighbor_patient_id)
         
         # Calculate predicted TRD probability
-        trd_prob = np.dot(a=weights, b=trds.T) / np.sum(a=weights)
-        
-        # Calculate effective sample size
-        weights_squared = np.multiply(weights, weights)
-        ess = np.power(np.sum(weights), 2) / np.sum(weights_squared)
+        total_weight = np.sum(a=weights)
+        if total_weight > 0:
+            trd_prob = np.dot(a=weights, b=trds.T) / total_weight
+            # Calculate effective sample size
+            weights_squared = np.multiply(weights, weights)
+            ess = np.power(total_weight, 2) / np.sum(weights_squared)
+        else:
+            trd_prob = float(os.environ['TRD_BLIND_PROBABILITY'])
+            print(f"[Warning] Patient {index_id} has 0 total weight among neighbors.", flush=True)
+            ess = 0
         
         # Record risk score
         risk = 'low' if trd_prob < 0.2 else ('moderate' if trd_prob < 0.5 else 'high')
