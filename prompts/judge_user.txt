@@ -30,4 +30,4 @@ Return this JSON:
 Scoring rules:
 - Same band (e.g., NSAID 0 vs 1) = small penalty; different band (0 vs >=2) = large penalty.
 - Reward matches on polypharmacy, pain/NSAIDs, anxiety/fatigue most.
-- If a dimension has any "Missing", exclude that dimension and renormalize the weights.
+- If a dimension has 'Missing' data, strictly output the value 0 for that score.

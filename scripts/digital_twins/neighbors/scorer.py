@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 from typing import Optional, Dict, Any
+import sys
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -122,7 +123,10 @@ INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response)
             self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
             return response_json
         except json.JSONDecodeError as e:
-            print(f"BAD RESPONSE FROM LLM:\nIDs: {index_id}, {candidate_id}\nResponse: {response}", flush=True)
+            sys.stderr.write(f"IDs: {index_id} vs {candidate_id}\n")
+            sys.stderr.write(f"Response Tail: {cleaned_response[-500:]}\n")
+            sys.stderr.write(f"===============================\n")
+            sys.stderr.flush() # Force the output
             raise e
         except Exception as e:
             raise e
