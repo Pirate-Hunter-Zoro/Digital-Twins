@@ -3,9 +3,9 @@ import os
 from sklearn.metrics import roc_auc_score, brier_score_loss
 import pandas as pd
 import ast
-import numpy as np
 import matplotlib.pyplot as plt
 
+from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 from scripts.shared.plots import (
     plot_calibration, 
     plot_precision_recall, 
@@ -19,8 +19,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
-TRD_FILE = Path(os.environ['TRD_LIST_PATH'])
-TRD_SET = set([l.strip('"') for l in TRD_FILE.read_text().splitlines()])
 
 def run_analysis():
     """
@@ -70,7 +68,24 @@ def run_analysis():
         print("TRD prediction evaluation analysis complete.", flush=True)
         
     # Now we have all the plots and results for each mode saved in the results directory
-    # TODO - Battle 2
+    predictor = TRDPredictor() # So that we can use it's trd flag
+    top_k_thresholds = [10, 25, 50, 100]
+    enrichment_percentages = [
+        {k : 0 for k in top_k_thresholds},
+        {k : 0 for k in top_k_thresholds},
+    ]
+    for _, row in results_df.iterrows():
+        neighbors_by_llm_score = ast.literal_eval(row['neighbors_by_llm_score'])
+        neighbors_by_cosine_score = ast.literal_eval(row['neighbors_by_cos_score'])
+        # Compute running sum of TRD-positive patients by index for both lists
+        for k_value in top_k_thresholds:
+            enrichment_percentages[0][k_value] += sum(
+                [predictor.get_trd_status(candidate_id=id) for id in neighbors_by_cosine_score[:k_value]]
+            ) / k_value
+            enrichment_percentages[1][k_value] += sum(
+                [predictor.get_trd_status(candidate_id=id) for id in neighbors_by_llm_score[:k_value]]
+            ) / k_value
+    # TODO - Now that we have the enrichment percentages, calculate average enrichment for every k...
     
 if __name__=="__main__":
     run_analysis()
