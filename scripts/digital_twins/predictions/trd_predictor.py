@@ -65,45 +65,70 @@ class TRDPredictor:
         index_vector = self.retriever.get_vector(id=index_id)
         # NOTE - be sure to exclude this patient from the list of viable neighbors
         nearest_neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id)
-        weights = np.zeros(shape=(len(nearest_neighbors),), dtype=np.float32) # Weights associated with each neighbor
-        trds = np.zeros_like(a=weights) # TRD 0/1 flag associated with each neighbor
+        weights = np.zeros(shape=(len(nearest_neighbors), 3), dtype=np.float32) # Weights associated with each neighbor
+        trds = np.zeros(shape=(weights.shape[0],), dtype=np.float32) # TRD 0/1 flag associated with each neighbor
         neighbor_patient_ids = [] 
-        neighbor_scores = np.zeros_like(weights)
+        patient_id_to_idx = {}
+        # This ONLY pertains to LLM scores
+        neighbor_scores = np.zeros_like(trds)
         for i, neighbor in enumerate(nearest_neighbors):
             neighbor_narrative_string_id = neighbor[0]
+            if neighbor_narrative_string_id == index_id:
+                raise ValueError(f"ERROR - Patient with narrative hash id {index_id} was one of its own neighbors - THIS SHOUDL NOT HAVE HAPPENED CHECK THE MATH IN THE RETREIVER....")
+            cosine_score = neighbor[1]
             neighbor_patient_id = self.retriever.get_patient_id(id=neighbor_narrative_string_id)
+            # Add this patient to the list of neighbors
             neighbor_patient_ids.append(neighbor_patient_id)
+            # Store the index of this patient for easy sorting later
+            patient_id_to_idx[neighbor_patient_id] = len(neighbor_patient_ids) - 1
             neighbor_narrative = self.retriever.get_narrative(id=neighbor_narrative_string_id)
             score = self.scorer.judge(index_narrative=index_narrative, candidate_narrative=neighbor_narrative, index_id=index_id, candidate_id=neighbor_narrative_string_id)['overall_similarity']
             neighbor_scores[i] = score
-            weights[i] = np.power(score/100, self.alpha)
-            trds[i] = self.get_trd_status(candidate_id=neighbor_patient_id)
+            # Store LLM weight, cosine weight, and average weight
+            weights[i] = np.array([np.power(score/100, self.alpha), cosine_score, 1.0])
+            status = self.get_trd_status(candidate_id=neighbor_patient_id)
+            trds[i] = status
         
         # Calculate predicted TRD probability
-        total_weight = np.sum(a=weights)
-        if total_weight > 0:
-            trd_prob = np.dot(a=weights, b=trds.T) / total_weight
+        total_weight = np.sum(a=weights, axis=0) # Total llm weight, cosine weight, average weight
+        if total_weight[0] > 0 and total_weight[1] > 0 and total_weight[2]:
+            # (3 x Neighbors) x (Neighbors x 1) -> (3 x 1)
+            trd_prob = np.dot(a=weights.T, b=trds) / total_weight # trd prob with llm weight, cosine weight, and average weight
             # Calculate effective sample size
             weights_squared = np.multiply(weights, weights)
-            ess = np.power(total_weight, 2) / np.sum(weights_squared)
+            ess = np.power(total_weight, 2) / np.sum(weights_squared, axis=0)
         else:
-            trd_prob = float(os.environ['TRD_BLIND_PROBABILITY'])
+            blind_prob = float(os.environ['TRD_BLIND_PROBABILITY'])
+            trd_prob = np.array([blind_prob, blind_prob, blind_prob]) 
             print(f"[Warning] Patient {index_id} has 0 total weight among neighbors.", flush=True)
-            ess = 0
+            ess = np.zeros(3)
         
         # Record risk score
-        risk = 'low' if trd_prob < 0.2 else ('moderate' if trd_prob < 0.5 else 'high')
+        trd_prob_llm, trd_prob_cosine, trd_prob_uniform = trd_prob[0], trd_prob[1], trd_prob[2]
+        risk_llm_tier = 'low' if trd_prob_llm < 0.2 else ('moderate' if trd_prob_llm < 0.5 else 'high')
+        risk_cosine_tier = 'low' if trd_prob_cosine < 0.2 else ('moderate' if trd_prob_cosine < 0.5 else 'high')
+        risk_uniform_tier = 'low' if trd_prob_uniform < 0.2 else ('moderate' if trd_prob_uniform < 0.5 else 'high')
         
-        # Record highest 5 contributing neighbor patients
+        # Record highest 5 contributing neighbor patients by LLM similarity
         top_5_indices = np.argpartition(neighbor_scores, -5)[-5:]
         top_5_scores = neighbor_scores[top_5_indices]
         neighbor_patient_ids = np.array(neighbor_patient_ids)
         top_5_ids = neighbor_patient_ids[top_5_indices]
         
+        # Create two (identical) lists of neighbor IDs, one sorted by cosine similarity and one my LLM similarity
+        neighbors_by_cosine = neighbor_patient_ids.tolist()
+        neighbors_by_cosine.sort(key=lambda x: weights[patient_id_to_idx[x], 1], reverse=True)
+        neighbors_by_llm = neighbor_patient_ids.tolist()
+        neighbors_by_llm.sort(key=lambda x: weights[patient_id_to_idx[x], 0], reverse=True)
+        
         # Return all such information
         return {
             'risk_score' : trd_prob,
-            'risk_tier' : risk,
+            'risk_tier' : {
+                'risk_llm' : risk_llm_tier,
+                'risk_cosine' : risk_cosine_tier,
+                'risk_uniform' : risk_uniform_tier
+            },
             'confidence_ess' : ess,
             'evidence' : [
                 {
@@ -112,5 +137,7 @@ class TRDPredictor:
                 }
                 for patient_id, score in zip(top_5_ids, top_5_scores)
             ],
-            'nearest_scores' : neighbor_scores.tolist()
+            'nearest_llm_scores' : neighbor_scores.tolist(),
+            'neighbors_sorted_by_llm_weight' : neighbors_by_llm,
+            'neighbors_sorted_by_cosine_weight' : neighbors_by_cosine,
         }

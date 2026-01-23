@@ -10,7 +10,7 @@ load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 
-def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array):
+def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, mode: str):
     """
     Create and save the ROC area under curve graph for the given values and predictions
     
@@ -18,6 +18,8 @@ def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array):
     :type y_true: np.array
     :param y_prob: Predicted probability labels
     :type y_prob: np.array
+    :param mode: llm weighting, cosine, weighting, uniform weighting
+    :type mode: str
     """
     score = sklearn.metrics.roc_auc_score(y_true=y_true, y_score=y_prob)
     false_positive_rate, true_positive_rate, _ = sklearn.metrics.roc_curve(y_true=y_true, y_score=y_prob)
@@ -27,10 +29,10 @@ def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array):
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/roc_curve.png")
+    plt.savefig(f"{str(RESULTS_DIR)}/roc_curve_{mode}.png")
     plt.close()
 
-def plot_precision_recall(y_true: np.array, y_prob: np.array):
+def plot_precision_recall(y_true: np.array, y_prob: np.array, mode: str):
     """
     Create and save the precision recall graph for the given values and predictions
     
@@ -38,6 +40,8 @@ def plot_precision_recall(y_true: np.array, y_prob: np.array):
     :type y_true: np.array
     :param y_prob: Predicted probability labels
     :type y_prob: np.array
+    :param mode: llm weighting, cosine, weighting, uniform weighting
+    :type mode: str
     """
     score = sklearn.metrics.average_precision_score(y_true=y_true, y_score=y_prob)
     precision, recall, _ = sklearn.metrics.precision_recall_curve(y_true=y_true, y_score=y_prob)
@@ -46,10 +50,10 @@ def plot_precision_recall(y_true: np.array, y_prob: np.array):
     plt.ylabel("Precision")
     plt.title("Precision Recall Curve")
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/pr_curve.png")
+    plt.savefig(f"{str(RESULTS_DIR)}/pr_curve_{mode}.png")
     plt.close()
 
-def plot_calibration(y_true: np.array, y_prob: np.array):
+def plot_calibration(y_true: np.array, y_prob: np.array, mode: str):
     """
     Create and save the calibration graph for the given values and predictions
     
@@ -57,6 +61,8 @@ def plot_calibration(y_true: np.array, y_prob: np.array):
     :type y_true: np.array
     :param y_prob: Predicted probability labels
     :type y_prob: np.array
+    :param mode: llm weighting, cosine, weighting, uniform weighting
+    :type mode: str
     """
     # For each bin, calculate average probability, and calculate true probability (average positive rating)
     prob_true_per_bin, prob_pred_per_bin = calibration.calibration_curve(y_true=y_true, y_prob=y_prob, n_bins=10)
@@ -66,10 +72,10 @@ def plot_calibration(y_true: np.array, y_prob: np.array):
     plt.ylabel("Fraction of Positives")
     plt.title("Calibration Curve")
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/calibration_curve.png")
+    plt.savefig(f"{str(RESULTS_DIR)}/calibration_curve_{mode}.png")
     plt.close()
 
-def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array):
+def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array, mode: str):
     """
     Plot decision curve benefits - when only assuming patients above a certain threshold are positive, what is the benefit
     
@@ -77,6 +83,8 @@ def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array):
     :type y_true: np.array
     :param y_prob: Predicted probability labels
     :type y_prob: np.array
+    :param mode: llm weighting, cosine, weighting, uniform weighting
+    :type mode: str
     """
     thresholds = np.linspace(0.01, 0.99, 100)
     TP_ASSIGN_ALL_POSITIVE = np.sum(y_true) # Count of true positives
@@ -115,15 +123,17 @@ def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array):
     plt.title("Decision Curve Analysis")
     plt.ylim(bottom=-0.1)
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/decision_curve_analysis.png")
+    plt.savefig(f"{str(RESULTS_DIR)}/decision_curve_analysis_{mode}.png")
     plt.close()
 
-def plot_effective_sample_size_distribution(ess_values: np.array):
+def plot_effective_sample_size_distribution(ess_values: np.array, mode: str):
     """
     Create a histogram of the effective sample sizes observed in the predictions
     
     :param ess_values: Effective sample sizes from predictions
     :type ess_values: np.array
+    :param mode: llm weighting, cosine, weighting, uniform weighting
+    :type mode: str
     """
     plt.hist(ess_values, bins=20, edgecolor='black')
     plt.xlabel("Effective Sample Size")
@@ -131,10 +141,10 @@ def plot_effective_sample_size_distribution(ess_values: np.array):
     plt.title("Effective Sample Size Distribution")
     plt.axvline(x=int(os.environ['LOW_CONFIDENCE_ESS_THRESHOLD']), color='red', linestyle='--', linewidth=2, label='Low Confidence (<20)')
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/effective_sample_size_distribution.png")
+    plt.savefig(f"{str(RESULTS_DIR)}/effective_sample_size_distribution_{mode}.png")
     plt.close()
     
-def plot_optimal_confusion_matrix(y_true: np.array, y_prob: np.array):
+def plot_optimal_confusion_matrix(y_true: np.array, y_prob: np.array, mode: str):
     """
     Create confusion matrix for the given probability estimates with the optimal threshold
     
@@ -142,6 +152,8 @@ def plot_optimal_confusion_matrix(y_true: np.array, y_prob: np.array):
     :type y_true: np.array
     :param y_prob: Predicted probability labels
     :type y_prob: np.array
+    :param mode: llm weighting, cosine, weighting, uniform weighting
+    :type mode: str
     """
     false_positive_rates, true_positive_rates, thresholds = sklearn.metrics.roc_curve(y_true=y_true, y_score=y_prob)
     # Find threshold that accomplished peak model performance
@@ -153,5 +165,5 @@ def plot_optimal_confusion_matrix(y_true: np.array, y_prob: np.array):
     display = sklearn.metrics.ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=['Non-TRD', 'TRD'])
     display.plot(cmap='Blues')
     plt.title(f'Threshold: {threshold}')
-    plt.savefig(f"{str(RESULTS_DIR)}/optimal_threshold_confusion_matrix.png")
+    plt.savefig(f"{str(RESULTS_DIR)}/optimal_threshold_confusion_matrix_{mode}.png")
     plt.close()

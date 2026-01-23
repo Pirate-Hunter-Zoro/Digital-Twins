@@ -37,10 +37,16 @@ def evaluate_patient(patient_info: tuple[str, str]) -> dict:
     return {
         'patient_id' : patient_id,
         'actual_trd_status' : trd_status,
-        'trd_risk_score' : prediction['risk_score'],
-        'ess' : prediction['confidence_ess'],
-        'nearest_scores' : str(prediction['nearest_scores']),
-        'random_scores' : str(random_llm_similarity_scores)
+        'trd_risk_score_llm' : prediction['risk_score'][0],
+        'trd_risk_score_cosine' : prediction['risk_score'][1],
+        'trd_risk_score_uniform' : prediction['risk_score'][2],
+        'ess_llm' : prediction['confidence_ess'][0],
+        'ess_cosine' : prediction['confidence_ess'][1],
+        'ess_uniform' : prediction['confidence_ess'][2],
+        'nearest_llm_scores' : str(prediction['nearest_llm_scores']),
+        'random_llm_scores' : str(random_llm_similarity_scores),
+        'neighbors_by_llm_score' : str(prediction['neighbors_sorted_by_llm_weight']),
+        'neighbors_by_cos_score' : str(prediction['neighbors_sorted_by_cosine_weight'])
     }
 
 def run():

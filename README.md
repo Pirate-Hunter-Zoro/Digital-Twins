@@ -215,3 +215,25 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 sbatch slurm_jobs/digital_twins/run_trd_prediction_orchestrator.sbatch
 
 ```
+
+
+# TODO
+- svm tight bounding box on neighbors of an anchor patient to measure how "dense" the neighborhood is
+- How does that parameter relate to the outcome? Does system predict better for patients with denser neighborhood?
+
+- Fewer neighbors
+- Make the neighborhood metric 
+- Distribution - for a given metric value, create a histogram over all patients of all the number of neighbors of each patient within that distance (cosine distance)
+- Histogram of chronological length (earliest encounter date and anchor date difference) of each patient narrative
+- Produce ROC curves for varying densities (bin patients by density)
+
+- 200 cosine neighbors, weighted by LLM similarity
+  - Try making the weight be cosine
+  - Try making all the weights 1
+
+- 200 cosine neighbors
+  - Nearest 5 cosine neighbors, nearest 5 llm neighbors
+  - Nearest 10, etc., 25
+
+
+- TRIPLE CHECK that the anchor patient themself is not included in the list of neighbors
