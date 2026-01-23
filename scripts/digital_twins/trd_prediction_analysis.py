@@ -65,7 +65,7 @@ def run_analysis():
         plot_precision_recall(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
         plot_calibration(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
         plot_decision_curve_analysis(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
-        plot_effective_sample_size_distribution(ess_values=results_df['ess'].to_numpy(), mode=mode)
+        plot_effective_sample_size_distribution(ess_values=results_df[f'ess_{mode}'].to_numpy(), mode=mode)
         plot_optimal_confusion_matrix(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
         print("TRD prediction evaluation analysis complete.", flush=True)
         

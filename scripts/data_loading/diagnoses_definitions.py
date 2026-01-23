@@ -1,8 +1,6 @@
 from typing import Optional
 import re
 
-# TODO - "status": "Active", "codes": [{"code": "300.4", "vocab": "ICD-9-CM", "description": "Unipolar Depressions"},
-
 MDD_SEVERITY_MAP = {
     '0': 'Mild',
     '1': 'Moderate',
