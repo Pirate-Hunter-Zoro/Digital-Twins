@@ -1,3 +1,4 @@
+
 # Digital Twins: Patient Representation & Embedding Pipeline
 
 This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"—vectorized representations of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
@@ -14,6 +15,7 @@ graph LR
     F --> G[(Vectors.db)]
     G --> H[Stage 3: Retrieval]
     H --> I[Stage 4: Prediction]
+
 
 ```
 
@@ -57,7 +59,6 @@ Transforms the structured JSONs into textual narratives.
 * Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
 * **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
 * **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
-
 * **`scorer.py`**:
 * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
 * **Caching**: Stores expensive LLM outputs in `judgements.db` (Table: `llm_judgements`) to prevent redundant inference.
@@ -73,32 +74,43 @@ graph TD
     B -->|Top-K| C[Candidate Neighbors]
     C --> D{LLM Scorer}
     D -->|Raw Score / 100| E[Similarity Score]
-    E -->|Exponent Alpha| F[Weighted Influence]
-    F --> G(Weighted Probability Calculation)
-    G --> H[Predicted TRD Risk]
+    E --> F{Weighting Strategy}
+    F -->|Alpha Power| G[LLM Weight]
+    F -->|Raw Cosine| H[Cosine Weight]
+    F -->|Uniform 1.0| I[Uniform Weight]
+    G --> J(Risk Calculation)
+    H --> J
+    I --> J
+    J --> K[3x Predicted TRD Risks]
 
 ```
 
 * **`trd_predictor.py`**:
-  * Implements the **Digital Twin Matcher** logic for Treatment-Resistant Depression (TRD).
+* Implements the **Digital Twin Matcher** logic for Treatment-Resistant Depression (TRD).
   * **Workflow**:
-        1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient) by largest cosine similarity.
-        2. Scores neighbors via `scorer.py` (raw score from the LLM is at most 100, so divide by 100 before preceding).
-        3. Applies exponential weighting ($w = score^\alpha\text{ }\forall \text{ neighbors}$) to emphasize strong matches.
-        4. Take TRD flags for neigbhors ($f = 1\text{ if TRD else } 0\text{ }\forall \text{ neighbors}$)
-        5. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$). If the total weight is zero, the probability is the blind probability float value from the .env file.
+      1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient) by largest cosine similarity.
+      2. Scores neighbors via a weighting strategy.
+      3. Applies exponential weighting ($w = score^\alpha\text{ }\forall \text{ neighbors}$) to emphasize strong matches.
+      4. Take TRD flags for neigbhors ($f = 1\text{ if TRD else } 0\text{ }\forall \text{ neighbors}$)
+      5. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$). If the total weight is zero, the probability is the blind probability float value from the .env file.
   * **Confidence**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions ($\text{ESS}=\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$).
-* **`evaluate_trd.py`**:
-  * Backtesting script.
-  * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
-  * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence).
-  * **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and ROC-AUC, Precision-Recall, Calibration, Decision Curve, and ESS Histogram plots.
+
+**Applies three parallel weighting strategies** to test the "Digital Twin" hypothesis:
+
+* **LLM Weighting**:  (The primary method - the LLM returns a score between 0-100, so divide the result by 100).
+* **Cosine Weighting**:  (The numeric baseline).
+* **Uniform Weighting**:  (The population baseline).
+
+**Aggregates TRD flags from neighbors and computes weighted probability of TRD risk for **each** strategy.**
+
+* **Confidence**: Calculates Effective Sample Size (ESS) for all three strategies to flag low-confidence predictions.
+* **Enrichment**: Returns neighbor lists sorted by both LLM Score and Cosine Score to audit sorting performance.
 
 * **`evaluate_trd.py`**:
 * Backtesting script.
 * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
-* **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence).
-* **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and ROC-AUC, Precision-Recall, Calibration, Decision Curve, and ESS Histogram plots.
+* **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence) for **all three** weighting modes (LLM vs. Cosine vs. Uniform).
+* **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and comparative plots (ROC-AUC, Precision-Recall, Calibration, Decision Curve).
 
 ### 6. Models (`scripts/models`)
 
@@ -109,7 +121,6 @@ Interfaces for the neural networks.
 * **Storage**: Manages a SQLite connection to `vectors.db`.
 * **Logic**: Checks the DB for existing IDs (MD5 hash of text). If missing, computes the embedding and inserts it as a binary BLOB.
 * **Scrubbing**: Respects `SCRUB_VECTORS` env var to force re-computation.
-
 * **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation or scoring).
 
 ### 7. Shared Utilities (`scripts/shared`)
@@ -117,7 +128,6 @@ Interfaces for the neural networks.
 * **`similarity.py`**: **The Search Engine.**
 * Computes Cosine Similarity between patient IDs.
 * **Caching**: Uses the `similarities` table in `vectors.db`.
-
 * **`utils.py`**: Core helpers (hashing logic `generate_string_id`, etc.).
 * **`io.py`**: Standardized file handling.
 
@@ -129,22 +139,22 @@ Interfaces for the neural networks.
 
 Located at `ARTIFACTS_DIR/vectors.db`.
 
-**Table: `vectors`**
+**Table: `vectors**`
 Stores the raw embeddings.
 
 | Column | Type | Description |
-| :--- | :--- | :--- |
+| --- | --- | --- |
 | `id` | `TEXT (PK)` | MD5 Hash of the narrative text. |
 | `patient_id` | `TEXT` | Patient ID of the corresponding narrative. |
 | `vector` | `BLOB` | The numpy array (`float32`) serialized to bytes. |
 | `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
 | `length` | `INTEGER` | Character count of the text. |
 
-**Table: `similarities`**
+**Table: `similarities**`
 Stores the cosine similarity of the embeddings associated with the string hash ids.
 
 | Column | Type | Description |
-| :--- | :--- | :--- |
+| --- | --- | --- |
 | `id_a` | `TEXT (PK)` | MD5 Hash (alphabetically first) of one of the narrative texts. |
 | `id_b` | `TEXT (PK)` | MD5 Hash (alphabetically second) of the other narrative text. |
 | `score` | `REAL` | The cosine similarity between the two embeddings. |
@@ -153,11 +163,11 @@ Stores the cosine similarity of the embeddings associated with the string hash i
 
 Located at `JUDGEMENTS_DIR`.
 
-**Table: `llm_judgements`**
+**Table: `llm_judgements**`
 Caches the expensive qualitative evaluations from the LLM.
 
 | Column | Type | Description |
-| :--- | :--- | :--- |
+| --- | --- | --- |
 | `id_a` | `TEXT (PK)` | First Patient ID. |
 | `id_b` | `TEXT (PK)` | Second Patient ID. |
 | `overall_score` | `INTEGER` | Numeric Similarity Score |
@@ -215,25 +225,3 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 sbatch slurm_jobs/digital_twins/run_trd_prediction_orchestrator.sbatch
 
 ```
-
-
-# TODO
-- svm tight bounding box on neighbors of an anchor patient to measure how "dense" the neighborhood is
-- How does that parameter relate to the outcome? Does system predict better for patients with denser neighborhood?
-
-- Fewer neighbors
-- Make the neighborhood metric 
-- Distribution - for a given metric value, create a histogram over all patients of all the number of neighbors of each patient within that distance (cosine distance)
-- Histogram of chronological length (earliest encounter date and anchor date difference) of each patient narrative
-- Produce ROC curves for varying densities (bin patients by density)
-
-- 200 cosine neighbors, weighted by LLM similarity
-  - Try making the weight be cosine
-  - Try making all the weights 1
-
-- 200 cosine neighbors
-  - Nearest 5 cosine neighbors, nearest 5 llm neighbors
-  - Nearest 10, etc., 25
-
-
-- TRIPLE CHECK that the anchor patient themself is not included in the list of neighbors
