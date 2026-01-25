@@ -38,7 +38,9 @@ def run_analysis():
     plt.hist(all_nearest_scores, alpha=0.5, density=True, label="Nearest (Cosine)")
     plt.hist(all_random_scores, alpha=0.5, density=True, label="Random")
     plt.title("LLM Similarity Scores of Random vs. Nearest Cosine Neighbor Patients")
+    plt.legend()
     plt.savefig(str(RESULTS_DIR / f"similarity_score_distribution.png"))
+    plt.close()
     
     prediction_modes = ['llm', 'cosine', 'uniform']
     for mode in prediction_modes:
@@ -70,22 +72,36 @@ def run_analysis():
     # Now we have all the plots and results for each mode saved in the results directory
     predictor = TRDPredictor() # So that we can use it's trd flag
     top_k_thresholds = [10, 25, 50, 100]
-    enrichment_percentages = [
-        {k : 0 for k in top_k_thresholds},
-        {k : 0 for k in top_k_thresholds},
-    ]
+    enrichment_percentages = {
+        'llm_averages' : [0 for _ in top_k_thresholds],
+        'cosine_averages' : [0 for _ in top_k_thresholds],
+    }
     for _, row in results_df.iterrows():
         neighbors_by_llm_score = ast.literal_eval(row['neighbors_by_llm_score'])
         neighbors_by_cosine_score = ast.literal_eval(row['neighbors_by_cos_score'])
-        # Compute running sum of TRD-positive patients by index for both lists
-        for k_value in top_k_thresholds:
-            enrichment_percentages[0][k_value] += sum(
+        # Compute running proportion of TRD-positive patients by index for both lists
+        for i, k_value in enumerate(top_k_thresholds):
+            enrichment_percentages['cosine_averages'][i] += sum(
                 [predictor.get_trd_status(candidate_id=id) for id in neighbors_by_cosine_score[:k_value]]
             ) / k_value
-            enrichment_percentages[1][k_value] += sum(
+            enrichment_percentages['llm_averages'][i] += sum(
                 [predictor.get_trd_status(candidate_id=id) for id in neighbors_by_llm_score[:k_value]]
             ) / k_value
-    # TODO - Now that we have the enrichment percentages, calculate average enrichment for every k...
+    # Divide the accumulated enrichment percentages by the total number of patients
+    for i in range(len(top_k_thresholds)):
+        enrichment_percentages['cosine_averages'][i] /= len(results_df)
+        enrichment_percentages['llm_averages'][i] /= len(results_df)
+    # Now that we have the enrichment percentages, calculate average enrichment for every k...
+    trd_baseline_prob = results_df['actual_trd_status'].mean()
+    plt.figure(figsize=(10,6))
+    plt.plot(top_k_thresholds, enrichment_percentages['llm_averages'], color='blue', label='LLM-Reranked')
+    plt.plot(top_k_thresholds, enrichment_percentages['cosine_averages'], color='orange', label='Cosine-Only')
+    plt.axhline(y=trd_baseline_prob, label='Random Baseline')
+    plt.xlabel('Top-k Neighbors')
+    plt.ylabel('TRD Prevalence')
+    plt.title('TRD Prevalence of Top LLM and Cosine Neighbors')
+    plt.savefig(str(RESULTS_DIR / f'TRD_prevalence.png'))
+    plt.close()
     
 if __name__=="__main__":
     run_analysis()

@@ -31,3 +31,4 @@ def main():
     plt.title("Distribution of Similarity Scores: Nearest vs Random Neighbors")
     plt.legend()
     plt.savefig(RESULTS_DIR / "similarity_score_distribution.png")
+    plt.close()

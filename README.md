@@ -110,6 +110,7 @@ graph TD
 * Backtesting script.
 * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
 * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence) for **all three** weighting modes (LLM vs. Cosine vs. Uniform).
+* **Enrichment Analysis**: Generates **Enrichment Curves** comparing the TRD prevalence in the top-$k$ neighbors ($k\in\{10,25,50,100\}$) for both LLM-sorted and Cosine-sorted lists. This validates whether the LLM retrieves more clinically relevant patients than raw embeddings.
 * **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and comparative plots (ROC-AUC, Precision-Recall, Calibration, Decision Curve).
 
 ### 6. Models (`scripts/models`)
