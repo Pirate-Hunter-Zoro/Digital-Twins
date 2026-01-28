@@ -14,5 +14,4 @@ Weight these dimensions when scoring (sum=100):
 
 Return JSON only.
 Do not repeat items in lists.
-Limit "top_similarity_drivers" and "key_mismatches" to at most 5 items each.
 Do NOT provide explanations, reasoning, or calculations. Output raw JSON only.

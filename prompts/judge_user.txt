@@ -4,7 +4,7 @@ INDEX PATIENT:
 CANDIDATE PATIENT:
 {narrative_b}
 
-Return this JSON:
+Limit "top_similarity_drivers" and "key_mismatches" to at most 5 items each. Return this JSON:
 {
     "overall_similarity": 0-100,
     "phenotype": 0-100,

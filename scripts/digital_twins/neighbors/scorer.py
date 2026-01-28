@@ -10,6 +10,7 @@ load_dotenv()
 
 from scripts.models.vllm_client import VllmClient
 from scripts.shared.prompts import PromptLoader
+from scripts.digital_twins.neighbors.retriever import Retriever
 
 class Scorer:
     
@@ -19,6 +20,7 @@ class Scorer:
         """
         self.client = VllmClient()
         self.prompt_loader = PromptLoader()
+        self.retriever = Retriever()
         self._init_db()
         
     def _init_db(self):
@@ -123,10 +125,24 @@ INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response)
             self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
             return response_json
         except json.JSONDecodeError as e:
-            sys.stderr.write(f"IDs: {index_id} vs {candidate_id}\n")
-            sys.stderr.write(f"Response Tail: {cleaned_response[-500:]}\n")
-            sys.stderr.write(f"===============================\n")
-            sys.stderr.flush() # Force the output
-            raise e
+            try:
+                bracket_idx = cleaned_response.rfind(']')
+                if bracket_idx == -1:
+                    raise e
+                else:
+                    # Add curly brackets to close the json, and 
+                    sliced_response = cleaned_response[:bracket_idx+1] + "}"
+                    response_json = json.loads(sliced_response)
+                    sys.stderr.write(f"Model Struggled and Json had to be truncated when judging patient IDs: {self.retriever.get_patient_id(id=index_id)} vs {self.retriever.get_patient_id(id=candidate_id)}\n")
+                    sys.stderr.write(f"Continuing...\n")
+                    sys.stderr.write(f"===============================\n")
+                    sys.stderr.flush() # Force the output
+                    return response_json
+            except:
+                sys.stderr.write(f"IDs: {self.retriever.get_patient_id(id=index_id)} vs {self.retriever.get_patient_id(id=candidate_id)}\n")
+                sys.stderr.write(f"Response Tail: {cleaned_response[-500:]}\n")
+                sys.stderr.write(f"===============================\n")
+                sys.stderr.flush() # Force the output
+                raise e
         except Exception as e:
             raise e
