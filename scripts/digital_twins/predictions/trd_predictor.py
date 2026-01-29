@@ -15,7 +15,9 @@ class TRDPredictor:
     def __init__(self):
         self.retriever = Retriever()
         self.scorer = Scorer()
-        self.alpha = float(os.environ['WEIGHTING_EXPONENT'])
+        
+        self.k_pool = int(os.environ['NUM_NEIGHBOR_PATIENTS'])
+        self.k_score = int(os.environ['TRD_TEST_COUNT'])
         
         self.trd_set = set()
         trd_file = Path(os.environ['TRD_LIST_PATH'])
@@ -32,112 +34,26 @@ class TRDPredictor:
         """
         return 1 if candidate_id in self.trd_set else 0
     
-    def get_random_sample_judge_scores(self, index_id: str) -> List[float]:
-        """
-        Retrieve random neighbor patients and compute all of their LLM-judged similarities
+    def construct_neighborhood_data(self, index_id: str) -> list[dict]:
+        """Return the information of all the neighbors of this anchor patient
 
-        :param index_id: Hashed ID of the narrative of the patient of interest
-        :type index_id: str
-        :return: All LLM-judged similarities of neighbors
-        :rtype: List[float]
+        Args:
+            index_id (str): Narrative hash ID of the patient
+
+        Returns:
+            list[dict]: Similarity scores, etc. of all neighbor patients
         """
-        k = int(os.environ['NUM_NEIGHBOR_PATIENTS'])
-        all_ids = [id for id in self.retriever.ids if id != index_id]
-        sampled_ids = random.sample(all_ids, min(k, len(all_ids)))
-        scores = []
-        index_narrative = self.retriever.get_narrative(id=index_id)
-        for neighbor_id in sampled_ids:
-            neighbor_narrative = self.retriever.get_narrative(id=neighbor_id)
-            score_report = self.scorer.judge(index_narrative=index_narrative, candidate_narrative=neighbor_narrative, index_id=index_id, candidate_id=neighbor_id)
-            scores.append(score_report['overall_similarity'])
-        return scores
-    
-    def predict_risk(self, index_id: str) -> Dict:
-        """
-        Predict the TRD risk for the given patient
-        
-        :param index_id: Hashed ID of the narrative of the patient of interest
-        :type index_id: str
-        :return: Information on TRD risk probability along with predictor information
-        :rtype: Dict
-        """
-        index_narrative = self.retriever.get_narrative(id=index_id)
-        index_vector = self.retriever.get_vector(id=index_id)
-        # NOTE - be sure to exclude this patient from the list of viable neighbors
-        nearest_neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id)
-        weights = np.zeros(shape=(len(nearest_neighbors), 3), dtype=np.float32) # Weights associated with each neighbor
-        trds = np.zeros(shape=(weights.shape[0],), dtype=np.float32) # TRD 0/1 flag associated with each neighbor
-        neighbor_patient_ids = [] 
-        patient_id_to_idx = {}
-        # This ONLY pertains to LLM scores
-        neighbor_scores = np.zeros_like(trds)
-        for i, neighbor in enumerate(nearest_neighbors):
-            neighbor_narrative_string_id = neighbor[0]
-            if neighbor_narrative_string_id == index_id:
-                raise ValueError(f"ERROR - Patient with narrative hash id {index_id} was one of its own neighbors - THIS SHOUDL NOT HAVE HAPPENED CHECK THE MATH IN THE RETREIVER....")
-            cosine_score = neighbor[1]
-            neighbor_patient_id = self.retriever.get_patient_id(id=neighbor_narrative_string_id)
-            # Add this patient to the list of neighbors
-            neighbor_patient_ids.append(neighbor_patient_id)
-            # Store the index of this patient for easy sorting later
-            patient_id_to_idx[neighbor_patient_id] = len(neighbor_patient_ids) - 1
-            neighbor_narrative = self.retriever.get_narrative(id=neighbor_narrative_string_id)
-            score = self.scorer.judge(index_narrative=index_narrative, candidate_narrative=neighbor_narrative, index_id=index_id, candidate_id=neighbor_narrative_string_id)['overall_similarity']
-            neighbor_scores[i] = score
-            # Store LLM weight, cosine weight, and average weight
-            weights[i] = np.array([np.power(score/100, self.alpha), cosine_score, 1.0])
-            status = self.get_trd_status(candidate_id=neighbor_patient_id)
-            trds[i] = status
-        
-        # Calculate predicted TRD probability
-        total_weight = np.sum(a=weights, axis=0) # Total llm weight, cosine weight, average weight
-        if total_weight[0] > 0 and total_weight[1] > 0 and total_weight[2]:
-            # (3 x Neighbors) x (Neighbors x 1) -> (3 x 1)
-            trd_prob = np.dot(a=weights.T, b=trds) / total_weight # trd prob with llm weight, cosine weight, and average weight
-            # Calculate effective sample size
-            weights_squared = np.multiply(weights, weights)
-            ess = np.power(total_weight, 2) / np.sum(weights_squared, axis=0)
-        else:
-            blind_prob = float(os.environ['TRD_BLIND_PROBABILITY'])
-            trd_prob = np.array([blind_prob, blind_prob, blind_prob]) 
-            print(f"[Warning] Patient {index_id} has 0 total weight among neighbors.", flush=True)
-            ess = np.zeros(3)
-        
-        # Record risk score
-        trd_prob_llm, trd_prob_cosine, trd_prob_uniform = trd_prob[0], trd_prob[1], trd_prob[2]
-        risk_llm_tier = 'low' if trd_prob_llm < 0.2 else ('moderate' if trd_prob_llm < 0.5 else 'high')
-        risk_cosine_tier = 'low' if trd_prob_cosine < 0.2 else ('moderate' if trd_prob_cosine < 0.5 else 'high')
-        risk_uniform_tier = 'low' if trd_prob_uniform < 0.2 else ('moderate' if trd_prob_uniform < 0.5 else 'high')
-        
-        # Record highest 5 contributing neighbor patients by LLM similarity
-        top_5_indices = np.argpartition(neighbor_scores, -5)[-5:]
-        top_5_scores = neighbor_scores[top_5_indices]
-        neighbor_patient_ids = np.array(neighbor_patient_ids)
-        top_5_ids = neighbor_patient_ids[top_5_indices]
-        
-        # Create two (identical) lists of neighbor IDs, one sorted by cosine similarity and one my LLM similarity
-        neighbors_by_cosine = neighbor_patient_ids.tolist()
-        neighbors_by_cosine.sort(key=lambda x: weights[patient_id_to_idx[x], 1], reverse=True)
-        neighbors_by_llm = neighbor_patient_ids.tolist()
-        neighbors_by_llm.sort(key=lambda x: weights[patient_id_to_idx[x], 0], reverse=True)
-        
-        # Return all such information
-        return {
-            'risk_score' : trd_prob,
-            'risk_tier' : {
-                'risk_llm' : risk_llm_tier,
-                'risk_cosine' : risk_cosine_tier,
-                'risk_uniform' : risk_uniform_tier
-            },
-            'confidence_ess' : ess,
-            'evidence' : [
-                {
-                    'neighbor_patient_id' : patient_id,
-                    'score' : score
-                }
-                for patient_id, score in zip(top_5_ids, top_5_scores)
-            ],
-            'nearest_llm_scores' : neighbor_scores.tolist(),
-            'neighbors_sorted_by_llm_weight' : neighbors_by_llm,
-            'neighbors_sorted_by_cosine_weight' : neighbors_by_cosine,
-        }
+        index_narrative, index_vector, index_patient_id = self.retriever.get_narrative(id=index_id), self.retriever.get_vector(id=index_id), self.retriever.get_patient_id(id=index_id)
+        neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id)
+        for hash_id, _ in neighbors:
+            # Quick check to ensure this patient is not included in the neighbors
+            if hash_id == index_id:
+                raise ValueError(f"ERROR: narrative with hash ID {index_id} was one of its own neighbors...")
+            neighbor_patient_id = self.retriever.get_patient_id(id=hash_id)
+            if neighbor_patient_id == index_patient_id:
+                raise ValueError(f"ERROR: patient with ID {index_patient_id} was one of their own neighbors...")
+        # Now sort by cosine similarity
+        neighbors.sort(key=lambda x: x[1])
+        neighbors = neighbors[:self.k_pool]
+        for hash_id, score in neighbors:
+            pass
