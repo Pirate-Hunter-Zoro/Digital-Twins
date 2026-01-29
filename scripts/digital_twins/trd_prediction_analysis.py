@@ -100,6 +100,7 @@ def run_analysis():
     plt.xlabel('Top-k Neighbors')
     plt.ylabel('TRD Prevalence')
     plt.title('TRD Prevalence of Top LLM and Cosine Neighbors')
+    plt.legend()
     plt.savefig(str(RESULTS_DIR / f'TRD_prevalence.png'))
     plt.close()
     

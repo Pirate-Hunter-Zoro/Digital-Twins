@@ -106,7 +106,7 @@ graph TD
 * **Confidence**: Calculates Effective Sample Size (ESS) for all three strategies to flag low-confidence predictions.
 * **Enrichment**: Returns neighbor lists sorted by both LLM Score and Cosine Score to audit sorting performance.
 
-* **`evaluate_trd.py`**:
+* **`trd_prediction_analysis.py`**:
 * Backtesting script.
 * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
 * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence) for **all three** weighting modes (LLM vs. Cosine vs. Uniform).
