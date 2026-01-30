@@ -93,7 +93,7 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
     precision, recall, _ = precision_recall_curve(y_true=y_true, y_score=y_prob)
     auprc = auc(x=recall, y=precision)
     # Brier score
-    brier_score = brier_score_loss(y_true=y_true, y_prob=y_prob)
+    brier_score = brier_score_loss(y_true=y_true, y_proba=y_prob)
     # Break patients up into bins and calculate the true and predicted mean TRD-positive probabilities for each patient bin
     prob_true, prob_pred = calibration_curve(y_true=y_true, y_prob=y_prob, n_bins=10)
     ece = np.mean(np.abs(prob_true - prob_pred))
