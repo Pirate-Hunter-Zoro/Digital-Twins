@@ -17,7 +17,14 @@ load_dotenv()
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 from scripts.digital_twins.neighbors.retriever import Retriever
-# TODO - plotting and .txt report
+from scripts.shared.plots import (
+    plot_receiving_operator_characteristic,
+    plot_precision_recall,
+    plot_calibration,
+    plot_decision_curve_analysis,
+    plot_effective_sample_size_distribution,
+    plot_optimal_confusion_matrix
+)
 
 class WeightingStrategy(Enum):
     UNIFORM = "UNIFORM"
@@ -112,6 +119,9 @@ def run_analysis():
     # Slice data frame to only have cosine ranks of less than or equal to K_SCORE
     df_battle = df[df['rank_cosine'] <= int(os.environ['K_SCORE'])]
     
+    # Create a report to put in a text file
+    text_report = "Battle 1 Analysis Report\n\n"
+    
     # Run the battle
     weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
     results = {}
@@ -126,6 +136,19 @@ def run_analysis():
             risks.append(risk)
             ess_values.append(ess)
         metrics = compute_metrics(y_true=np.array(labels), y_prob=np.array(risks))
+        plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
+        plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
+        plot_calibration(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
+        plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
+        plot_effective_sample_size_distribution(ess_values=np.array(ess_values), mode=strat.value)
+        plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
+        # Add to text report
+        text_report += f"{strat.value} Metrics:\n\
+                        'roc_score': {metrics['roc_score']}\n\
+                            'auprc': {metrics['auprc']}\n\
+                                'brier_score': {metrics['brier_score']}\n\
+                                    'expected_calibration_error': {metrics['expected_calibration_error']}\n\
+                                        'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
         results[strat.value] = {
             'roc_score': metrics['roc_score'],
             'auprc': metrics['auprc'],
@@ -134,6 +157,13 @@ def run_analysis():
             'Mean_ESS': np.mean(np.array(ess_values))
         }
     
+    results_txt_file = Path(os.environ['RESULTS_DIR']) / 'battle_1_results.txt'
+    with open(results_txt_file, 'w') as f:
+        f.write(text_report)
+    
     # Turn results into a pandas data frame and save the .csv
     results_df = pd.DataFrame(results)
     results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_summary.csv')
+    
+if __name__=="__main__":
+    run_analysis()
