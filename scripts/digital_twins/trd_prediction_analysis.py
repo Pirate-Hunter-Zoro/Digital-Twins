@@ -1,108 +1,139 @@
-from pathlib import Path
 import os
-from sklearn.metrics import roc_auc_score, brier_score_loss
+import numpy as np
 import pandas as pd
-import ast
-import matplotlib.pyplot as plt
+from pathlib import Path
+from enum import Enum
 
-from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
-from scripts.shared.plots import (
-    plot_calibration, 
-    plot_precision_recall, 
-    plot_receiving_operator_characteristic, 
-    plot_decision_curve_analysis, 
-    plot_effective_sample_size_distribution,
-    plot_optimal_confusion_matrix
+from sklearn.metrics import (
+    roc_auc_score, 
+    brier_score_loss, 
+    precision_recall_curve, 
+    auc,
 )
+from sklearn.calibration import calibration_curve
 
 from dotenv import load_dotenv
 load_dotenv()
 
-RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
+from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
+from scripts.digital_twins.neighbors.retriever import Retriever
+# TODO - plotting and .txt report
 
-def run_analysis():
-    """
-    Function for to run performance analysis on the TRD prediction
-    """
-    # Run analysis on all prediction results from all workers together
-    results_files = RESULTS_DIR.glob("trd_evaluation_results_*.csv")
-    results_df = pd.concat([pd.read_csv(f) for f in results_files], ignore_index=True)
-    
-    # Create master lists of random LLM scores and LLM scores of nearby cosine neighbors
-    all_nearest_scores = []
-    all_random_scores = []
-    for nearest_llm_scores, random_llm_scores in zip(results_df['nearest_llm_scores'], results_df['random_llm_scores']):
-        all_nearest_scores.extend(ast.literal_eval(nearest_llm_scores))
-        all_random_scores.extend(ast.literal_eval(random_llm_scores))
-    plt.figure(figsize=(10,6))
-    plt.hist(all_nearest_scores, alpha=0.5, density=True, label="Nearest (Cosine)")
-    plt.hist(all_random_scores, alpha=0.5, density=True, label="Random")
-    plt.title("LLM Similarity Scores of Random vs. Nearest Cosine Neighbor Patients")
-    plt.legend()
-    plt.savefig(str(RESULTS_DIR / f"similarity_score_distribution.png"))
-    plt.close()
-    
-    prediction_modes = ['llm', 'cosine', 'uniform']
-    for mode in prediction_modes:
-        # Determin column name
-        column_name = f"trd_risk_score_{mode}"
-        
-        # Grab the actual TRD status and evaluate
-        roc = roc_auc_score(y_true=results_df['actual_trd_status'], y_score=results_df[column_name])
-        brier = brier_score_loss(y_true=results_df['actual_trd_status'], y_proba=results_df[column_name])
-        mean_ess = results_df[f'ess_{mode}'].mean()
-        results_txt = RESULTS_DIR / f'trd_evaluation_results_{mode}.txt'
-        print(f"Writing TRD prediction evaluation results to {str(results_txt)}...")
-        with open(results_txt, 'w') as f:
-            f.write(f"TRD Prediction Evaluation Results\n")
-            f.write(f"ROC AUC: {roc:.4f}\n")
-            f.write(f"Brier Score: {brier:.4f}\n")
-            f.write(f"Mean Effective Sample Size (ESS): {mean_ess:.2f}\n")
+class WeightingStrategy(Enum):
+    UNIFORM = "UNIFORM"
+    COSINE = "COSINE"
+    LLM = "LLM"
+    COMBINED = "COMBINED"
 
-        # Generate and save plots
-        print("Generating TRD prediction evaluation plots...", flush=True)
-        plot_receiving_operator_characteristic(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
-        plot_precision_recall(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
-        plot_calibration(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
-        plot_decision_curve_analysis(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
-        plot_effective_sample_size_distribution(ess_values=results_df[f'ess_{mode}'].to_numpy(), mode=mode)
-        plot_optimal_confusion_matrix(y_true=results_df['actual_trd_status'].to_numpy(), y_prob=results_df[column_name].to_numpy(), mode=mode)
-        print("TRD prediction evaluation analysis complete.", flush=True)
+def calculated_weighted_risk(group: pd.DataFrame, strategy: WeightingStrategy) -> tuple[float, float]:
+    """Method to calculate the weighted risk of TRD of a patient along with their essential sample size
+
+    Args:
+        group (pd.DataFrame): Patient neighborhood information
+        strategy (WeightingStrategy): e.g. uniform weighting, cosine weighting, combined weighting
+
+    Raises:
+        ValueError: In the case of a patient's neighbors all having zero weight
+
+    Returns:
+        tuple[float, float]: TRD risk score paired with effective sample size
+    """
+    patient_id = group['anchor_patient_id'].iloc[0]
+    alpha = float(os.environ['WEIGHTING_EXPONENT'])
+    if strategy == WeightingStrategy.LLM or strategy == WeightingStrategy.COMBINED:
+        # We cannot work with records that did not have proper LLM judgements
+        cleaned_group = group[group['llm_sim'].notna()]
+    else:
+        cleaned_group = group
         
-    # Now we have all the plots and results for each mode saved in the results directory
-    predictor = TRDPredictor() # So that we can use it's trd flag
-    top_k_thresholds = [10, 25, 50, 100]
-    enrichment_percentages = {
-        'llm_averages' : [0 for _ in top_k_thresholds],
-        'cosine_averages' : [0 for _ in top_k_thresholds],
+    # Grab neighbor TRD statuses
+    trds = np.array([status for status in cleaned_group['neighbor_trd_label']])
+    
+    # Assign weights
+    if strategy == WeightingStrategy.LLM:
+        weights = np.array([(score/100)**alpha for score in cleaned_group['llm_sim']])
+    elif strategy == WeightingStrategy.COSINE:
+        weights = np.array([max(0,score) for score in cleaned_group['cosine_sim']])
+    elif strategy == WeightingStrategy.COMBINED:
+        weights = np.array([max(cos_score,0)*(llm_score/100)**alpha  for llm_score, cos_score in zip(cleaned_group['llm_sim'], cleaned_group['cosine_sim'])])
+    else:
+        weights = np.ones(shape=(len(cleaned_group),))
+    
+    # Compute risk by dotting weights with flags and dividing by weights
+    weight_sum = np.sum(weights)
+    if weight_sum == 0:
+        raise ValueError(f"ERROR: all weights zero for patient with ID: {patient_id} using strategy {strategy.value}...")
+    risk_score = np.dot(weights, trds) / weight_sum
+    
+    # Compute effective sample size
+    ess = np.sum(weights)**2 / np.sum(weights**2)
+    
+    return (risk_score, ess)
+
+def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
+    """Compute the metrics to describe the performance of the TRD risk predictions given the actual flags
+
+    Args:
+        y_true (np.array): Actual TRD flags of the patients
+        y_prob (np.array): Predicted TRD risks for the patients
+
+    Returns:
+        dict: Performance results
+    """
+    # ROC score
+    roc_score = roc_auc_score(y_true=y_true, y_score=y_prob)
+    # PR area curve
+    precision, recall, _ = precision_recall_curve(y_true=y_true, probas_pred=y_prob)
+    auprc = auc(x=recall, y=precision)
+    # Brier score
+    brier_score = brier_score_loss(y_true=y_true, y_prob=y_prob)
+    # Break patients up into bins and calculate the true and predicted mean TRD-positive probabilities for each patient bin
+    prob_true, prob_pred = calibration_curve(y_true=y_true, y_prob=y_prob, n_bins=10)
+    ece = np.mean(np.abs(prob_true - prob_pred))
+    
+    return {
+        'roc_score': roc_score,
+        'auprc': auprc,
+        'brier_score': brier_score,
+        'expected_calibration_error': ece
     }
-    for _, row in results_df.iterrows():
-        neighbors_by_llm_score = ast.literal_eval(row['neighbors_by_llm_score'])
-        neighbors_by_cosine_score = ast.literal_eval(row['neighbors_by_cos_score'])
-        # Compute running proportion of TRD-positive patients by index for both lists
-        for i, k_value in enumerate(top_k_thresholds):
-            enrichment_percentages['cosine_averages'][i] += sum(
-                [predictor.get_trd_status(candidate_id=id) for id in neighbors_by_cosine_score[:k_value]]
-            ) / k_value
-            enrichment_percentages['llm_averages'][i] += sum(
-                [predictor.get_trd_status(candidate_id=id) for id in neighbors_by_llm_score[:k_value]]
-            ) / k_value
-    # Divide the accumulated enrichment percentages by the total number of patients
-    for i in range(len(top_k_thresholds)):
-        enrichment_percentages['cosine_averages'][i] /= len(results_df)
-        enrichment_percentages['llm_averages'][i] /= len(results_df)
-    # Now that we have the enrichment percentages, calculate average enrichment for every k...
-    trd_baseline_prob = results_df['actual_trd_status'].mean()
-    plt.figure(figsize=(10,6))
-    plt.plot(top_k_thresholds, enrichment_percentages['llm_averages'], color='blue', label='LLM-Reranked')
-    plt.plot(top_k_thresholds, enrichment_percentages['cosine_averages'], color='orange', label='Cosine-Only')
-    plt.axhline(y=trd_baseline_prob, label='Random Baseline')
-    plt.xlabel('Top-k Neighbors')
-    plt.ylabel('TRD Prevalence')
-    plt.title('TRD Prevalence of Top LLM and Cosine Neighbors')
-    plt.legend()
-    plt.savefig(str(RESULTS_DIR / f'TRD_prevalence.png'))
-    plt.close()
     
-if __name__=="__main__":
-    run_analysis()
+def run_analysis():
+    # Merge all evaluation results from different .csv files into one dataframe
+    df = pd.concat([pd.read_csv(f) for f in Path(os.environ['RESULTS_DIR']).glob("trd_evaluation_results_*.csv")], ignore_index=True)
+    anchor_ids = set(df['anchor_patient_id'])
+    predictor = TRDPredictor()
+    retriever = Retriever()
+    anchor_labels = {
+        patient_id: predictor.get_trd_status(candidate_id=patient_id)
+        for patient_id in anchor_ids
+    }
+    
+    # Slice data frame to only have cosine ranks of less than or equal to K_SCORE
+    df_battle = df[df['rank_cosine'] <= int(os.environ['K_SCORE'])]
+    
+    # Run the battle
+    weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
+    results = {}
+    for strat in weighting_strats:
+        grouped_by_anchor_patient = df_battle.groupby('anchor_id')
+        labels = []
+        risks = []
+        ess_values = []
+        for anchor_hash, group in grouped_by_anchor_patient:
+            risk, ess = calculated_weighted_risk(group=group, strategy=strat)
+            labels.append(anchor_labels[retriever.get_patient_id(anchor_hash)])
+            risks.append(risk)
+            ess_values.append(ess)
+        metrics = compute_metrics(y_true=np.array(labels), y_prob=np.array(risks))
+        results[strat.value] = {
+            'roc_score': metrics['roc_score'],
+            'auprc': metrics['auprc'],
+            'brier_score': metrics['brier_score'],
+            'expected_calibration_error': metrics['expected_calibration_error'],
+            'Mean_ESS': np.mean(np.array(ess_values))
+        }
+    
+    # Turn results into a pandas data frame and save the .csv
+    results_df = pd.DataFrame(results)
+    results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_summary.csv')

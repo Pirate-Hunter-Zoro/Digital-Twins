@@ -19,35 +19,17 @@ def init_worker():
     global predictor
     predictor = TRDPredictor()
 
-def evaluate_patient(patient_info: tuple[str, str]) -> dict:
+def evaluate_patient(narrative_hash_id: str) -> list[dict]:
     """
-    Evaluate TRD prediction for the patient with the given narrative hash id and patient id
+    Obtain all of the patient's neighborhood prediction information
     
-    :param patient_info: narrative hash ID and patient ID
-    :type patient_info: tuple[str, str]
-    :return: TRD prediction results
-    :rtype: dict
+    :param narrative_hash_id: narrative hash ID of patient
+    :type patient_info: str
+    :return: patient neighborhood results
+    :rtype: list[dict]
     """
     global predictor
-    narrative_hash_id, patient_id = patient_info
-    print("Predicting TRD risk for patient ID:", patient_id, flush=True)
-    trd_status = predictor.get_trd_status(candidate_id=patient_id)
-    prediction = predictor.predict_risk(index_id=narrative_hash_id)
-    random_llm_similarity_scores = predictor.get_random_sample_judge_scores(index_id=narrative_hash_id)
-    return {
-        'patient_id' : patient_id,
-        'actual_trd_status' : trd_status,
-        'trd_risk_score_llm' : prediction['risk_score'][0],
-        'trd_risk_score_cosine' : prediction['risk_score'][1],
-        'trd_risk_score_uniform' : prediction['risk_score'][2],
-        'ess_llm' : prediction['confidence_ess'][0],
-        'ess_cosine' : prediction['confidence_ess'][1],
-        'ess_uniform' : prediction['confidence_ess'][2],
-        'nearest_llm_scores' : str(prediction['nearest_llm_scores']),
-        'random_llm_scores' : str(random_llm_similarity_scores),
-        'neighbors_by_llm_score' : str(prediction['neighbors_sorted_by_llm_weight']),
-        'neighbors_by_cos_score' : str(prediction['neighbors_sorted_by_cosine_weight'])
-    }
+    return predictor.construct_neighborhood_data(index_id=narrative_hash_id)
 
 def run():
     """
@@ -81,12 +63,12 @@ SELECT id, patient_id FROM vectors
     start_idx = slurm_task_id*chunk_length
     end_idx = len(patient_sample) if slurm_task_id == slurm_task_count - 1 else start_idx + chunk_length
     # Python handles out of range end_idx
-    patient_chunk_for_worker = patient_sample[start_idx: end_idx]
+    patient_chunk_for_worker = patient_sample[start_idx: end_idx] # For the worker below, we will only grab the narrative Hash ID; not the patient ID
     
     results = []
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker) as pool:
-        for result in tqdm(pool.imap_unordered(evaluate_patient, patient_chunk_for_worker), total=len(patient_chunk_for_worker)):
-            results.append(result)
+        for result in tqdm(pool.imap_unordered(evaluate_patient, [info[0] for info in patient_chunk_for_worker]), total=len(patient_chunk_for_worker)):
+            results.extend(result)
     # Turn results into a dataframe
     results_df = pd.DataFrame(results)
     

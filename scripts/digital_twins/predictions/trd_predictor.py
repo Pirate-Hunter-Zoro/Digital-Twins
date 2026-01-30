@@ -17,7 +17,7 @@ class TRDPredictor:
         self.scorer = Scorer()
         
         self.k_pool = int(os.environ['NUM_NEIGHBOR_PATIENTS'])
-        self.k_score = int(os.environ['TRD_TEST_COUNT'])
+        self.k_score = int(os.environ['K_SCORE'])
         
         self.trd_set = set()
         trd_file = Path(os.environ['TRD_LIST_PATH'])
@@ -45,15 +45,41 @@ class TRDPredictor:
         """
         index_narrative, index_vector, index_patient_id = self.retriever.get_narrative(id=index_id), self.retriever.get_vector(id=index_id), self.retriever.get_patient_id(id=index_id)
         neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id)
-        for hash_id, _ in neighbors:
+        for neighbor_narrative_hash_id, _ in neighbors:
             # Quick check to ensure this patient is not included in the neighbors
-            if hash_id == index_id:
+            if neighbor_narrative_hash_id == index_id:
                 raise ValueError(f"ERROR: narrative with hash ID {index_id} was one of its own neighbors...")
-            neighbor_patient_id = self.retriever.get_patient_id(id=hash_id)
+            neighbor_patient_id = self.retriever.get_patient_id(id=neighbor_narrative_hash_id)
             if neighbor_patient_id == index_patient_id:
                 raise ValueError(f"ERROR: patient with ID {index_patient_id} was one of their own neighbors...")
-        # Now sort by cosine similarity
-        neighbors.sort(key=lambda x: x[1])
+        
+        # Now sort by decreasing cosine similarity and grab information on all neighbors
+        neighborhood_data = []
+        neighbors.sort(key=lambda x: x[1], reverse=True)
         neighbors = neighbors[:self.k_pool]
-        for hash_id, score in neighbors:
-            pass
+        for idx, (neighbor_narrative_hash_id, score) in enumerate(neighbors):
+            neighbor_patient_id = self.retriever.get_patient_id(id=neighbor_narrative_hash_id)
+            if idx < self.k_score:
+                # This is an 'important enough' neighbor by cosine metric
+                neighbor_narrative = self.retriever.get_narrative(id=neighbor_narrative_hash_id)
+                llm_sim = self.scorer.judge(index_narrative=index_narrative, 
+                                            candidate_narrative=neighbor_narrative, 
+                                            index_id=index_id, 
+                                            candidate_id=neighbor_narrative_hash_id)['overall_similarity']
+            else:
+                # Filler for the background density check
+                llm_sim = None
+            # Flag for if this neighbor is trd
+            neighbor_trd_flag = self.get_trd_status(candidate_id=neighbor_patient_id)
+            neighborhood_data.append({
+                "anchor_id": index_id,
+                "anchor_patient_id": index_patient_id,
+                "neighbor_id": neighbor_narrative_hash_id,
+                "neighbor_patient_id": neighbor_patient_id,
+                "cosine_sim": score,
+                "llm_sim": llm_sim,
+                "neighbor_trd_label": neighbor_trd_flag,
+                "rank_cosine": idx+1,
+            })
+            
+        return neighborhood_data
