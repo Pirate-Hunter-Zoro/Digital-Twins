@@ -99,6 +99,7 @@ graph TD
 
 * **LLM Weighting**:  (The primary method - the LLM returns a score between 0-100, so divide the result by 100).
 * **Cosine Weighting**:  (The numeric baseline).
+# TODO - fix documentation - scale by alpha after multiplying 
 * **Combined**: (Product of the LLM-weighting - scaled by an alpha factor - and cosine-weighting also scaled by the same alpha factor).
 * **Uniform Weighting**:  (The population baseline).
 
@@ -227,3 +228,8 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 sbatch slurm_jobs/digital_twins/run_trd_prediction_orchestrator.sbatch
 
 ```
+
+# TODO
+Take each anchor patient and compare distances to other anchor patietns of opposite class
+- and same class
+- Hope to see greater similarity between patients of same class vs. opposite class
