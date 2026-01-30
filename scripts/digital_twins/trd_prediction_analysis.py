@@ -90,7 +90,7 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
     # ROC score
     roc_score = roc_auc_score(y_true=y_true, y_score=y_prob)
     # PR area curve
-    precision, recall, _ = precision_recall_curve(y_true=y_true, probas_pred=y_prob)
+    precision, recall, _ = precision_recall_curve(y_true=y_true, y_score=y_prob)
     auprc = auc(x=recall, y=precision)
     # Brier score
     brier_score = brier_score_loss(y_true=y_true, y_prob=y_prob)

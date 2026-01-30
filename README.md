@@ -95,10 +95,11 @@ graph TD
       5. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$). If the total weight is zero, the probability is the blind probability float value from the .env file.
   * **Confidence**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions ($\text{ESS}=\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$).
 
-**Applies three parallel weighting strategies** to test the "Digital Twin" hypothesis:
+**Applies four parallel weighting strategies** to test the "Digital Twin" hypothesis:
 
 * **LLM Weighting**:  (The primary method - the LLM returns a score between 0-100, so divide the result by 100).
 * **Cosine Weighting**:  (The numeric baseline).
+* **Combined**: (Product of the LLM-weighting - scaled by an alpha factor - and cosine-weighting).
 * **Uniform Weighting**:  (The population baseline).
 
 **Aggregates TRD flags from neighbors and computes weighted probability of TRD risk for **each** strategy.**
