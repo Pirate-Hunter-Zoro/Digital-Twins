@@ -7,6 +7,7 @@ import ast
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 
 def main():
+    print("Loading TRD evaluation result files for similarity distribution plot...", flush=True)
     csv_result_files = RESULTS_DIR.glob("trd_evaluation_results_*.csv")
     dfs_to_merge = []
     for result_file in csv_result_files:
@@ -23,6 +24,7 @@ def main():
         random_scores.extend(random_score_list)
             
     # Now we plot
+    print("Plotting similarity score distributions...", flush=True)
     plt.figure(figsize=(10, 6))
     plt.hist(nearest_scores, bins=100, alpha=0.5, label="Nearest (Cosine) Neighbors", color="blue", density=True)
     plt.hist(random_scores, bins=100, alpha=0.5, label="Random Neighbors", color="orange", density=True)
@@ -32,3 +34,7 @@ def main():
     plt.legend()
     plt.savefig(RESULTS_DIR / "similarity_score_distribution.png")
     plt.close()
+    print("Similarity distribution plot saved!", flush=True)
+    
+if __name__ == "__main__":
+    main()

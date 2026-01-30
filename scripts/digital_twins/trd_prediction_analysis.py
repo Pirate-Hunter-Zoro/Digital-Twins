@@ -126,6 +126,7 @@ def run_analysis():
     weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
     results = {}
     for strat in weighting_strats:
+        print(f"Running analysis for weighting strategy: {strat.value}...", flush=True)
         grouped_by_anchor_patient = df_battle.groupby('anchor_id')
         labels = []
         risks = []
@@ -164,6 +165,7 @@ def run_analysis():
     # Turn results into a pandas data frame and save the .csv
     results_df = pd.DataFrame(results)
     results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_summary.csv')
+    print("Battle 1 analysis complete!", flush=True)
     
 if __name__=="__main__":
     run_analysis()
