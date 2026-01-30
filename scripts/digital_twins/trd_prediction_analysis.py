@@ -60,9 +60,9 @@ def calculated_weighted_risk(group: pd.DataFrame, strategy: WeightingStrategy) -
     if strategy == WeightingStrategy.LLM:
         weights = np.array([(score/100)**alpha for score in cleaned_group['llm_sim']])
     elif strategy == WeightingStrategy.COSINE:
-        weights = np.array([max(0,score) for score in cleaned_group['cosine_sim']])
+        weights = np.array([max(0,score)**alpha for score in cleaned_group['cosine_sim']])
     elif strategy == WeightingStrategy.COMBINED:
-        weights = np.array([max(cos_score,0)*(llm_score/100)**alpha  for llm_score, cos_score in zip(cleaned_group['llm_sim'], cleaned_group['cosine_sim'])])
+        weights = np.array([max(cos_score,0)**alpha*(llm_score/100)**alpha  for llm_score, cos_score in zip(cleaned_group['llm_sim'], cleaned_group['cosine_sim'])])
     else:
         weights = np.ones(shape=(len(cleaned_group),))
     

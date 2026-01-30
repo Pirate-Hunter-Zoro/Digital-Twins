@@ -99,7 +99,7 @@ graph TD
 
 * **LLM Weighting**:  (The primary method - the LLM returns a score between 0-100, so divide the result by 100).
 * **Cosine Weighting**:  (The numeric baseline).
-* **Combined**: (Product of the LLM-weighting - scaled by an alpha factor - and cosine-weighting).
+* **Combined**: (Product of the LLM-weighting - scaled by an alpha factor - and cosine-weighting also scaled by the same alpha factor).
 * **Uniform Weighting**:  (The population baseline).
 
 **Aggregates TRD flags from neighbors and computes weighted probability of TRD risk for **each** strategy.**
