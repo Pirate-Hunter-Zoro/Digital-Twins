@@ -23,7 +23,7 @@ class TRDPredictor:
         trd_file = Path(os.environ['TRD_LIST_PATH'])
         self.trd_set = set([l.strip('"') for l in trd_file.read_text().splitlines()])
         
-    def get_trd_status(self, candidate_id: str) -> int:
+    def get_trd_status(self, candidate_patient_id: str) -> int:
         """
         Return 1 if the patient is in the list of TRD positive patients, and 0 otherwise
         
@@ -32,7 +32,7 @@ class TRDPredictor:
         :return: Integer flag for if the patient is TRD
         :rtype: int
         """
-        return 1 if candidate_id in self.trd_set else 0
+        return 1 if candidate_patient_id in self.trd_set else 0
     
     def construct_neighborhood_data(self, index_id: str) -> list[dict]:
         """Return the information of all the neighbors of this anchor patient
@@ -70,7 +70,7 @@ class TRDPredictor:
                 # Filler for the background density check
                 llm_sim = None
             # Flag for if this neighbor is trd
-            neighbor_trd_flag = self.get_trd_status(candidate_id=neighbor_patient_id)
+            neighbor_trd_flag = self.get_trd_status(candidate_patient_id=neighbor_patient_id)
             neighborhood_data.append({
                 "anchor_id": index_id,
                 "anchor_patient_id": index_patient_id,

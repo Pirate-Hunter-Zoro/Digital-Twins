@@ -112,7 +112,7 @@ def run_analysis():
     predictor = TRDPredictor()
     retriever = Retriever()
     anchor_labels = {
-        patient_id: predictor.get_trd_status(candidate_id=patient_id)
+        patient_id: predictor.get_trd_status(candidate_patient_id=patient_id)
         for patient_id in anchor_ids
     }
     
