@@ -1,8 +1,5 @@
-import numpy as np
 import os
 from pathlib import Path
-from typing import Dict, List
-import random
 
 from dotenv import load_dotenv
 load_dotenv()

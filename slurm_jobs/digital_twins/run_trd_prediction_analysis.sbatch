@@ -32,6 +32,7 @@ fi
 set -a; source "${ENV_FILE}"; set +a
 
 python -m scripts.digital_twins.trd_prediction_analysis
+python -m scripts.digital_twins.trd_ranking_analysis
 
 # Copy all non-csv files from the RESULTS_DIR to the local results/ directory for easier access
 LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"

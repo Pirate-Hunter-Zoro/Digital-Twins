@@ -85,7 +85,7 @@ graph TD
 
 ```
 
-* **`trd_predictor.py`**:
+* **`trd_prediction_analysis.py`**:
 * Implements the **Digital Twin Matcher** logic for Treatment-Resistant Depression (TRD).
   * **Workflow**:
       1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient) by largest cosine similarity.
@@ -99,8 +99,8 @@ graph TD
 
 * **LLM Weighting**:  (The primary method - the LLM returns a score between 0-100, so divide the result by 100).
 * **Cosine Weighting**:  (The numeric baseline).
-# TODO - fix documentation - scale by alpha after multiplying 
-* **Combined**: (Product of the LLM-weighting - scaled by an alpha factor - and cosine-weighting also scaled by the same alpha factor).
+
+* **Combined**: (Product of the LLM-weighting and cosine-weighting).
 * **Uniform Weighting**:  (The population baseline).
 
 **Aggregates TRD flags from neighbors and computes weighted probability of TRD risk for **each** strategy.**
@@ -114,6 +114,15 @@ graph TD
 * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence) for **all three** weighting modes (LLM vs. Cosine vs. Uniform).
 * **Enrichment Analysis**: Generates **Enrichment Curves** comparing the TRD prevalence in the top-$k$ neighbors ($k\in\{10,25,50,100\}$) for both LLM-sorted and Cosine-sorted lists. This validates whether the LLM retrieves more clinically relevant patients than raw embeddings.
 * **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and comparative plots (ROC-AUC, Precision-Recall, Calibration, Decision Curve).
+
+* **`trd_ranking_analysis.py`**:
+  * **Battle 2: Ranking & Homophily Analysis.** Investigates whether the LLM retrieves neighbors that are clinically more congruent with the anchor than Cosine alone ("Label Homophily").
+  * **Agreement Curves**: Computes and plots the "Agreement Score" (homophily) for Top-$k$ neighbors ($k \in \{5, 10, 25, 50\}$) comparing **Cosine Strategy** vs. **LLM Strategy**.
+  * **Diagnostics**:
+    * **Spearman Correlation**: Quantifies the correlation between Cosine Similarity and LLM Similarity to check for signal redundancy.
+    * **Separation AUC**: (Proxy) Evaluates the LLM's ability to distinguish between "Close" neighbors (Rank $\le 5$) and "Far" neighbors (Rank $\ge 45$).
+  * **Density**: Computes **kNN Radius** and **LLM Effective Sample Size (ESS)** to profile the density of patient neighborhoods.
+  * **Output**: Generates `battle_2_agreement_curve.png`, `battle_2_agreement_summary.csv`, and `battle_2_correlation_results.json`.
 
 ### 6. Models (`scripts/models`)
 
@@ -228,8 +237,3 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 sbatch slurm_jobs/digital_twins/run_trd_prediction_orchestrator.sbatch
 
 ```
-
-# TODO
-Take each anchor patient and compare distances to other anchor patietns of opposite class
-- and same class
-- Hope to see greater similarity between patients of same class vs. opposite class
