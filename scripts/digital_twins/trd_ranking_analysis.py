@@ -92,7 +92,7 @@ def compute_diagnostics(df: pd.DataFrame) -> dict:
     }
     close = filtered_df[filtered_df['rank_cosine'] <= 5]
     far = filtered_df[filtered_df['rank_cosine'] >= 45]
-    cos_closeness_labels = np.array([1 for _ in close['llm_sim'].values] + [0 for _ in far['llm_sim'].values])
+    cos_closeness_labels = np.concatenate([np.ones(len(close)), np.zeros(len(far))])
     llm_sims = np.concatenate([close['llm_sim'].values, far['llm_sim'].values])
     results['roc_score_llm_predict_close'] = roc_auc_score(y_true=cos_closeness_labels, y_score=llm_sims)
     return results
