@@ -45,13 +45,14 @@ def agreement(results_df: pd.DataFrame, k_values: list[int]) -> pd.DataFrame:
         pd.DataFrame: Summary results for each anchor patient
     """
     all_results = []
-    for k in k_values:
-        analysis_df = results_df.copy()
+    analysis_df = results_df.copy()
         
-        # Cosine similarity ranking
-        analysis_df.sort_values(by='cosine_sim', ascending=False, inplace=True) # Descending cosine similarity
-        analysis_df = analysis_df.groupby(by='anchor_id').head(k) # Grab the top k neighbors
-        k_results_cos = analysis_df.groupby(by='anchor_id').apply(homophily_helper)
+    # Cosine similarity ranking
+    sorted_by_cos = analysis_df.sort_values(by='cosine_sim', ascending=False) # Descending cosine similarity
+    sorted_by_llm = analysis_df.sort_values(by='llm_sim', ascending=False) # Descending LLM similarity
+    for k in k_values:
+        k_analysis_df = sorted_by_cos.groupby(by='anchor_id').head(k) # Grab the top k neighbors
+        k_results_cos = k_analysis_df.groupby(by='anchor_id', include_groups=False).apply(homophily_helper)
         for anchor_id, score in k_results_cos.items():
             all_results.append({
                 'k': k, 
@@ -61,11 +62,8 @@ def agreement(results_df: pd.DataFrame, k_values: list[int]) -> pd.DataFrame:
             })
         
         # LLM similarity ranking
-        analysis_df = results_df.copy()
-        analysis_df = analysis_df[analysis_df['llm_sim'].notna()]
-        analysis_df.sort_values(by='llm_sim', ascending=False, inplace=True) # Descending LLM similarity
-        analysis_df = analysis_df.groupby(by='anchor_id').head(k)
-        k_results_llm = analysis_df.groupby(by='anchor_id').apply(homophily_helper)
+        k_analysis_df = sorted_by_llm[sorted_by_llm['llm_sim'].notna()].groupby(by='anchor_id').head(k)
+        k_results_llm = k_analysis_df.groupby(by='anchor_id', include_groups=False).apply(homophily_helper)
         for anchor_id, score in k_results_llm.items():
             all_results.append({
                 'k': k,
@@ -94,7 +92,7 @@ def compute_diagnostics(df: pd.DataFrame) -> dict:
     }
     close = filtered_df[filtered_df['rank_cosine'] <= 5]
     far = filtered_df[filtered_df['rank_cosine'] >= 45]
-    cos_closeness_labels = np.array([1 for _ in close] + [0 for _ in far])
+    cos_closeness_labels = np.array([1 for _ in close['llm_sim'].values] + [0 for _ in far['llm_sim'].values])
     llm_sims = np.concatenate([close['llm_sim'].values, far['llm_sim'].values])
     results['roc_score_llm_predict_close'] = roc_auc_score(y_true=cos_closeness_labels, y_score=llm_sims)
     return results
