@@ -11,6 +11,9 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
@@ -52,7 +55,7 @@ def agreement(results_df: pd.DataFrame, k_values: list[int]) -> pd.DataFrame:
     sorted_by_llm = analysis_df.sort_values(by='llm_sim', ascending=False) # Descending LLM similarity
     for k in k_values:
         k_analysis_df = sorted_by_cos.groupby(by='anchor_id').head(k) # Grab the top k neighbors
-        k_results_cos = k_analysis_df.groupby(by='anchor_id', include_groups=False).apply(homophily_helper)
+        k_results_cos = k_analysis_df.groupby(by='anchor_id').apply(homophily_helper)
         for anchor_id, score in k_results_cos.items():
             all_results.append({
                 'k': k, 
@@ -63,7 +66,7 @@ def agreement(results_df: pd.DataFrame, k_values: list[int]) -> pd.DataFrame:
         
         # LLM similarity ranking
         k_analysis_df = sorted_by_llm[sorted_by_llm['llm_sim'].notna()].groupby(by='anchor_id').head(k)
-        k_results_llm = k_analysis_df.groupby(by='anchor_id', include_groups=False).apply(homophily_helper)
+        k_results_llm = k_analysis_df.groupby(by='anchor_id').apply(homophily_helper)
         for anchor_id, score in k_results_llm.items():
             all_results.append({
                 'k': k,
