@@ -79,6 +79,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
     med_intervals = {}
     sliced_med_intervals = {}
     
+    earliest_encounter_date = anchor_date
     for encounter in patient_dict['encounters']:
         sliced_encounter = {'details': encounter['details'], 'procedures': [], 'diagnoses': encounter['diagnoses'], 'vitals': encounter['vitals'],}
         info = sliced_encounter['details']
@@ -88,6 +89,8 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
             continue # Skip bad encounters
             
         encounter_start_date = datetime.strptime(enc_start_str, '%Y-%m-%d')
+        if encounter_start_date < earliest_encounter_date:
+            earliest_encounter_date = encounter_start_date
         
         enc_end_str = info.get('end_visit')
         if isinstance(enc_end_str, str):
@@ -177,5 +180,10 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
     processed_patient['active_medications'].sort(key=lambda x: -x['MedStartInstant'])
     processed_sliced_patient['encounters'].sort(key=lambda x: -x['details']['start_visit'])
     processed_sliced_patient['active_medications'].sort(key=lambda x: -x['MedStartInstant'])
+    
+    # Total chronological length
+    timespan = (anchor_date - earliest_encounter_date).days
+    processed_sliced_patient['days_of_history'] = timespan
+    processed_patient['days_of_history'] = timespan
     
     return (processed_sliced_patient, processed_patient)
