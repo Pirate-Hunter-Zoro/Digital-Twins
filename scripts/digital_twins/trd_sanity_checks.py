@@ -1,5 +1,5 @@
 import os
-import random
+from itertools import combinations
 import numpy as np
 from pathlib import Path
 import pandas as pd
@@ -11,34 +11,26 @@ from scripts.shared.similarity import cosine
 from dotenv import load_dotenv
 load_dotenv()
 
-def main():
-    # Get a random sample of pairs
+def run_chonology_check():
+    """Helper function to evaluate TRD prediction performance over varying chronological lengths of patient history
+    """
+    df = pd.concat([pd.read_csv(f) for f in Path(os.environ['RESULTS_DIR']).glob('trd_evaluation_results_*.csv')])
     retriever = Retriever()
-    pair_ids = set()
-    all_hash_ids = retriever.ids
-    pairs = []
-    for _ in range(int(os.environ['NUM_PAIRS_SANITY_CHECK'])):
-        pair_indices = random.sample(range(len(all_hash_ids)), 2)
-        pair_indices = (pair_indices[0], pair_indices[1]) if pair_indices[0] < pair_indices[1] else (pair_indices[1], pair_indices[0])
-        while pair_indices in pair_ids:
-            pair_indices = random.sample(range(len(all_hash_ids)), 2)
-            pair_indices = (pair_indices[0], pair_indices[1]) if pair_indices[0] < pair_indices[1] else (pair_indices[1], pair_indices[0])  
-        pair_ids.add(pair_indices)
-        first_idx = pair_indices[0]
-        second_idx = pair_indices[1]
-        pairs.append((all_hash_ids[first_idx], all_hash_ids[second_idx]))
-    
-    # Compute cosine similarities of all pairs
-    random_cos_sims = np.array([cosine(id_a=pair[0], id_b=pair[1]) for pair in pairs])
+
+def run_cosine_check():
+    """Helper function to produce a graph of cosine similarity over random patient pairs versus neighbor patient pairs
+    """
     
     # Load neighbor similarities
     df = pd.concat([pd.read_csv(f) for f in Path(os.environ['RESULTS_DIR']).glob('trd_evaluation_results_*.csv')])
-    neighbor_cos_sims = df['cosine_sim']
+    anchor_to_neighbor_cos_sims = df['cosine_sim']
+    anchor_patient_ids = df['anchor_id'] # Narrative hash IDs of each anchor patient
+    anchor_to_anchor_cos_sims = np.array([cosine(id_a, id_b) for (id_a, id_b) in combinations(anchor_patient_ids.tolist(), 2)])
     
     # Plot the two histograms
     plt.figure(figsize=(10,6))
-    plt.hist(random_cos_sims, alpha=0.5, color='red', label='Random Cosine Similarities')
-    plt.hist(neighbor_cos_sims, alpha=0.5, color='green', label='Neighbor Cosine Similarities')
+    plt.hist(anchor_to_anchor_cos_sims, alpha=0.5, color='red', label='Random Cosine Similarities')
+    plt.hist(anchor_to_neighbor_cos_sims, alpha=0.5, color='green', label='Neighbor Cosine Similarities')
     plt.legend()
     plt.title('Random vs. Neighborhood Cosine Similarity Scores')
     plt.xlabel('Score')

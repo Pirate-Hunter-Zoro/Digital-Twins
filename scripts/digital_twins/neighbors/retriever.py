@@ -3,6 +3,7 @@ import numpy as np
 from pathlib import Path
 import os
 from typing import List, Tuple, Optional
+import matplotlib.pyplot as plt
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -22,7 +23,7 @@ class Retriever:
         # Load all patient vectors
         self.cursor.execute(
             """
-SELECT id, vector FROM vectors
+SELECT id, vector, chronological_length FROM vectors
             """
         )
         # List of tuples - (id string of narrative, vector in bytes)
@@ -30,14 +31,25 @@ SELECT id, vector FROM vectors
         
         self.ids = []
         vectors = []
+        self.chronological_lengths = []
         for row in self.patient_vectors:
             self.ids.append(row[0])
             vectors.append(np.frombuffer(row[1], dtype=np.float32))
+            self.chronological_lengths.append(row[2])
         self.ids_to_index = {id: i for i, id in enumerate(self.ids)}
         self.vectors = np.vstack(vectors)
         # Normalize each vector
         norms = np.linalg.norm(self.vectors, axis=1, keepdims=True)
         self.vectors /= norms
+        
+        # Create histogram of chronological lengths
+        plt.figure(figsize=(10,6))
+        plt.hist(np.array(self.chronological_lengths))
+        plt.xlabel("Chronological Length (Days)")
+        plt.ylabel("Frequency")
+        plt.title("Histogram of Patient Chronological History Lengths")
+        plt.savefig(Path(os.environ['RESULTS_DIR']) / 'history_length_histogram.png')
+        plt.close()
         
     def get_narrative(self, id: str) -> Optional[str]:
         """
@@ -98,6 +110,8 @@ SELECT vector FROM vectors WHERE id=?
             return np.frombuffer(row[0], dtype=np.float32)
         else:
             return None
+        
+    # TODO - get_chronological_length
         
     def search(self, query_vector: np.array, exclude_id: str=None) -> List[Tuple[str, float]]:
         """
