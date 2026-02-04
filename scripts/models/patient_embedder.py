@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS vectors (
     patient_id TEXT,
     vector BLOB,
     text TEXT,
-    length INTEGER
+    chronological_length INTEGER
 );
 ''')
         
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS vectors (
                 
             self.connection.executemany(
                 '''
-INSERT OR REPLACE INTO vectors (id, patient_id, vector, text, length) VALUES (?, ?, ?, ?, ?)
+INSERT OR REPLACE INTO vectors (id, patient_id, vector, text, chronological_length) VALUES (?, ?, ?, ?, ?)
 ''',
                 new_records
             )

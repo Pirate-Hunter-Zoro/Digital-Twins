@@ -31,14 +31,15 @@ def get_bool_str(val: bool) -> str:
         return "Present"
     return "Absent"
 
-def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict):
-    """
-    Parse the sliced and unsliced patient json to generate a deterministic markdown file output
-    
-    :param sliced_json: Anchor date going back a certain number of years
-    :type sliced_json: Dict
-    :param unsliced_json: Anchor date going back to the beginning of the patient's history
-    :type unsliced_json: Dict
+def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict) -> tuple[str, int]:
+    """Parse the sliced and unsliced patient json to generate a deterministic markdown file output
+
+    Args:
+        sliced_json (Dict): Anchor date going back a certain number of years
+        unsliced_json (Dict): Anchor date going back to the beginning of the patient's history
+
+    Returns:
+        tuple[str, int]: Patient id and chronologic length of the patient
     """
     # First check for pre-existence
     narrative_save_path = Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']) / f"{sliced_json['patient_id']}.md"
@@ -159,6 +160,7 @@ NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingr
     os.makedirs(narrative_save_path.parent, exist_ok=True)
     with open(narrative_save_path, 'w') as f:
         f.write(result)
+    return (sliced_json['patient_id'], sliced_json['days_of_history'])
 
 
 if __name__=="__main__":
