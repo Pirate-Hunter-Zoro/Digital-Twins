@@ -5,6 +5,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 import sqlite3
 import torch
+import pandas as pd
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -38,6 +39,9 @@ class PatientEmbedder:
         )
         self.vectors_path = Path(os.environ['VECTORS_DIR'])
         os.makedirs(self.vectors_path, exist_ok=True)
+        self.narrative_chronological_lengths = {}
+        for row in pd.read_csv(Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']) / 'narrative_days_of_history.csv').iterrows():
+            self.narrative_chronological_lengths[row['patient_id']] = row['days_of_history']
         
         # Make connection to database
         self.connection = sqlite3.connect(self.vectors_path / 'vectors.db')
@@ -64,6 +68,7 @@ CREATE TABLE IF NOT EXISTS vectors (
         :rtype: List
         """
         cursor = self.connection.cursor()
+        
         patient_ids = patients[0]
         narratives = patients[1]
         vectors = [None for _ in patient_ids]
@@ -94,7 +99,7 @@ CREATE TABLE IF NOT EXISTS vectors (
                 vectors[i] = missing_vector
                 id = generate_string_id(text=narratives[i])
                 vector_bytes = missing_vector.tobytes()
-                new_records.append((id, patient_ids[i], vector_bytes, narratives[i], len(narratives[i])))
+                new_records.append((id, patient_ids[i], vector_bytes, narratives[i], self.narrative_chronological_lengths[patient_ids[i]]))
                 
             self.connection.executemany(
                 '''
