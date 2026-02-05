@@ -111,7 +111,7 @@ def run_analysis():
     anchor_ids = set(df['anchor_patient_id'])
     predictor = TRDPredictor()
     retriever = Retriever()
-    anchor_labels = {
+    anchor_trd_labels = {
         patient_id: predictor.get_trd_status(candidate_patient_id=patient_id)
         for patient_id in anchor_ids
     }
@@ -125,6 +125,8 @@ def run_analysis():
     # Run the battle
     weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
     results = {}
+    # Store for each strategy the TRD predictions of each anchor patient
+    raw_predictions = [] 
     for strat in weighting_strats:
         print(f"Running analysis for weighting strategy: {strat.value}...", flush=True)
         grouped_by_anchor_patient = df_battle.groupby('anchor_id')
@@ -133,9 +135,17 @@ def run_analysis():
         ess_values = []
         for anchor_hash, group in grouped_by_anchor_patient:
             risk, ess = calculated_weighted_risk(group=group, strategy=strat)
-            labels.append(anchor_labels[retriever.get_patient_id(anchor_hash)])
+            labels.append(anchor_trd_labels[retriever.get_patient_id(anchor_hash)])
             risks.append(risk)
             ess_values.append(ess)
+            raw_predictions.append({
+                'anchor_id': anchor_hash,
+                'anchor_patient_id': retriever.get_patient_id(anchor_hash),
+                'predicted_risk': risk,
+                'true_label': labels[-1],
+                'ess': ess,
+                'strategy': strat.name
+            })
         metrics = compute_metrics(y_true=np.array(labels), y_prob=np.array(risks))
         plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
         plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
@@ -145,11 +155,11 @@ def run_analysis():
         plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
         # Add to text report
         text_report += f"{strat.value} Metrics:\n\
-                        'roc_score': {metrics['roc_score']}\n\
-                            'auprc': {metrics['auprc']}\n\
-                                'brier_score': {metrics['brier_score']}\n\
-                                    'expected_calibration_error': {metrics['expected_calibration_error']}\n\
-                                        'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
+'roc_score': {metrics['roc_score']}\n\
+'auprc': {metrics['auprc']}\n\
+'brier_score': {metrics['brier_score']}\n\
+'expected_calibration_error': {metrics['expected_calibration_error']}\n\
+'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
         results[strat.value] = {
             'roc_score': metrics['roc_score'],
             'auprc': metrics['auprc'],
@@ -165,6 +175,7 @@ def run_analysis():
     # Turn results into a pandas data frame and save the .csv
     results_df = pd.DataFrame(results)
     results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_summary.csv')
+    pd.DataFrame(raw_predictions).to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_predictions.csv')
     print("Battle 1 analysis complete!", flush=True)
     
 if __name__=="__main__":

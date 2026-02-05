@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/digital_twins/logs/trd_prediction_analysis_out.txt
-#SBATCH -e slurm_jobs/digital_twins/logs/trd_prediction_analysis_err.txt
+#SBATCH -o slurm_jobs/logs/trd_prediction_analysis_out.txt
+#SBATCH -e slurm_jobs/logs/trd_prediction_analysis_err.txt
 
 # Exit immediately if command fails
 set -e

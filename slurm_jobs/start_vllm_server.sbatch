@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/digital_twins/logs/vllm_out.txt
-#SBATCH -e slurm_jobs/digital_twins/logs/vllm_err.txt
+#SBATCH -o slurm_jobs/logs/vllm_out.txt
+#SBATCH -e slurm_jobs/logs/vllm_err.txt
 #SBATCH --gres=gpu:2
   
 GPUS=2                      

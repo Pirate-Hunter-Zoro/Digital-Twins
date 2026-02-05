@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=256G
-#SBATCH -o slurm_jobs/data_loading/logs/load_json_out.txt
-#SBATCH -e slurm_jobs/data_loading/logs/load_json_err.txt
+#SBATCH -o slurm_jobs/logs/load_json_out.txt
+#SBATCH -e slurm_jobs/logs/load_json_err.txt
 
 # Exit immediately if command fails
 set -e
