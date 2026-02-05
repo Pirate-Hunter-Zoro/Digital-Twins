@@ -160,7 +160,7 @@ Stores the raw embeddings.
 | `patient_id` | `TEXT` | Patient ID of the corresponding narrative. |
 | `vector` | `BLOB` | The numpy array (`float32`) serialized to bytes. |
 | `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
-| `length` | `INTEGER` | Character count of the text. |
+| `chronological_length` | `INTEGER` | Chronological length in days of the patient;s history window. |
 
 **Table: `similarities**`
 Stores the cosine similarity of the embeddings associated with the string hash ids.

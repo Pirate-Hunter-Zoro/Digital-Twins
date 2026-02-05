@@ -16,6 +16,7 @@ def run_chonology_check():
     """
     df = pd.concat([pd.read_csv(f) for f in Path(os.environ['RESULTS_DIR']).glob('trd_evaluation_results_*.csv')])
     retriever = Retriever()
+    
 
 def run_cosine_check():
     """Helper function to produce a graph of cosine similarity over random patient pairs versus neighbor patient pairs

@@ -93,7 +93,7 @@ SELECT patient_id FROM vectors WHERE id=?
 
     def get_vector(self, id: str) -> np.array:
         """
-        Helper method to return the vectir corresponding with the narrative that has the input hashed ID calculated from the narrative
+        Helper method to return the vector corresponding with the narrative that has the input hashed ID calculated from the narrative
         
         :param id: Hashed ID from narrative of patient
         :type id: str
@@ -111,7 +111,25 @@ SELECT vector FROM vectors WHERE id=?
         else:
             return None
         
-    # TODO - get_chronological_length
+    def get_time_length(self, id: str) -> int:
+        """
+        Helper method to return the chronological length in days of the corresponding with the narrative that has the input hashed ID calculated from the narrative
+        
+        :param id: Hashed ID from narrative of patient
+        :type id: str
+        :return: Respective vector
+        :rtype: np.array
+        """
+        self.cursor.execute(
+            """
+SELECT chronological_length FROM vectors WHERE id=?
+            """,
+            (id,))
+        row = self.cursor.fetchone()
+        if row is not None:
+            return row[0]
+        else:
+            return None
         
     def search(self, query_vector: np.array, exclude_id: str=None) -> List[Tuple[str, float]]:
         """
