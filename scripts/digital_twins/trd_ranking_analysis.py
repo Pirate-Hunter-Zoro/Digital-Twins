@@ -112,6 +112,7 @@ def plot_agreement_curves(agreement_df: pd.DataFrame):
     plt.legend()
     plt.title('Agreement of Nearest Neighbors with Anchor TRD Label')
     plt.savefig(RESULTS_DIR / 'battle_2_agreement_curve.png')
+    plt.close()
 
 def main():
     results_df = pd.concat([pd.read_csv(f) for f in RESULTS_DIR.glob("trd_evaluation_results_*.csv")], ignore_index=True)

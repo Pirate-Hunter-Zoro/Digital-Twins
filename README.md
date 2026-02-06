@@ -15,6 +15,7 @@ graph LR
     F --> G[(Vectors.db)]
     G --> H[Stage 3: Retrieval]
     H --> I[Stage 4: Prediction]
+    I --> J[Diagnostics & Sanity Checks]
 
 
 ```
@@ -113,7 +114,10 @@ graph TD
 * **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
 * **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence) for **all three** weighting modes (LLM vs. Cosine vs. Uniform).
 * **Enrichment Analysis**: Generates **Enrichment Curves** comparing the TRD prevalence in the top-$k$ neighbors ($k\in\{10,25,50,100\}$) for both LLM-sorted and Cosine-sorted lists. This validates whether the LLM retrieves more clinically relevant patients than raw embeddings.
-* **Output**: Saves a summary text file, a full CSV log of every prediction (`trd_evaluation_results.csv`), and comparative plots (ROC-AUC, Precision-Recall, Calibration, Decision Curve).
+* **Output**:
+  * **Summary**: `battle_1_summary.csv` (Aggregated AUC/Brier/ESS per strategy).
+  * **System of Record**: `battle_1_predictions.csv` (Row-level log of every prediction, risk score, true label, and strategy used for downstream auditing).
+  * **Plots**: Comparative ROC-AUC, Precision-Recall, Calibration, and Decision Curves.
 
 * **`trd_ranking_analysis.py`**:
   * **Battle 2: Ranking & Homophily Analysis.** Investigates whether the LLM retrieves neighbors that are clinically more congruent with the anchor than Cosine alone ("Label Homophily").
@@ -123,6 +127,12 @@ graph TD
     * **Separation AUC**: (Proxy) Evaluates the LLM's ability to distinguish between "Close" neighbors (Rank $\le 5$) and "Far" neighbors (Rank $\ge 45$).
   * **Density**: Computes **kNN Radius** and **LLM Effective Sample Size (ESS)** to profile the density of patient neighborhoods.
   * **Output**: Generates `battle_2_agreement_curve.png`, `battle_2_agreement_summary.csv`, and `battle_2_correlation_results.json`.
+
+* **`trd_sanity_checks.py`**:
+  * **Battle 3: Deep Diagnostics & Validity.**
+  * **Embedding Validity**: Validates that retrieved neighbors are statistically distinct from random noise. Computes the $N \times N$ similarity matrix of the anchor cohort to generate a "Random Pair" distribution and overlays it against the "Neighbor" distribution.
+  * **Chronology Confounding**: Tests if the model is cheating by using "Data Richness" as a proxy for risk. Merges prediction errors with patient history lengths ($L_i$) and calculates the **Spearman Correlation** ($\rho$) for each weighting strategy.
+  * **Output**: Generates `cosine_score_random_vs_neighbor.png` (Visual Validity) and `battle_1_chronology_check.csv` (Confounding Metrics + Scatter Plots).
 
 ### 6. Models (`scripts/models`)
 
