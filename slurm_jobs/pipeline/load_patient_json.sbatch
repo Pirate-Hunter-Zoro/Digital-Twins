@@ -30,4 +30,4 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-srun python -m scripts.data_loading.build_jsons
+srun --mem=0 python -m scripts.data_loading.build_jsons

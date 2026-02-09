@@ -6,5 +6,5 @@ scratch/
 .DS_Store
 *.pyc
 .pytest_cache/
-slurm_jobs/digital_twins/cancel_pipeline.sh
+cancel_pipeline.sh
 results/
