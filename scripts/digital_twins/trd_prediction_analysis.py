@@ -11,6 +11,7 @@ from sklearn.metrics import (
     auc,
 )
 from sklearn.calibration import calibration_curve
+from sklearn.linear_model import LinearRegression
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -89,20 +90,43 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
     """
     # ROC score
     roc_score = roc_auc_score(y_true=y_true, y_score=y_prob)
+    
     # PR area curve
     precision, recall, _ = precision_recall_curve(y_true=y_true, y_score=y_prob)
     auprc = auc(x=recall, y=precision)
+    
     # Brier score
     brier_score = brier_score_loss(y_true=y_true, y_proba=y_prob)
+    
     # Break patients up into bins and calculate the true and predicted mean TRD-positive probabilities for each patient bin
     prob_true, prob_pred = calibration_curve(y_true=y_true, y_prob=y_prob, n_bins=10)
-    ece = np.mean(np.abs(prob_true - prob_pred))
+    # We must weight the bins by their count
+    bin_weights = np.histogram(y_prob, bins=10, range=(0,1))[0] / len(y_prob)
+    bin_weights = bin_weights[bin_weights != 0] # Calibration curve bins were already non-zero filtered
+    ece = np.sum(bin_weights * np.abs(prob_true - prob_pred))
+    
+    # Calibration slope and intercept
+    model = LinearRegression()
+    model.fit(prob_pred.reshape(-1,1), prob_true)
+    slope, intercept = model.coef_[0], model.intercept_
+    
+    # Count extreme predictions
+    mask = np.zeros_like(y_prob)
+    mask[y_prob < 0.1] = 1
+    low_proportion = np.sum(mask) / len(mask)
+    mask = np.zeros_like(y_prob)
+    mask[y_prob > 0.9] = 1
+    high_proportion = np.sum(mask) / len(mask)
     
     return {
         'roc_score': roc_score,
         'auprc': auprc,
         'brier_score': brier_score,
-        'expected_calibration_error': ece
+        'weighted_calibration_error': ece,
+        'calibration_slope': slope,
+        'calibration_intercept': intercept,
+        'proportion_risk_score_<0.1': low_proportion,
+        'proportion_risk_score_>0.9': high_proportion,
     }
     
 def run_analysis():
