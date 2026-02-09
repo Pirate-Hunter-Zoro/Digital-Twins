@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/logs/trd_prediction_analysis_out.txt
-#SBATCH -e slurm_jobs/logs/trd_prediction_analysis_err.txt
+#SBATCH -o slurm_jobs/pipeline/logs/trd_prediction_analysis_out.txt
+#SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_analysis_err.txt
 
 # Exit immediately if command fails
 set -e
@@ -34,7 +34,7 @@ set -a; source "${ENV_FILE}"; set +a
 python -m scripts.digital_twins.trd_prediction_analysis
 python -m scripts.digital_twins.trd_ranking_analysis
 
-# Copy all non-csv files from the RESULTS_DIR to the local results/ directory for easier access
+# Copy all files from the RESULTS_DIR to the local results/ directory for easier access
 LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
 mkdir -p "${LOCAL_RESULTS_DIR}"
 rsync -av "${RESULTS_DIR}/" "${LOCAL_RESULTS_DIR}/"

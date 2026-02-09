@@ -15,6 +15,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
+from scripts.shared.utils import load_trd_prediction_csv_results
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 ALPHA = float(os.environ['WEIGHTING_EXPONENT'])
@@ -115,7 +116,7 @@ def plot_agreement_curves(agreement_df: pd.DataFrame):
     plt.close()
 
 def main():
-    results_df = pd.concat([pd.read_csv(f) for f in RESULTS_DIR.glob("trd_evaluation_results_*.csv")], ignore_index=True)
+    results_df = load_trd_prediction_csv_results()
     results_df['anchor_trd_label'] = results_df['anchor_patient_id'].apply(PREDICTOR.get_trd_status)
     # Remove self from neighbors
     results_df = results_df[results_df['anchor_id'] != results_df['neighbor_id']]

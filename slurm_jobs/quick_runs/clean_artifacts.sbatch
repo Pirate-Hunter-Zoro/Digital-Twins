@@ -3,8 +3,8 @@
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
-#SBATCH -o slurm_jobs/logs/clean_artifacts_out.txt
-#SBATCH -e slurm_jobs/logs/clean_artifacts_err.txt
+#SBATCH -o slurm_jobs/quick_runs/logs/clean_artifacts_out.txt
+#SBATCH -e slurm_jobs/quick_runs/logs/clean_artifacts_err.txt
 
 cd /media/studies/ehr_study/analysis/mferguson/
 echo "Removing artifacts..."

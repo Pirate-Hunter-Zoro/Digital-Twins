@@ -1,13 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=embedding_pipeline
+#SBATCH --job-name=trd_prediction_pipeline
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/logs/embedding_pipeline_out.txt
-#SBATCH -e slurm_jobs/logs/embedding_pipeline_err.txt
-#SBATCH --gres=gpu:1
+#SBATCH -o slurm_jobs/quick_runs/logs/vector_audit_out.txt
+#SBATCH -e slurm_jobs/quick_runs/logs/vector_audit_err.txt
 
 # Exit immediately if command fails
 set -e
@@ -32,6 +31,9 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-# Explicitly pass the memory limit to srun to resolve the conflict
-python -m scripts.digital_twins.forge_narratives
-python -m scripts.digital_twins.forge_vectors
+python -m scripts.digital_twins.neighbors.vector_audit
+
+# Copy all files from the RESULTS_DIR to the local results/ directory for easier access
+LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
+mkdir -p "${LOCAL_RESULTS_DIR}"
+rsync -av "${RESULTS_DIR}/" "${LOCAL_RESULTS_DIR}/"

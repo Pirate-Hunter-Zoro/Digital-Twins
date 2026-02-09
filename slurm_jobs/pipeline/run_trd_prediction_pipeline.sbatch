@@ -1,12 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=load_json
+#SBATCH --job-name=trd_prediction_pipeline
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=256G
-#SBATCH -o slurm_jobs/logs/load_json_out.txt
-#SBATCH -e slurm_jobs/logs/load_json_err.txt
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=64G
+#SBATCH -o slurm_jobs/pipeline/logs/rd_prediction_pipeline_%a_out.txt
+#SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_pipeline_%a_err.txt
+#SBATCH --array=0-2
 
 # Exit immediately if command fails
 set -e
@@ -25,9 +26,9 @@ set +u; conda activate "${CONDA_ENV}"; set -u || exit 10
 # Load live vLLM endpoint 
 ENV_FILE="${SLURM_SUBMIT_DIR}/.env"
 if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "ERROR: ${ENV_FILE} not found. The server job must run first." >&2
+  echo "ERROR: ${ENV_FILE} not found." >&2
   exit 11
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-srun python -m scripts.data_loading.build_jsons
+python -m scripts.digital_twins.predict_trd

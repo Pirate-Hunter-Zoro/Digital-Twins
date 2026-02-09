@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 
 from scripts.digital_twins.neighbors.retriever import Retriever
+from scripts.shared.utils import load_trd_prediction_csv_results
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -52,7 +53,7 @@ def run_cosine_check():
     """Helper function to produce a graph of cosine similarity over random patient pairs versus neighbor patient pairs
     """
     # Load anchor patient neighborhood data frame
-    df = pd.concat([pd.read_csv(f) for f in Path(os.environ['RESULTS_DIR']).glob('trd_evaluation_results_*.csv')])
+    df = load_trd_prediction_csv_results()
     
     # Compute anchor to anchor similarities
     retriever = Retriever()
