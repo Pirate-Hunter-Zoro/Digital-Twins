@@ -1,7 +1,7 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import sqlite3
+from scipy.stats import spearmanr
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -36,7 +36,7 @@ def vector_analysis(vectors: np.array) -> np.array:
     plt.close()
     return vector_norms
     
-def cone_analysis(vectors: np.array, vector_norms: np.array) -> set[tuple[int,int]]:
+def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple[int,int]], np.array]:
     """Analyze baseline random cosine similarity value
 
     Args:
@@ -44,7 +44,7 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> set[tuple[int,in
         vector_norms (np.array): Norms of all vectors of interest
 
     Returns:
-        set[tuple[int,int]]: Resulting random pairs generated
+        tuple[list[tuple[int,int]], np.array]: Resulting random pairs generated and their cosine similarities
     """
     # Using itertools will be too large when generating all possible combinations - just make unique pairs until we have enough
     num_pairs = 5000
@@ -54,12 +54,16 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> set[tuple[int,in
         new_pair = random.sample(indices, 2)
         new_pair = (new_pair[0], new_pair[1]) if new_pair[0] < new_pair[1] else (new_pair[1], new_pair[0])
         pairs.add(new_pair)
+    pairs = list(pairs)
+    a_indices = [pair[0] for pair in pairs]
+    b_indices = [pair[1] for pair in pairs]
     
     # Now grab the vectors and perform analysis - if any vectors are of zero magnitute this will crash and burn as it SHOULD because that should never happen
-    random_similarities = np.array([
-        np.dot(vectors[a_idx], vectors[b_idx]) / (vector_norms[a_idx] * vector_norms[b_idx])
-        for a_idx, b_idx in pairs
-    ])
+    a_vectors = vectors[a_indices]
+    a_vectors = a_vectors / np.linalg.norm(a_vectors, axis=1, keepdims=True)
+    b_vectors = vectors[b_indices]
+    b_vectors = b_vectors / np.linalg.norm(b_vectors, axis=1, keepdims=True)
+    random_similarities = np.sum(a_vectors * b_vectors, axis=1)
     # We want to compare this with the cosine similarities from our results
     results_df = load_trd_prediction_csv_results()
     neighbor_cosines = results_df['cosine_sim']
@@ -74,19 +78,28 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> set[tuple[int,in
     plt.savefig(str(Path(os.environ['RESULTS_DIR']) / 'cos_random_vs_neighbor.png'))
     plt.close()
     
-    return pairs
+    return (pairs, random_similarities)
     
-def monotonicity_analysis(vectors: np.array, random_pairs: set[tuple[int,int]]):
+def monotonicity_analysis(vectors: np.array, random_pairs: list[tuple[int,int]], cosine_sims: np.array):
     """Compare Euclidean and Cosine similarity metrics of random pairs
 
     Args:
         vectors (np.array): Vectors of interest
-        random_pairs (set[tuple[int,int]]): Pre-computed random pairs
+        random_pairs (list[tuple[int,int]]): Pre-computed random pairs
+        cosine_sims (np.array): Cosine similarities of all pairs pre-computed
     """
     a_vectors = vectors[[a_idx for a_idx, _ in random_pairs]]
     b_vectors = vectors[[b_idx for _, b_idx in random_pairs]]
     euclidean_distances = np.linalg.norm(a_vectors-b_vectors, axis=1)
-    # TODO - cosine distance
+    cosine_distances = 1 - cosine_sims
+    rho, p_value = spearmanr(euclidean_distances, cosine_distances)
+    plt.figure(figsize=(10,6))
+    plt.scatter(euclidean_distances, cosine_distances, alpha=0.1, s=1)
+    plt.xlabel("Euclidean Distance")
+    plt.ylabel("Cosine Distances")
+    plt.title(f"Euclidean vs. Cosine (Rho={rho}, P-Value={p_value})")
+    plt.savefig(str(Path(os.environ['RESULTS_DIR']) / 'cos_vs_euclidean.png'))
+    plt.close()
 
 def main():
     vectors_db_path = Path(os.environ['VECTORS_DIR']) / 'vectors.db'
@@ -100,7 +113,7 @@ SELECT vector FROM vectors
     
     # Perform analyses
     vector_norms = vector_analysis(vectors=vectors)
-    random_pairs = cone_analysis(vectors=vectors, norms=vector_norms)
-    monotonicity_analysis(vectors=vectors, random_pairs=random_pairs)
+    random_pairs, cosine_sims = cone_analysis(vectors=vectors, vector_norms=vector_norms)
+    monotonicity_analysis(vectors=vectors, random_pairs=random_pairs, cosine_sims=cosine_sims)
     
     connection.close()
