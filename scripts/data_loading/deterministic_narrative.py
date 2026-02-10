@@ -44,7 +44,7 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict) -> 
     # First check for pre-existence
     narrative_save_path = Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']) / f"{sliced_json['patient_id']}.md"
     if narrative_save_path.exists() and int(os.environ['SCRUB_NARRATIVES']) == 0:
-        return
+        return (sliced_json['patient_id'], sliced_json['days_of_history'])
     
     demographics_of_interests = [
         "Sex",
