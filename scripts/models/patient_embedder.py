@@ -40,7 +40,7 @@ class PatientEmbedder:
         self.vectors_path = Path(os.environ['VECTORS_DIR'])
         os.makedirs(self.vectors_path, exist_ok=True)
         self.narrative_chronological_lengths = {}
-        for row in pd.read_csv(Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']) / 'narrative_days_of_history.csv').iterrows():
+        for _, row in pd.read_csv(Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']) / 'narrative_days_of_history.csv').iterrows():
             self.narrative_chronological_lengths[row['patient_id']] = row['days_of_history']
         
         # Make connection to database
