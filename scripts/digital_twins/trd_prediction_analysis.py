@@ -183,13 +183,13 @@ def run_analysis():
 'roc_score': {metrics['roc_score']}\n\
 'auprc': {metrics['auprc']}\n\
 'brier_score': {metrics['brier_score']}\n\
-'expected_calibration_error': {metrics['expected_calibration_error']}\n\
+'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\
 'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
         results[strat.value] = {
             'roc_score': metrics['roc_score'],
             'auprc': metrics['auprc'],
             'brier_score': metrics['brier_score'],
-            'expected_calibration_error': metrics['expected_calibration_error'],
+            'weighted_calibration_error': metrics['weighted_calibration_error'],
             'Mean_ESS': np.mean(np.array(ess_values))
         }
     
