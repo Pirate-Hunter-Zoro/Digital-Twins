@@ -27,8 +27,13 @@ def vector_analysis(vectors: np.array) -> np.array:
     
     # Compute norm of all vectors
     vector_norms = np.linalg.norm(vectors, axis=1)
+    min_norm = np.min(vector_norms)
+    max_norm = np.max(vector_norms)
     plt.figure(figsize=(10,6))
-    plt.hist(vector_norms)
+    if np.isclose(min_norm, max_norm):
+        plt.hist(vector_norms, range=(min_norm-0.01, max_norm+0.01), bins=1)
+    else:
+        plt.hist(vector_norms)
     plt.title("Histogram of Norms of Vectorized Patients")
     plt.xlabel("Vector Norm")
     plt.ylabel("Frequency")
@@ -60,9 +65,9 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple
     
     # Now grab the vectors and perform analysis - if any vectors are of zero magnitute this will crash and burn as it SHOULD because that should never happen
     a_vectors = vectors[a_indices]
-    a_vectors = a_vectors / np.linalg.norm(a_vectors, axis=1, keepdims=True)
+    a_vectors = a_vectors / vector_norms[a_indices][:, np.newaxis] # (N,) -> (N,1)
     b_vectors = vectors[b_indices]
-    b_vectors = b_vectors / np.linalg.norm(b_vectors, axis=1, keepdims=True)
+    b_vectors = b_vectors / vector_norms[b_indices][:, np.newaxis]
     random_similarities = np.sum(a_vectors * b_vectors, axis=1)
     # We want to compare this with the cosine similarities from our results
     results_df = load_trd_prediction_csv_results()
