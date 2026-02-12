@@ -117,3 +117,6 @@ SELECT vector FROM vectors
     monotonicity_analysis(vectors=vectors, random_pairs=random_pairs, cosine_sims=cosine_sims)
     
     connection.close()
+    
+if __name__=="__main__":
+    main()
