@@ -56,14 +56,23 @@ Transforms the structured JSONs into textual narratives.
 **The Judge.** Finds and scores patient similarity.
 
 * **`retriever.py`**:
-* Loads the entire `vectors.db` into memory as a normalized matrix.
-* Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
-* **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
-* **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
+  * Loads the entire `vectors.db` into memory.
+  * Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
+  * **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
+  * **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
+
+* **`vector_audit.py`**:
+  * **The Auditor.** Validates the geometry of the embedding space before expensive scoring.
+  * **Checks**:
+    1. **Normalization**: Verifies if vector norms are uniform (1.0) or variable.
+    2. **Anisotropy (The Cone)**: Measures embedding collapse by comparing the distribution of Random Pair similarities vs. Neighbor similarities.
+    3. **Metric Monotonicity**: Tests if Euclidean distance offers distinct ranking signals compared to Cosine similarity.
+  * **Output**: `vector_norms.png`, `cos_random_vs_neighbor.png`, `cos_vs_euclidean.png`.
+
 * **`scorer.py`**:
-* The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
-* **Caching**: Stores expensive LLM outputs in `judgements.db` (Table: `llm_judgements`) to prevent redundant inference.
-* **Logic**: Checks cache -> Formats Prompt -> Calls vLLM -> Parses JSON -> Saves Result.
+  * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
+  * **Caching**: Stores expensive LLM outputs in `judgements.db` (Table: `llm_judgements`) to prevent redundant inference.
+  * **Logic**: Checks cache -> Formats Prompt -> Calls vLLM -> Parses JSON -> Saves Result.
 
 ### 5. Stage 4: Prediction & Evaluation (`scripts/digital_twins/predictions`)
 
@@ -87,37 +96,16 @@ graph TD
 ```
 
 * **`trd_prediction_analysis.py`**:
-* Implements the **Digital Twin Matcher** logic for Treatment-Resistant Depression (TRD).
-  * **Workflow**:
-      1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient) by largest cosine similarity.
-      2. Scores neighbors via a weighting strategy.
-      3. Applies exponential weighting ($w = score^\alpha\text{ }\forall \text{ neighbors}$) to emphasize strong matches.
-      4. Take TRD flags for neigbhors ($f = 1\text{ if TRD else } 0\text{ }\forall \text{ neighbors}$)
-      5. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$). If the total weight is zero, the probability is the blind probability float value from the .env file.
-  * **Confidence**: Calculates Effective Sample Size (ESS) to flag low-confidence predictions ($\text{ESS}=\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$).
-
-**Applies four parallel weighting strategies** to test the "Digital Twin" hypothesis:
-
-* **LLM Weighting**:  (The primary method - the LLM returns a score between 0-100, so divide the result by 100).
-* **Cosine Weighting**:  (The numeric baseline).
-
-* **Combined**: (Product of the LLM-weighting and cosine-weighting).
-* **Uniform Weighting**:  (The population baseline).
-
-**Aggregates TRD flags from neighbors and computes weighted probability of TRD risk for **each** strategy.**
-
-* **Confidence**: Calculates Effective Sample Size (ESS) for all three strategies to flag low-confidence predictions.
-* **Enrichment**: Returns neighbor lists sorted by both LLM Score and Cosine Score to audit sorting performance.
-
-* **`trd_prediction_analysis.py`**:
-* Backtesting script.
-* **Sampling**: Selects a balanced random sample of TRD-positive and TRD-negative patients from the vector database.
-* **Metrics**: Computes **ROC AUC** (Discrimination), **Brier Score** (Calibration), and **Mean ESS** (Confidence) for **all three** weighting modes (LLM vs. Cosine vs. Uniform).
-* **Enrichment Analysis**: Generates **Enrichment Curves** comparing the TRD prevalence in the top-$k$ neighbors ($k\in\{10,25,50,100\}$) for both LLM-sorted and Cosine-sorted lists. This validates whether the LLM retrieves more clinically relevant patients than raw embeddings.
-* **Output**:
-  * **Summary**: `battle_1_summary.csv` (Aggregated AUC/Brier/ESS per strategy).
-  * **System of Record**: `battle_1_predictions.csv` (Row-level log of every prediction, risk score, true label, and strategy used for downstream auditing).
-  * **Plots**: Comparative ROC-AUC, Precision-Recall, Calibration, and Decision Curves.
+  * **Battle 1: Prediction & Calibration.**
+  * **Digital Twin Matcher Logic**:
+      1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient).
+      2. Scores neighbors via weighting strategies (Uniform, Cosine, LLM, Combined).
+      3. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$).
+  * **Analysis & Metrics**:
+    * **Discrimination**: ROC AUC, AUPRC.
+    * **Calibration**: Brier Score, **Weighted ECE**, **Calibration Slope & Intercept**.
+    * **Confidence**: Effective Sample Size (ESS) and **Risk Extremity Index** (fraction of predictions <0.1 or >0.9).
+  * **Output**: `battle_1_summary.csv` (Metrics), `battle_1_predictions.csv` (Row-level logs), and comparative calibration/ROC plots.
 
 * **`trd_ranking_analysis.py`**:
   * **Battle 2: Ranking & Homophily Analysis.** Investigates whether the LLM retrieves neighbors that are clinically more congruent with the anchor than Cosine alone ("Label Homophily").
@@ -125,7 +113,7 @@ graph TD
   * **Diagnostics**:
     * **Spearman Correlation**: Quantifies the correlation between Cosine Similarity and LLM Similarity to check for signal redundancy.
     * **Separation AUC**: (Proxy) Evaluates the LLM's ability to distinguish between "Close" neighbors (Rank $\le 5$) and "Far" neighbors (Rank $\ge 45$).
-  * **Density**: Computes **kNN Radius** and **LLM Effective Sample Size (ESS)** to profile the density of patient neighborhoods.
+  * **Density**: Computes **kNN Radius** and **LLM Effective Sample Size (ESS=$\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$)** to profile the density of patient neighborhoods.
   * **Output**: Generates `battle_2_agreement_curve.png`, `battle_2_agreement_summary.csv`, and `battle_2_correlation_results.json`.
 
 * **`trd_sanity_checks.py`**:
@@ -133,6 +121,8 @@ graph TD
   * **Embedding Validity**: Validates that retrieved neighbors are statistically distinct from random noise. Computes the $N \times N$ similarity matrix of the anchor cohort to generate a "Random Pair" distribution and overlays it against the "Neighbor" distribution.
   * **Chronology Confounding**: Tests if the model is cheating by using "Data Richness" as a proxy for risk. Merges prediction errors with patient history lengths ($L_i$) and calculates the **Spearman Correlation** ($\rho$) for each weighting strategy.
   * **Output**: Generates `cosine_score_random_vs_neighbor.png` (Visual Validity) and `battle_1_chronology_check.csv` (Confounding Metrics + Scatter Plots).
+
+* **Output**: `battle_1_summary.csv` (Metrics), `battle_1_predictions.csv` (Row-level logs), and comparative calibration/ROC plots.
 
 ### 6. Models (`scripts/models`)
 
