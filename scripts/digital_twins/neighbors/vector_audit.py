@@ -109,7 +109,7 @@ def main():
     cursor.execute('''
 SELECT vector FROM vectors
 ''')
-    vectors = np.array([np.frombuffer(vec, dtype=np.float32) for _, vec in cursor.fetchall()])
+    vectors = np.array([np.frombuffer(vec[0], dtype=np.float32) for vec in cursor.fetchall()])
     
     # Perform analyses
     vector_norms = vector_analysis(vectors=vectors)
