@@ -26,7 +26,7 @@ from scripts.shared.plots import (
     plot_effective_sample_size_distribution,
     plot_optimal_confusion_matrix
 )
-from scripts.shared.utils import load_trd_prediction_csv_results
+from scripts.shared.utils import load_neighborhood_data
 
 class WeightingStrategy(Enum):
     UNIFORM = "UNIFORM"
@@ -132,7 +132,7 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
     
 def run_analysis():
     # Merge all evaluation results from different .csv files into one dataframe
-    df = load_trd_prediction_csv_results()
+    df = load_neighborhood_data()
     anchor_ids = set(df['anchor_patient_id'])
     predictor = TRDPredictor()
     retriever = Retriever()

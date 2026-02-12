@@ -6,44 +6,43 @@ from sklearn.metrics import (
     brier_score_loss,
 )
 from sklearn.calibration import calibration_curve
+from pathlib import Path
+import os
 
 from dotenv import load_dotenv
 load_dotenv()
 
-def load_and_merge_data(
-    predictions_path: str, 
-    neighbor_data_path: str
-) -> pd.DataFrame:
-    """
-    Loads the prediction log (battle_1_predictions.csv) and the raw neighbor 
-    similarity data.
-    
-    Must perform an inner join on 'anchor_id'.
-    
-    Returns a DataFrame containing:
-    - anchor_id
-    - true_label (outcome)
-    - predicted_prob
-    - list_of_neighbor_scores (or pre-aggregated stats if your CSV is already summarized)
-    """
-    pass
+from scripts.shared.utils import load_neighborhood_data
 
-def compute_density_metrics(
-    merged_df: pd.DataFrame, 
-    k: int = 50, 
-    high_sim_threshold: float = 0.95
-) -> pd.DataFrame:
+def load_and_merge_data() -> pd.DataFrame:
+    """Loads the neighbor data for each anchor patient, as well as the evaluation results for each anchor patient and merges them into a single array
+
+    Returns:
+        pd.DataFrame: Resulting array that for each anchor patient describes neighborhood similarity and the TRD flag and risk score information
     """
-    Iterates through patients and computes the required density signals.
-    
-    New Columns to Add:
-    - knn_radius: Mean distance (1 - similarity) of the top-k neighbors.
-    - high_sim_count: Count of neighbors with similarity > high_sim_threshold.
-    - ess: The Effective Sample Size (if not already present).
-    
-    Returns the DataFrame with these new feature columns.
+    predictions_results_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / "battle_1_predictions.csv")
+    neighbor_df = load_neighborhood_data()
+    # Group by anchor id but then turn back into regular column
+    neighbor_df = neighbor_df.groupby('anchor_id')['cosine_sim'].apply(list).reset_index()
+    merged = pd.merge(predictions_results_df, neighbor_df, on='anchor_id').rename(columns={'cosine_sim': 'neighbor_scores'})
+    return merged
+
+def compute_density_metrics(merged_df: pd.DataFrame, ) -> pd.DataFrame:
+    """Computes various density metrics on each anchor patient with their neighborhoods
+
+    Args:
+        merged_df (pd.DataFrame): Neighborhood data and TRD flag and risk predictions for each anchor patient
+
+    Returns:
+        pd.DataFrame: Resulting information for each anchor patient on their neighborhood density
     """
-    pass
+    k = int(os.environ['K_SCORE'])
+    threshold = float(os.environ['HIGH_SIM_THRESHOLD'])
+    def calculate_metrics(scores):
+        pass
+    
+    return merged_df
+    
 
 def stratify_by_density(
     df: pd.DataFrame, 

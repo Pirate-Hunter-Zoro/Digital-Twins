@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import random
 
-from scripts.shared.utils import load_trd_prediction_csv_results
+from scripts.shared.utils import load_neighborhood_data
 
 def vector_analysis(vectors: np.array) -> np.array:
     """Analyzes shape and norm of all the given vectors
@@ -70,7 +70,7 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple
     b_vectors = b_vectors / vector_norms[b_indices][:, np.newaxis]
     random_similarities = np.sum(a_vectors * b_vectors, axis=1)
     # We want to compare this with the cosine similarities from our results
-    results_df = load_trd_prediction_csv_results()
+    results_df = load_neighborhood_data()
     neighbor_cosines = results_df['cosine_sim']
     
     # Create a histogram comparing the random similarities with the neighbor similarities

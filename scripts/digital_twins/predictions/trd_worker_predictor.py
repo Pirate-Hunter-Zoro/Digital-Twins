@@ -73,5 +73,5 @@ SELECT id, patient_id FROM vectors
     results_df = pd.DataFrame(results)
     
     # Save dataframe to a .csv and the results to a .txt
-    results_csv = RESULTS_DIR / f'trd_evaluation_results_{slurm_task_id}.csv'
+    results_csv = RESULTS_DIR / f'neighbor_results_{slurm_task_id}.csv'
     results_df.to_csv(results_csv, index=False)
