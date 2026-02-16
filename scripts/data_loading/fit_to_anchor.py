@@ -6,6 +6,14 @@ from dotenv import load_dotenv
 load_dotenv()
 import os
 
+# If someone we have never seen before comes into the hospital that leads to MDD and antidepressant ASAP
+# Then they could have zero length - technically should be one day
+# Look at that patient's JSON and see if this is the case
+# Take days calculation and add 1
+
+# Age 20 - MDD diagnosis, no antidepressant; 10 years later, come in and get antidepressant for unrelated 
+# reason
+
 MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
 DEBUG = False
 YEARS_BACK = int(os.environ['YEARS_BACK'])

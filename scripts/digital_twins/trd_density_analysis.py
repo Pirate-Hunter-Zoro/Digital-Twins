@@ -39,9 +39,17 @@ def compute_density_metrics(merged_df: pd.DataFrame, ) -> pd.DataFrame:
     k = int(os.environ['K_SCORE'])
     threshold = float(os.environ['HIGH_SIM_THRESHOLD'])
     def calculate_metrics(scores):
-        pass
-    
-    return merged_df
+        scores.sort(reverse=True)
+        top_k = np.array(scores[:k])
+        knn_rad = 1 - np.mean(top_k)
+        high_sim_count = np.sum(top_k > threshold)
+        return pd.Series({
+            "knn_radius": knn_rad, 
+            "high_similarity_count": high_sim_count,
+        })
+    # Get data frame with knn_rad and high_sim_count for each anchor patient
+    metrics_df = merged_df['neighbor_scores'].apply(calculate_metrics)
+    return pd.concat([merged_df, metrics_df], axis=1)
     
 
 def stratify_by_density(
