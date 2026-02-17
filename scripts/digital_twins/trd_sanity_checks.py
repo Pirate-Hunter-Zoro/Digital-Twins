@@ -65,8 +65,8 @@ def run_cosine_check():
     
     # Plot the two histograms
     plt.figure(figsize=(10,6))
-    plt.hist(unique_pair_sims, alpha=0.5, color='red', label='Random Cosine Similarities')
-    plt.hist(df['cosine_sim'], alpha=0.5, color='green', label='Neighbor Cosine Similarities')
+    plt.hist(unique_pair_sims, alpha=0.5, color='red', label='Random Cosine Similarities', bins=100)
+    plt.hist(df['cosine_sim'], alpha=0.5, color='green', label='Neighbor Cosine Similarities', bins=100)
     plt.legend()
     plt.title('Random vs. Neighborhood Cosine Similarity Scores')
     plt.xlabel('Score')

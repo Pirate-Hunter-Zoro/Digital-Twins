@@ -135,7 +135,7 @@ def plot_effective_sample_size_distribution(ess_values: np.array, mode: str):
     :param mode: llm weighting, cosine, weighting, uniform weighting
     :type mode: str
     """
-    plt.hist(ess_values, bins=20, edgecolor='black')
+    plt.hist(ess_values, bins=100, edgecolor='black')
     plt.xlabel("Effective Sample Size")
     plt.ylabel("Frequency")
     plt.title("Effective Sample Size Distribution")

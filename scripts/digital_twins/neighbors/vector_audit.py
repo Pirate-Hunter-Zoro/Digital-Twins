@@ -75,8 +75,8 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple
     
     # Create a histogram comparing the random similarities with the neighbor similarities
     plt.figure(figsize=(10,6))
-    plt.hist(random_similarities, label="Random Similarity Values", alpha=0.5, density=True)
-    plt.hist(neighbor_cosines, label="Neighbor Cosine Similarities", alpha=0.5, density=True)
+    plt.hist(random_similarities, label="Random Similarity Values", alpha=0.5, density=True, bins=100)
+    plt.hist(neighbor_cosines, label="Neighbor Cosine Similarities", alpha=0.5, density=True, bins=100)
     plt.xlabel("Cosine Similarity Score")
     plt.ylabel("Frequency")
     plt.legend()
