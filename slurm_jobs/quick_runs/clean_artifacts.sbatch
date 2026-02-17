@@ -7,6 +7,6 @@
 #SBATCH -e slurm_jobs/quick_runs/logs/clean_artifacts_err.txt
 
 cd /media/studies/ehr_study/analysis/mferguson/
-echo "Removing artifacts..."
+echo "Removing artifacts and json..."
 rm -rf patient_json/ && rm -rf sliced_patient_json/ && rm -rf unsliced_patient_json/ && rm -rf artifacts/
-echo "Artifacts removed!"
+echo "Artifacts and json removed!"
