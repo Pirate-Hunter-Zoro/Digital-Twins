@@ -51,7 +51,7 @@ SELECT id, vector, chronological_length FROM vectors
         plt.savefig(Path(os.environ['RESULTS_DIR']) / 'history_length_histogram.png')
         plt.close()
         
-    def get_narrative(self, id: str) -> Optional[str]:
+    def get_narrative(self, id: str) -> str:
         """
         Helper method to return the narrative corresponding with the input hashed ID calculated from the narrative
         
@@ -65,13 +65,9 @@ SELECT id, vector, chronological_length FROM vectors
 SELECT text FROM vectors WHERE id=?
             """,
             (id,))
-        row = self.cursor.fetchone()
-        if row is not None:
-            return row[0]
-        else:
-            return None
-    
-    def get_patient_id(self, id: str) -> Optional[str]:
+        self.cursor.fetchone()[0]
+        
+    def get_patient_id(self, id: str) -> str:
         """
         Helper method to return the patient id corresponding with the narrative that has the input hashed ID calculated from the narrative
         
@@ -85,11 +81,7 @@ SELECT text FROM vectors WHERE id=?
 SELECT patient_id FROM vectors WHERE id=?
             """,
             (id,))
-        row = self.cursor.fetchone()
-        if row is not None:
-            return row[0]
-        else:
-            return None
+        return self.cursor.fetchone()[0]
 
     def get_vector(self, id: str) -> np.array:
         """
@@ -111,7 +103,7 @@ SELECT vector FROM vectors WHERE id=?
         else:
             return None
         
-    def get_time_length(self, id: str) -> int:
+    def get_chronological_length(self, id: str) -> int:
         """
         Helper method to return the chronological length in days of the corresponding with the narrative that has the input hashed ID calculated from the narrative
         
@@ -125,11 +117,7 @@ SELECT vector FROM vectors WHERE id=?
 SELECT chronological_length FROM vectors WHERE id=?
             """,
             (id,))
-        row = self.cursor.fetchone()
-        if row is not None:
-            return row[0]
-        else:
-            return None
+        return self.cursor.fetchone()[0]
         
     def search(self, query_vector: np.array, exclude_id: str=None) -> List[Tuple[str, float]]:
         """

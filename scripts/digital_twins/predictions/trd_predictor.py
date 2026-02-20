@@ -40,7 +40,11 @@ class TRDPredictor:
         Returns:
             list[dict]: Similarity scores, etc. of all neighbor patients
         """
-        index_narrative, index_vector, index_patient_id = self.retriever.get_narrative(id=index_id), self.retriever.get_vector(id=index_id), self.retriever.get_patient_id(id=index_id)
+        index_narrative, index_vector, index_patient_id, chronological_length =\
+            self.retriever.get_narrative(id=index_id),\
+                self.retriever.get_vector(id=index_id),\
+                    self.retriever.get_patient_id(id=index_id),\
+                        self.retriever.get_chronological_length(id=index_id)
         neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id)
         for neighbor_narrative_hash_id, _ in neighbors:
             # Quick check to ensure this patient is not included in the neighbors
@@ -70,6 +74,7 @@ class TRDPredictor:
             neighbor_trd_flag = self.get_trd_status(candidate_patient_id=neighbor_patient_id)
             neighborhood_data.append({
                 "anchor_id": index_id,
+                "chronological_length": chronological_length,
                 "anchor_patient_id": index_patient_id,
                 "neighbor_id": neighbor_narrative_hash_id,
                 "neighbor_patient_id": neighbor_patient_id,

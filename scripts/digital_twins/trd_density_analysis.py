@@ -5,7 +5,6 @@ from sklearn.metrics import (
     roc_auc_score,
     brier_score_loss,
 )
-from sklearn.calibration import calibration_curve
 from pathlib import Path
 import os
 
@@ -64,9 +63,10 @@ def stratify_by_density(
     
     Returns the modified DataFrame.
     """
-    pass
+    df['density_bin'] = pd.qcut(df[metric_col], q=n_bins, labels=['Q1 (Dense)']+[f'Q{d}' for d in range(2, n_bins)]+[f'Q{n_bins} (Sparse)'])
+    return df
 
-def compute_bin_metrics(
+def compute_density_bin_scores(
     stratified_df: pd.DataFrame
 ) -> pd.DataFrame:
     """
@@ -78,12 +78,19 @@ def compute_bin_metrics(
     
     Returns a summary DataFrame indexed by bin.
     """
-    pass
+    grouped_df = stratified_df.groupby(['density_bin', 'strategy'])
+    def extractor(df_bin):
+        true_labels = df_bin['true_label']
+        predicted_risks = df_bin['predicted_risk']
+        # Find metrics on this - if it breaks, let it - I want to see the error
+        roc_score = roc_auc_score(y_true=true_labels, y_score=predicted_risks)
+        brier_score = brier_score_loss(y_true=true_labels, y_prob=predicted_risks)
+        patient_count_in_bin = len(df_bin)
+        return pd.Series([roc_score, brier_score, patient_count_in_bin], index=['roc_score', 'brier_score', 'patient_count_in_bin'])
+    return grouped_df.apply(extractor).reset_index()
 
 def plot_density_impact(
     performance_summary: pd.DataFrame, 
-    metric_name: str,
-    output_path: str
 ) -> None:
     """
     Generates a dual-axis line plot:
@@ -93,10 +100,98 @@ def plot_density_impact(
     
     Saves the plot to output_path.
     """
-    pass
+    for strat in performance_summary['strategy'].unique():
+        fig, ax1 = plt.subplots(figsize=(10,6))
+        ax2 = ax1.twinx() # Share x axis
+        filtered_df = performance_summary[performance_summary['strategy'] == strat]
+        ax1.plot(filtered_df['density_bin'], filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
+        ax2.plot(filtered_df['density_bin'], filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
+        ax1.set_xlabel('Density Bin')
+        ax1.set_ylabel('ROC Score')
+        ax1.legend(loc='upper left')
+        ax2.set_ylabel('Brier Score')
+        ax2.legend(loc='upper right')
+        fig.savefig(f"{os.environ['RESULTS_DIR']}/scores_by_density_{strat}.png")
+        plt.close(fig)
+
+def stratify_by_chronology(
+    df: pd.DataFrame, 
+    metric_col: str = 'chronological_length', 
+    n_bins: int = 5
+) -> pd.DataFrame:
+    """
+    Bins the dataframe into quintiles based on the chronological history length in days.
+    
+    Adds a 'chronological_bin' column (e.g., 'Q1 (Short)', 'Q5 (Long)').
+    
+    Returns the modified DataFrame.
+    """
+    df['chronological_bin'] = pd.qcut(df[metric_col], q=n_bins, labels=['Q1 (Short)']+[f'Q{d}' for d in range(2, n_bins)]+[f'Q{n_bins} (Long)'])
+    return df
+
+def compute_chronological_bin_scores(
+    stratified_df: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Groups by 'chronological_bin' and calculates:
+    - AUC (Area Under Curve)
+    - Brier Score
+    - ECE (Expected Calibration Error)
+    - Count (N patients in bin)
+    
+    Returns a summary DataFrame indexed by bin.
+    """
+    grouped_df = stratified_df.groupby(['chronological_bin', 'strategy'])
+    def extractor(df_bin):
+        true_labels = df_bin['true_label']
+        predicted_risks = df_bin['predicted_risk']
+        # Find metrics on this - if it breaks, let it - I want to see the error
+        roc_score = roc_auc_score(y_true=true_labels, y_score=predicted_risks)
+        brier_score = brier_score_loss(y_true=true_labels, y_prob=predicted_risks)
+        patient_count_in_bin = len(df_bin)
+        return pd.Series([roc_score, brier_score, patient_count_in_bin], index=['roc_score', 'brier_score', 'patient_count_in_bin'])
+    return grouped_df.apply(extractor).reset_index()
+
+def plot_chronological_length_impact(
+    performance_summary: pd.DataFrame, 
+) -> None:
+    """
+    Generates a dual-axis line plot:
+    - X-Axis: Chronological Length Bin (shorter -> longer)
+    - Y-Axis Left: AUC (Higher is better)
+    - Y-Axis Right: ECE/Brier (Lower is better)
+    
+    Saves the plot to output_path.
+    """
+    for strat in performance_summary['strategy'].unique():
+        fig, ax1 = plt.subplots(figsize=(10,6))
+        ax2 = ax1.twinx() # Share x axis
+        filtered_df = performance_summary[performance_summary['strategy'] == strat]
+        ax1.plot(filtered_df['chronological_bin'], filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
+        ax2.plot(filtered_df['chronological_bin'], filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
+        ax1.set_xlabel('Chronological Length Bin')
+        ax1.set_ylabel('ROC Score')
+        ax1.legend(loc='upper left')
+        ax2.set_ylabel('Brier Score')
+        ax2.legend(loc='upper right')
+        fig.savefig(f"{os.environ['RESULTS_DIR']}/scores_by_chronological_length_{strat}.png")
+        plt.close(fig)
 
 def main():
-    pass
+    df = load_and_merge_data()
+    
+    density_metrics_df=compute_density_metrics(df) 
+    density_stratified = stratify_by_density(density_metrics_df)
+    density_scores_by_bin = compute_density_bin_scores(density_stratified)
+    # Save the .csv so we can see the bin counts
+    density_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / "density_performance_summary.csv")
+    plot_density_impact(density_scores_by_bin)
+    
+    chronological_stratified = stratify_by_chronology(df)
+    chronological_scores_by_bin = compute_chronological_bin_scores(chronological_stratified)
+    # Again save the .csv so we can see the bin counts
+    chronological_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / "chronology_performance_summary.csv")
+    plot_chronological_length_impact(chronological_scores_by_bin)
 
 if __name__=="__main__":
     main()
