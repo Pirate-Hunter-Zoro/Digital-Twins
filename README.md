@@ -125,7 +125,7 @@ graph TD
 
 * **`trd_density_analysis.py`**:
   * **Battle 3: Environmental Diagnostics (Density & Chronology).** Investigates how the structural environment of the embedding space and data richness impact model reliability.
-  * **Density Stratification**: Bins patients into quintiles based on their **kNN Radius** (mean distance of top-$k$ neighbors) to evaluate if sparse neighborhoods degrade model discrimination (AUC) or calibration (Brier Score).
+  * **Density Stratification**: Bins patients into quintiles based on their **kNN Radius** (mean distance of top-$k$ neighbors - e.g. 1 - mean(cos_sims)) to evaluate if sparse neighborhoods degrade model discrimination (AUC) or calibration (Brier Score).
   * **Chronology Confounding**: Bins patients into quintiles based on their **Chronological Length** (days of patient history) to test if the model is inappropriately leveraging data volume as a proxy for clinical risk.
   * **Metrics**: Calculates AUC, Brier Score, and Patient Count per bin across all weighting strategies (Uniform, Cosine, LLM, Combined).
   * **Output**: Generates dual-axis performance plots (`scores_by_density_{strategy}.png` and `scores_by_chronological_length_{strategy}.png`) to visualize degradation trends.
@@ -166,7 +166,7 @@ Stores the raw embeddings.
 | `patient_id` | `TEXT` | Patient ID of the corresponding narrative. |
 | `vector` | `BLOB` | The numpy array (`float32`) serialized to bytes. |
 | `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
-| `chronological_length` | `INTEGER` | Chronological length in days of the patient;s history window. |
+| `chronological_length` | `INTEGER` | Chronological length in days of the patient's history window. |
 
 **Table: `similarities**`
 Stores the cosine similarity of the embeddings associated with the string hash ids.

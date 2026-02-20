@@ -76,7 +76,7 @@ SELECT full_response FROM llm_judgements WHERE id_a=? AND id_b=?
         self.connection.execute('''
 INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response) VALUES (?, ?, ?, ?)
 ''',
-                (pair[0], pair[1], score, json.dumps(response_json))
+                (pair[0], pair[1], score, json.dumps(response_json, indent=4))
         )
         self.connection.commit()
         

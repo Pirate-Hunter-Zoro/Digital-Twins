@@ -63,7 +63,7 @@ class PromptLoader:
 
     def _render_user(self, filename: str, patient_json: dict) -> str:
         tmpl = self._read(filename)
-        payload = json.dumps(patient_json, ensure_ascii=False)
+        payload = json.dumps(patient_json, ensure_ascii=False, indent=4)
         if "{patient_json}" in tmpl:
             return tmpl.replace("{patient_json}", payload)
         return tmpl

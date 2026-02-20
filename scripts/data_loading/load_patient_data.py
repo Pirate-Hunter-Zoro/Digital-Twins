@@ -57,9 +57,9 @@ def _load_one_patient(patient_args: Tuple[str, Path, Path, Path, Dict]) -> Tuple
         sliced_json, unsliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=verified_anchor[0], mdd_date=verified_anchor[1])
         # Save the json to avoid re-computation
         with open(sliced_path, 'w') as f:
-            json.dump(sliced_json, f)
+            json.dump(sliced_json, f, indent=4)
         with open(unsliced_path, 'w') as f:
-            json.dump(unsliced_json, f)
+            json.dump(unsliced_json, f, indent=4)
         return (sliced_json, unsliced_json)
     else:
         # Anchor date was within a 'washout' period
