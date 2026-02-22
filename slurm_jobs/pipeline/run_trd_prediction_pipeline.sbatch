@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/pipeline/logs/rd_prediction_pipeline_%a_out.txt
+#SBATCH -o slurm_jobs/pipeline/logs/trd_prediction_pipeline_%a_out.txt
 #SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_pipeline_%a_err.txt
 #SBATCH --array=0-2
 
