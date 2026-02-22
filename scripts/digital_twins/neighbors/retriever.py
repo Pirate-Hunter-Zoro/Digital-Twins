@@ -97,11 +97,7 @@ SELECT patient_id FROM vectors WHERE id=?
 SELECT vector FROM vectors WHERE id=?
             """,
             (id,))
-        row = self.cursor.fetchone()
-        if row is not None:
-            return np.frombuffer(row[0], dtype=np.float32)
-        else:
-            return None
+        return np.frombuffer(self.cursor.fetchone()[0], dtype=np.float32)
         
     def get_chronological_length(self, id: str) -> int:
         """

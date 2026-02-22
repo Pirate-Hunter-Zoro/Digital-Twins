@@ -123,7 +123,7 @@ graph TD
   * **Output**: Generates `cosine_score_random_vs_neighbor.png` (Visual Validity) and `battle_1_chronology_check.csv` (Confounding Metrics + Scatter Plots).
   * **Output**: `battle_1_summary.csv` (Metrics), `battle_1_predictions.csv` (Row-level logs), and comparative calibration/ROC plots.
 
-* **`trd_density_analysis.py`**:
+* **`trd_binning_analysis.py`**:
   * **Battle 3: Environmental Diagnostics (Density & Chronology).** Investigates how the structural environment of the embedding space and data richness impact model reliability.
   * **Density Stratification**: Bins patients into quintiles based on their **kNN Radius** (mean distance of top-$k$ neighbors - e.g. 1 - mean(cos_sims)) to evaluate if sparse neighborhoods degrade model discrimination (AUC) or calibration (Brier Score).
   * **Chronology Confounding**: Bins patients into quintiles based on their **Chronological Length** (days of patient history) to test if the model is inappropriately leveraging data volume as a proxy for clinical risk.

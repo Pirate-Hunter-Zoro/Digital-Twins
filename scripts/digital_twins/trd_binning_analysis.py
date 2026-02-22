@@ -22,7 +22,11 @@ def load_and_merge_data() -> pd.DataFrame:
     predictions_results_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / "battle_1_predictions.csv")
     neighbor_df = load_neighborhood_data()
     # Group by anchor id but then turn back into regular column
-    neighbor_df = neighbor_df.groupby('anchor_id')['cosine_sim'].apply(list).reset_index()
+    neighbor_df = neighbor_df.groupby('anchor_id').agg({\
+                                        'cosine_sim': list,
+                                        'chronological_length': 'first'\
+                                        })\
+                                    .reset_index()
     merged = pd.merge(predictions_results_df, neighbor_df, on='anchor_id').rename(columns={'cosine_sim': 'neighbor_scores'})
     return merged
 
@@ -87,7 +91,7 @@ def compute_density_bin_scores(
         brier_score = brier_score_loss(y_true=true_labels, y_proba=predicted_risks)
         patient_count_in_bin = len(df_bin)
         return pd.Series([roc_score, brier_score, patient_count_in_bin], index=['roc_score', 'brier_score', 'patient_count_in_bin'])
-    return grouped_df.apply(extractor).reset_index()
+    return grouped_df.apply(extractor, include_groups=False).reset_index()
 
 def plot_density_impact(
     performance_summary: pd.DataFrame, 
@@ -150,7 +154,7 @@ def compute_chronological_bin_scores(
         brier_score = brier_score_loss(y_true=true_labels, y_proba=predicted_risks)
         patient_count_in_bin = len(df_bin)
         return pd.Series([roc_score, brier_score, patient_count_in_bin], index=['roc_score', 'brier_score', 'patient_count_in_bin'])
-    return grouped_df.apply(extractor).reset_index()
+    return grouped_df.apply(extractor, include_groups=False).reset_index()
 
 def plot_chronological_length_impact(
     performance_summary: pd.DataFrame, 
