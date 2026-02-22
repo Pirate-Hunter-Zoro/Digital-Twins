@@ -65,7 +65,7 @@ SELECT id, vector, chronological_length FROM vectors
 SELECT text FROM vectors WHERE id=?
             """,
             (id,))
-        self.cursor.fetchone()[0]
+        return self.cursor.fetchone()[0]
         
     def get_patient_id(self, id: str) -> str:
         """
