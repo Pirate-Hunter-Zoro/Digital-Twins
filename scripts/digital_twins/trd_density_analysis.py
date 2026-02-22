@@ -84,7 +84,7 @@ def compute_density_bin_scores(
         predicted_risks = df_bin['predicted_risk']
         # Find metrics on this - if it breaks, let it - I want to see the error
         roc_score = roc_auc_score(y_true=true_labels, y_score=predicted_risks)
-        brier_score = brier_score_loss(y_true=true_labels, y_prob=predicted_risks)
+        brier_score = brier_score_loss(y_true=true_labels, y_proba=predicted_risks)
         patient_count_in_bin = len(df_bin)
         return pd.Series([roc_score, brier_score, patient_count_in_bin], index=['roc_score', 'brier_score', 'patient_count_in_bin'])
     return grouped_df.apply(extractor).reset_index()
@@ -147,7 +147,7 @@ def compute_chronological_bin_scores(
         predicted_risks = df_bin['predicted_risk']
         # Find metrics on this - if it breaks, let it - I want to see the error
         roc_score = roc_auc_score(y_true=true_labels, y_score=predicted_risks)
-        brier_score = brier_score_loss(y_true=true_labels, y_prob=predicted_risks)
+        brier_score = brier_score_loss(y_true=true_labels, y_proba=predicted_risks)
         patient_count_in_bin = len(df_bin)
         return pd.Series([roc_score, brier_score, patient_count_in_bin], index=['roc_score', 'brier_score', 'patient_count_in_bin'])
     return grouped_df.apply(extractor).reset_index()
