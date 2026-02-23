@@ -67,7 +67,7 @@ def stratify_by_density(
     
     Returns the modified DataFrame.
     """
-    df['density_bin'] = pd.qcut(df[metric_col], q=n_bins, labels=['Q1 (Dense)']+[f'Q{d}' for d in range(2, n_bins)]+[f'Q{n_bins} (Sparse)'])
+    df['density_bin'] = pd.qcut(df[metric_col], q=n_bins, labels=['Q1 (Dense)']+[f'Q{d}' for d in range(2, n_bins)]+[f'Q{n_bins} (Sparse)'], duplicates='drop')
     return df
 
 def compute_density_bin_scores(
@@ -82,7 +82,7 @@ def compute_density_bin_scores(
     
     Returns a summary DataFrame indexed by bin.
     """
-    grouped_df = stratified_df.groupby(['density_bin', 'strategy'])
+    grouped_df = stratified_df.groupby(['density_bin', 'strategy'], observed=False)
     def extractor(df_bin):
         true_labels = df_bin['true_label']
         predicted_risks = df_bin['predicted_risk']
@@ -145,7 +145,7 @@ def compute_chronological_bin_scores(
     
     Returns a summary DataFrame indexed by bin.
     """
-    grouped_df = stratified_df.groupby(['chronological_bin', 'strategy'])
+    grouped_df = stratified_df.groupby(['chronological_bin', 'strategy'], observed=False)
     def extractor(df_bin):
         true_labels = df_bin['true_label']
         predicted_risks = df_bin['predicted_risk']
