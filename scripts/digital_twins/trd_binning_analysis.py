@@ -108,8 +108,8 @@ def plot_density_impact(
         fig, ax1 = plt.subplots(figsize=(10,6))
         ax2 = ax1.twinx() # Share x axis
         filtered_df = performance_summary[performance_summary['strategy'] == strat]
-        ax1.plot(filtered_df['density_bin'], filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
-        ax2.plot(filtered_df['density_bin'], filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
+        ax1.plot(filtered_df['density_bin'].astype(str), filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
+        ax2.plot(filtered_df['density_bin'].astype(str), filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
         ax1.set_xlabel('Density Bin')
         ax1.set_ylabel('ROC Score')
         ax1.legend(loc='upper left')
