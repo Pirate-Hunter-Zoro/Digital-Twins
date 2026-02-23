@@ -126,7 +126,7 @@ def stratify_by_chronology(
     """
     Bins the dataframe into quintiles based on the chronological history length in days.
     
-    Adds a 'chronological_bin' column (e.g., 'Q1 (Short)', 'Q5 (Long)').
+    Adds a 'chronological_bin' column.
     
     Returns the modified DataFrame.
     """
