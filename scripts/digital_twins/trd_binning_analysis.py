@@ -130,7 +130,7 @@ def stratify_by_chronology(
     
     Returns the modified DataFrame.
     """
-    df['chronological_bin'] = pd.qcut(df[metric_col], q=n_bins, labels=['Q1 (Short)']+[f'Q{d}' for d in range(2, n_bins)]+[f'Q{n_bins} (Long)'])
+    df['chronological_bin'] = pd.qcut(df[metric_col], q=n_bins, duplicates='drop')
     return df
 
 def compute_chronological_bin_scores(
