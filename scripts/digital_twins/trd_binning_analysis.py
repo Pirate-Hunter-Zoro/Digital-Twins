@@ -67,7 +67,7 @@ def stratify_by_density(
     
     Returns the modified DataFrame.
     """
-    df['density_bin'] = pd.qcut(df[metric_col], q=n_bins, labels=['Q1 (Dense)']+[f'Q{d}' for d in range(2, n_bins)]+[f'Q{n_bins} (Sparse)'], duplicates='drop')
+    df['density_bin'] = pd.qcut(df[metric_col], q=n_bins, duplicates='drop')
     return df
 
 def compute_density_bin_scores(
@@ -171,8 +171,8 @@ def plot_chronological_length_impact(
         fig, ax1 = plt.subplots(figsize=(10,6))
         ax2 = ax1.twinx() # Share x axis
         filtered_df = performance_summary[performance_summary['strategy'] == strat]
-        ax1.plot(filtered_df['chronological_bin'], filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
-        ax2.plot(filtered_df['chronological_bin'], filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
+        ax1.plot(filtered_df['chronological_bin'].astype(str), filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
+        ax2.plot(filtered_df['chronological_bin'].astype(str), filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
         ax1.set_xlabel('Chronological Length Bin')
         ax1.set_ylabel('ROC Score')
         ax1.legend(loc='upper left')
