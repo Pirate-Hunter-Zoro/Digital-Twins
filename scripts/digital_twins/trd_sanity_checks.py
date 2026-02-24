@@ -73,3 +73,7 @@ def run_cosine_check():
     plt.ylabel('Frequency')
     plt.savefig(Path(os.environ['RESULTS_DIR']) / 'cosine_score_random_vs_neighbor.png')
     plt.close()
+    
+if __name__=="__main__":
+    run_chonology_check()
+    run_cosine_check()
