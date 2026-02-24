@@ -198,3 +198,29 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
     processed_patient['days_of_history'] = timespan_unsliced
     
     return (processed_sliced_patient, processed_patient)
+
+if __name__=="__main__":
+    from pathlib import Path
+    import json
+    json_path = Path("/media/studies/ehr_study/analysis/mferguson/sliced_patient_json/")
+    ids = []
+    empty_ids = []
+    record_every = 1000
+    done = 0
+    for json_file in json_path.glob("*.json"):
+        id = json_file.stem[8:]
+        with open(json_file, 'r') as f:
+            contents = f.read()
+            if len(contents) == 0:
+                empty_ids.append(id)
+            else:
+                patient_json = json.loads(contents)
+                if patient_json['days_of_history'] == 1:
+                    ids.append(id)
+        done += 1
+        if done % record_every == 0:
+            print(f"Scanned {done} patient json files...", flush=True)
+    with open(Path("test_data/length_1_ids.txt"), 'w') as f:
+        f.write("\n".join(ids))
+    with open(Path("test_data/empty_ids.txt"), 'w') as f:
+        f.write("\n".join(empty_ids))
