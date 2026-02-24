@@ -243,3 +243,12 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 sbatch slurm_jobs/digital_twins/run_trd_prediction_orchestrator.sbatch
 
 ```
+
+## Downloading Models
+
+```bash
+conda activate ehr_env
+export HF_HOME=/media/studies/ehr_study/analysis/mferguson/models/hf_cache
+cd /media/studies/ehr_study/analysis/mferguson/models/
+hf download BAAI/bge-en-icl --local-dir bge-en-icl
+```

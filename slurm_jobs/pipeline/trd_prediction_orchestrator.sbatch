@@ -12,6 +12,7 @@ CANCEL_SCRIPT="${SLURM_SUBMIT_DIR}/slurm_jobs/pipeline/cancel_pipeline.sh"
 echo "#!/bin/bash" > "${CANCEL_SCRIPT}"
 echo "echo 'Killing prediction pipeline...'" >> "${CANCEL_SCRIPT}"
 chmod +x "${CANCEL_SCRIPT}"
+echo "scancel ${SLURM_JOB_ID} # Orchestrator Job" >> "${CANCEL_SCRIPT}"
 
 JSON_JOB_ID=$(sbatch --parsable slurm_jobs/pipeline/load_patient_json.sbatch)
 echo "scancel ${JSON_JOB_ID} # Json Job" >> "${CANCEL_SCRIPT}"
