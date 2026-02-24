@@ -41,3 +41,6 @@ python -m scripts.digital_twins.trd_sanity_checks
 LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
 mkdir -p "${LOCAL_RESULTS_DIR}"
 rsync -av "${RESULTS_DIR}/" "${LOCAL_RESULTS_DIR}/"
+
+# Cancel the job
+bash slurm_jobs/pipeline/cancel_pipeline.sh
