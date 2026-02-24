@@ -99,7 +99,7 @@ graph TD
   * **Battle 1: Prediction & Calibration.**
   * **Digital Twin Matcher Logic**:
       1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient).
-      2. Scores neighbors via weighting strategies (Uniform, Cosine, LLM, Combined).
+      2. Scores neighbors via weighting strategies (Uniform, Cosine, LLM, Combined (Harmonic Mean of Cosine and LLM)).
       3. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$).
   * **Analysis & Metrics**:
     * **Discrimination**: ROC AUC, AUPRC.
