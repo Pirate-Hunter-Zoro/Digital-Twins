@@ -144,7 +144,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime, mdd_date: 
                 unsliced_encounter['procedures'].append(procedure_copy)
         
         processed_patient['encounters'].append(unsliced_encounter)
-        if encounter_start_date >= start_date:
+        if encounter_start_date >= start_date and encounter_start_date <= anchor_date:
             processed_sliced_patient['encounters'].append(sliced_encounter)
             
         for med in encounter['medications']:
