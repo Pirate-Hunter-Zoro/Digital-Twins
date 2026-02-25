@@ -83,9 +83,9 @@ def load_patient_data() -> Iterator[Tuple[Dict, Dict]]:
         anchor_data = patient_info.to_dict()
         
         worker_args.append((
-            SLICED_JSON_PATH / f"patient_{patient_id}.json",
-            UNSLICED_JSON_PATH / f"patient_{patient_id}.json",
-            RAW_JSON_PATH / f"patient_{patient_id}.json",
+            SLICED_JSON_PATH / f"{patient_id}.json",
+            UNSLICED_JSON_PATH / f"{patient_id}.json",
+            RAW_JSON_PATH / f"{patient_id}.json",
             anchor_data
         ))
         

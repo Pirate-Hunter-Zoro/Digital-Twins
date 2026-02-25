@@ -208,7 +208,7 @@ if __name__=="__main__":
     record_every = 1000
     done = 0
     for json_file in json_path.glob("*.json"):
-        id = json_file.stem[8:]
+        id = json_file.stem
         with open(json_file, 'r') as f:
             contents = f.read()
             if len(contents) == 0:

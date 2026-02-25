@@ -127,7 +127,7 @@ def process_patient(patient_id: str, raw: bool=False) -> bool:
     :return: Flag to indicate if it was necessary to create the json from scratch or if it was already found
     :rtype: bool
     """
-    output_file_path = PATIENT_JSON_DIR / f'patient_{patient_id}.json'
+    output_file_path = PATIENT_JSON_DIR / f'{patient_id}.json'
     if output_file_path.exists() and not SCRUB:
         # Cleaned patient json already exists - return value to indicate we did NOT have to process this patient
         return False
