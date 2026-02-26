@@ -31,13 +31,11 @@ def get_bool_str(val: bool) -> str:
         return "Present"
     return "Absent"
 
-def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict) -> tuple[str, int]:
+def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
     """Parse the sliced and unsliced patient json to generate a deterministic markdown file output
 
     Args:
         sliced_json (Dict): Anchor date going back a certain number of years
-        unsliced_json (Dict): Anchor date going back to the beginning of the patient's history
-
     Returns:
         tuple[str, int]: Patient id and chronologic length of the patient
     """
@@ -58,7 +56,7 @@ def generate_deterministic_narrative(sliced_json: Dict, unsliced_json: Dict) -> 
     ]
     
     psych_comorbidity_dict = psych_comorbidity(sliced_json)
-    medical_comorbidity_dict = medical_comorbidity(unsliced_json) # We care about this EVER happening within our anchor
+    medical_comorbidity_dict = medical_comorbidity(sliced_json)
     
     # Various flags
     suicide_flag = suicidality_flag(sliced_json)

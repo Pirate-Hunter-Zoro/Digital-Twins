@@ -1,2 +1,0 @@
-PATIENT_JSON:
-{patient_json}

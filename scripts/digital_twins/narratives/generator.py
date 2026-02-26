@@ -17,17 +17,13 @@ RECORD_EVERY = 1000
 
 # Now deterministically parsed narratives
 
-def _get_deterministic_narrative(sliced_and_unsliced_json: Tuple[Dict]) -> bool:
-    sliced_patient_json, unsliced_patient_json = sliced_and_unsliced_json
-    return generate_deterministic_narrative(sliced_json=sliced_patient_json, unsliced_json=unsliced_patient_json)
-
 def generate_deterministic_narratives():
     """
     Use multiprocessing to generate narratives for all the sampled patients
     """
     narrative_lengths = {'patient_id': [], 'days_of_history': []}
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as thread_pool:
-        for i, (patient_id, history_length) in enumerate(thread_pool.imap_unordered(_get_deterministic_narrative, load_patient_data())):
+        for i, (patient_id, history_length) in enumerate(thread_pool.imap_unordered(generate_deterministic_narrative, load_patient_data())):
             narrative_lengths['patient_id'].append(patient_id)
             narrative_lengths['days_of_history'].append(history_length)
             if (i + 1) % RECORD_EVERY == 0:

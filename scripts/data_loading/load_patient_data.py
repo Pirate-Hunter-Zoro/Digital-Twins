@@ -4,11 +4,12 @@ from pathlib import Path
 import pandas as pd
 import json
 import multiprocessing
+from datetime import datetime
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.data_loading.fit_to_anchor import slice_and_convert_time, find_anchor_date
+from scripts.data_loading.fit_to_anchor import slice_and_convert_time
 from scripts.data_loading.create_cohort import create_cohort
 
 MED_DATE_CSV = Path(os.environ['MDD_MED_DATE_CSV_PATH'])
@@ -25,52 +26,28 @@ UNSLICED_JSON_PATH = Path(os.environ['UNSLICED_PATIENT_JSON_DIR'])
 SLICED_JSON_PATH = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
 
 # Function for a worker to load one patient
-def _load_one_patient(patient_args: Tuple[str, Path, Path, Path, Dict]) -> Tuple[Dict, Dict]:
+def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Dict:
     """
-    Check for validity of the anchor date should it be valid return the sliced and unsliced electronic health record dictionary for the patient
-    
-    :param patient_args: path to the sliced data, path to the unsliced data, path to the raw data, and their anchor information
-    :type patient_args: Tuple[str, Path, Path, Dict]
-    :return: Resulting sliced and unsliced EHR data for said patient
-    :rtype: Tuple[Dict, Dict]
+    Return sliced json of the patient
     """
-    sliced_path, unsliced_path, raw_path, anchor_data = patient_args
-    sliced_json, unsliced_json = None, None
-    if sliced_path.exists() and unsliced_path.exists() and int(os.environ['SCRUB_PATIENT_JSON']) == 0:
+    sliced_path, raw_path, anchor_data = patient_args
+    sliced_json = None
+    if sliced_path.exists() and int(os.environ['SCRUB_PATIENT_JSON']) == 0:
         try:
             with open(sliced_path, 'r') as f:
                 sliced_json = json.load(f)
-            with open(unsliced_path, 'r') as f:
-                unsliced_json = json.load(f)
-            return (sliced_json, unsliced_json)
+                return sliced_json
         except json.JSONDecodeError as e:
-            print(f"Exception occured when reading from either {sliced_path} or {unsliced_path}... {str(e)}... will try to recreate...", flush=True)
+            print(f"Exception occured when reading from {sliced_path}... {str(e)}... will try to recreate...", flush=True)
     
     # Load the patient's raw data
     with open(raw_path, 'r') as f:
         raw_json = json.load(f)
-    # Verify the anchor date and create the sliced dictionary
-    verified_anchor = find_anchor_date(anchor_data=anchor_data)
-    if verified_anchor is not None:
-        os.makedirs(UNSLICED_JSON_PATH, exist_ok=True)
-        os.makedirs(SLICED_JSON_PATH, exist_ok=True)
-        sliced_json, unsliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=verified_anchor[0], mdd_date=verified_anchor[1])
-        # Save the json to avoid re-computation
-        with open(sliced_path, 'w') as f:
-            json.dump(sliced_json, f, indent=4)
-        with open(unsliced_path, 'w') as f:
-            json.dump(unsliced_json, f, indent=4)
-        return (sliced_json, unsliced_json)
-    else:
-        # Anchor date was within a 'washout' period
-        return None
+        return slice_and_convert_time(patient_dict=raw_json, anchor_date=datetime.strptime(anchor_data.get('MedStartInstant'), '%Y-%m-%d'))
     
-def load_patient_data() -> Iterator[Tuple[Dict, Dict]]:
+def load_patient_data() -> Iterator[Dict]:
     """
-    Returns the sliced and unsliced information for all patients
-    
-    :return: For all sampled patients, return their sliced and unsliced health record going back from their anchor date
-    :rtype: Iterator[Tuple[Dict, Dict]]
+    Returns the sliced JSON for all patients
     """
     # Find the intersection of the medication dates
     cohort_ids = COHORT_DF['PatientEpicId_SH']
@@ -84,12 +61,11 @@ def load_patient_data() -> Iterator[Tuple[Dict, Dict]]:
         
         worker_args.append((
             SLICED_JSON_PATH / f"{patient_id}.json",
-            UNSLICED_JSON_PATH / f"{patient_id}.json",
             RAW_JSON_PATH / f"{patient_id}.json",
             anchor_data
         ))
         
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as pool:
-        for json_pair in pool.imap_unordered(func=_load_one_patient, iterable=worker_args):
-            if json_pair is not None:
-                yield json_pair
+        for sliced_json in pool.imap_unordered(func=_load_one_patient, iterable=worker_args):
+            if sliced_json is not None:
+                yield sliced_json
