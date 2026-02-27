@@ -32,7 +32,7 @@ def get_bool_str(val: bool) -> str:
     return "Absent"
 
 def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
-    """Parse the sliced and unsliced patient json to generate a deterministic markdown file output
+    """Parse the sliced patient json to generate a deterministic markdown file output
 
     Args:
         sliced_json (Dict): Anchor date going back a certain number of years

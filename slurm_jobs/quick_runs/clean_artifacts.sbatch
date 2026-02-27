@@ -8,5 +8,5 @@
 
 cd /media/studies/ehr_study/analysis/mferguson/
 echo "Removing artifacts and json..."
-rm -rf patient_json/ && rm -rf sliced_patient_json/ && rm -rf unsliced_patient_json/ && rm -rf artifacts/
+rm -rf patient_json/ && rm -rf sliced_patient_json/ && rm -rf artifacts/
 echo "Artifacts and json removed!"

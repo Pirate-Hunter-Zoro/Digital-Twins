@@ -22,7 +22,6 @@ if not COHORT_PATH.exists():
 COHORT_DF = pd.read_csv(COHORT_PATH, escapechar='\\', low_memory=False)
 
 RAW_JSON_PATH = Path(os.environ['PATIENT_JSON_DIR'])
-UNSLICED_JSON_PATH = Path(os.environ['UNSLICED_PATIENT_JSON_DIR'])
 SLICED_JSON_PATH = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
 
 # Function for a worker to load one patient
