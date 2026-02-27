@@ -115,7 +115,7 @@ SELECT chronological_length FROM vectors WHERE id=?
             (id,))
         return self.cursor.fetchone()[0]
         
-    def search(self, query_vector: np.array, exclude_id: str=None) -> List[Tuple[str, float]]:
+    def search(self, query_vector: np.array, exclude_id: str=None, random: bool=False) -> List[Tuple[str, float]]:
         """
         Find the nearest patients to this patient in terms of cosine similarity of the vectors
         
@@ -138,12 +138,21 @@ SELECT chronological_length FROM vectors WHERE id=?
             idx = self.ids_to_index[exclude_id]
             similarities[idx] = -1.0
         
-        # Go through and find the kth largest value, and ensure everything to the right is bigger than it, so grab the last k values of this partitioned array to get the largest similarity values
-        unsorted_top_k_indices = np.argpartition(similarities, -k)[-k:]
-        unsorted_top_k_scores = similarities[unsorted_top_k_indices]
-        # Sort only the most similar indices
-        sorted_k_indices = np.argsort(unsorted_top_k_scores)[::-1] # DESCENDING sorting order - return the indices that would put the highest similarity scores first
-        top_k_indices = unsorted_top_k_indices[sorted_k_indices]
-        top_k_scores = unsorted_top_k_scores[sorted_k_indices]
-        
-        return [(self.ids[index], score) for index, score in zip(top_k_indices, top_k_scores)]
+        if not random: # Find nearest neighbors by cosine similarity
+            # Go through and find the kth largest value, and ensure everything to the right is bigger than it, so grab the last k values of this partitioned array to get the largest similarity values
+            unsorted_top_k_indices = np.argpartition(similarities, -k)[-k:]
+            unsorted_top_k_scores = similarities[unsorted_top_k_indices]
+            # Sort only the most similar indices
+            sorted_k_indices = np.argsort(unsorted_top_k_scores)[::-1] # DESCENDING sorting order - return the indices that would put the highest similarity scores first
+            top_k_indices = unsorted_top_k_indices[sorted_k_indices]
+            top_k_scores = unsorted_top_k_scores[sorted_k_indices]
+            
+            return [(self.ids[index], score) for index, score in zip(top_k_indices, top_k_scores)]
+        else:
+            # Find random neighbors
+            available_ids = self.ids.copy()
+            if exclude_id != None and exclude_id in self.ids_to_index.keys():
+                available_ids.remove(exclude_id)
+            available_ids = np.array(available_ids)
+            random_neighbors = np.random.choice(available_ids, size=k, replace=False).tolist()
+            return [(id, similarities[self.ids_to_index[id]]) for id in random_neighbors]

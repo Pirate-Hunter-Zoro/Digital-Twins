@@ -42,7 +42,9 @@ def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Dict:
     # Load the patient's raw data
     with open(raw_path, 'r') as f:
         raw_json = json.load(f)
-        return slice_and_convert_time(patient_dict=raw_json, anchor_date=datetime.strptime(anchor_data.get('MedStartInstant'), '%Y-%m-%d'))
+        sliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=datetime.strptime(anchor_data.get('MedStartInstant'), '%Y-%m-%d'))
+        with open(sliced_path, 'w') as f:
+            json.dump(sliced_json, f, indent=4)
     
 def load_patient_data() -> Iterator[Dict]:
     """
