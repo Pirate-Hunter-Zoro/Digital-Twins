@@ -45,6 +45,7 @@ def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Dict:
         sliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=datetime.strptime(anchor_data.get('MedStartInstant'), '%Y-%m-%d'))
         with open(sliced_path, 'w') as f:
             json.dump(sliced_json, f, indent=4)
+        return sliced_json
     
 def load_patient_data() -> Iterator[Dict]:
     """
