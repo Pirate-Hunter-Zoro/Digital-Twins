@@ -1,11 +1,13 @@
-from typing import Dict, Tuple
+from typing import Dict, Optional
 from datetime import datetime
 import copy
+import os
+
 from dotenv import load_dotenv
 load_dotenv()
 
 MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
-DEBUG = False
+YEARS_BACK = int(os.environ['YEARS_BACK'])
 
 def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict):
     """
@@ -39,7 +41,20 @@ def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict)
                 }
             )
 
-def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Dict:
+def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optional[Dict]:
+    """Verify that the patient has an MDD diagnosis prior to their anchor date, and that their history extends 2 years or more, and if so return their sliced record
+
+    Args:
+        patient_dict (Dict): Raw json of the patient
+        anchor_date (datetime): Information on the antidepressant anchor date of the patient
+
+    Returns:
+        Optional[Dict]: Sliced record of the patient or null if they do not meet the window criteria
+    """
+    # First loop through every encounter and look for an MDD diagnosis which precedes or occurs at the same time as the anchor date
+    for encounter in patient_dict['encounters']:
+        # TODO
+        pass
     
     processed_sliced_patient = {
         'patient_id': patient_dict['patient_id'],
