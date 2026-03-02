@@ -38,15 +38,14 @@ def safety_comorbidity(patient_dict: Dict) -> Dict[str, bool]:
 
 def suicidality_flag(patient_dict: Dict) -> bool:
     """
-    Go one year prior to the anchor date searching for specific codes
+    Analyze the history window searching for specific suicide codes
     """
     for encounter in patient_dict['encounters']:
-        if encounter['details']['start_visit'] >= -365:
-            for diagnosis in encounter['diagnoses']:
-                codes = diagnosis['codes']
-                for code_info in codes:
-                    if suicidal(code_info['code']):
-                        return True
+        for diagnosis in encounter['diagnoses']:
+            codes = diagnosis['codes']
+            for code_info in codes:
+                if suicidal(code_info['code']):
+                    return True
     return False
 
 def suicidal(diagnosis_code: str) -> bool:

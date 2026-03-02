@@ -26,6 +26,8 @@ from scripts.data_loading.features import (
     get_vitals_average,
 )
 
+YEARS_BACK = int(os.environ['YEARS_BACK'])
+
 def get_bool_str(val: bool) -> str:
     if val:
         return "Present"
@@ -76,8 +78,7 @@ def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
     distinct_nsaid_ingredients = nsaid_burden(sliced_json) # Which have duration at least 7 days
     
     # Utilization
-    in_patient_days_1_yr, num_emergency_1_yr = psych_utilization(sliced_json, 1)
-    in_patient_days_3_yr, num_emergency_3_yr = psych_utilization(sliced_json, 3)
+    in_patient_days, num_emergency = psych_utilization(sliced_json, YEARS_BACK)
     
     # Substance abuse
     sud_names_dict = sud_specifics(sliced_json)
@@ -130,7 +131,7 @@ def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
     # Psych history
     substances = ' | '.join([sud_name for sud_name in sorted(list(sud_names_dict.keys())) if sud_names_dict[sud_name]])
     psych_comorbidities = [f'{psych_arm}: {get_bool_str(psych_comorbidity_dict[psych_arm])}' for psych_arm in psych_comorbidity_dict.keys()]
-    PSYCH_HISTORY = f"### PSYCH HISTORY\n{' | '.join(psych_comorbidities)}\nSUICIDE FLAG (12m): {get_bool_str(suicide_flag)}\nSUBSTANCE ABUSE: {substances if len(substances) > 0 else 'None'}\n"
+    PSYCH_HISTORY = f"### PSYCH HISTORY\n{' | '.join(psych_comorbidities)}\nSUICIDE FLAG ({YEARS_BACK}y): {get_bool_str(suicide_flag)}\nSUBSTANCE ABUSE: {substances if len(substances) > 0 else 'None'}\n"
     
     # Medical comorbidity
     med_comorbidities = [f'{med_arm}: {get_bool_str(medical_comorbidity_dict[med_arm])}' for med_arm in medical_comorbidity_dict.keys()]
@@ -141,14 +142,14 @@ def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
 Benzodiazepine days (90d): {benzo_days_coverage}\n\
 Hypnotics: {' | '.join([hypnotic for hypnotic in hypnotics_burden_set]) if len(hypnotics_burden_set) > 0 else 'Absent'}\n\
 Augmentation: {get_bool_str(augmentation_occured)}\n\
-Somatic treatments: {get_bool_str(somatic_flag)} | Psychotherapy visits (12m): {psychotherapy_treament_count if psychotherapy_treament_count > 0 else 'Absent'}\n"
+Somatic treatments: {get_bool_str(somatic_flag)} | Psychotherapy visits ({YEARS_BACK}y): {psychotherapy_treament_count if psychotherapy_treament_count > 0 else 'Absent'}\n"
         
     # Medication burden
     MED_BURDEN = f"### MEDICATION BURDEN\nActive meds at baseline: {len(distinct_ingredients)} ({', '.join([ingredient for ingredient in distinct_ingredients]) if len(distinct_ingredients) > 0 else 'Absent'})\n\
 NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingredient in distinct_nsaid_ingredients]) if len(distinct_nsaid_ingredients) > 0 else 'Absent'})\n"
      
     # Utilization
-    UTILIZATION = f"### UTILIZATION\nPsych inpatient days: {in_patient_days_1_yr} (12m) / {in_patient_days_3_yr} (3y) | ED psych visits: {num_emergency_1_yr} (12m) / {num_emergency_3_yr} (3y)\n"
+    UTILIZATION = f"### UTILIZATION\nPsych inpatient days: {in_patient_days} ({YEARS_BACK}y) | ED psych visits: {num_emergency} ({YEARS_BACK}y)\n"
         
     # Safety
     SAFETY = f"### SAFETY\n{' | '.join([f'{safety_arm}: {get_bool_str(safety_comorbidity_dict[safety_arm])}' for safety_arm in safety_comorbidity_dict.keys()])}\n"

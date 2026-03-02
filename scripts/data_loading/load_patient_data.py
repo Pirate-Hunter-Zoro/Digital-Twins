@@ -1,5 +1,5 @@
 import os
-from typing import Tuple, Iterator, Dict
+from typing import Tuple, Iterator, Dict, Optional
 from pathlib import Path
 import pandas as pd
 import json
@@ -25,26 +25,38 @@ RAW_JSON_PATH = Path(os.environ['PATIENT_JSON_DIR'])
 SLICED_JSON_PATH = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
 
 # Function for a worker to load one patient
-def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Dict:
+def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Optional[Dict]:
     """
-    Return sliced json of the patient
+    Return sliced json of the patient if they fit the window criteria (else return None)
     """
     sliced_path, raw_path, anchor_data = patient_args
+    failure_path = sliced_path.with_suffix(".rejected")
     sliced_json = None
-    if sliced_path.exists() and int(os.environ['SCRUB_PATIENT_JSON']) == 0:
-        try:
-            with open(sliced_path, 'r') as f:
-                sliced_json = json.load(f)
-                return sliced_json
-        except json.JSONDecodeError as e:
-            print(f"Exception occured when reading from {sliced_path}... {str(e)}... will try to recreate...", flush=True)
+    if int(os.environ['SCRUB_PATIENT_JSON']) == 0:
+        if sliced_path.exists():
+            try:
+                with open(sliced_path, 'r') as f:
+                    sliced_json = json.load(f)
+                    return sliced_json
+            except json.JSONDecodeError as e:
+                print(f"Exception occured when reading from {sliced_path}... {str(e)}... will try to recreate...", flush=True)
+        elif failure_path.exists():
+            # Patient was rejected due to inadequate history
+            return None
     
     # Load the patient's raw data
     with open(raw_path, 'r') as f:
         raw_json = json.load(f)
         sliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=datetime.strptime(anchor_data.get('MedStartInstant'), '%Y-%m-%d'))
-        with open(sliced_path, 'w') as f:
-            json.dump(sliced_json, f, indent=4)
+        if sliced_json != None:
+            # Record the json
+            with open(sliced_path, 'w') as f:
+                json.dump(sliced_json, f, indent=4)
+        else:
+            # Record the failure
+            with open(failure_path, 'w') as f:
+                # Just create the dummy file to mark the failure
+                pass
         return sliced_json
     
 def load_patient_data() -> Iterator[Dict]:

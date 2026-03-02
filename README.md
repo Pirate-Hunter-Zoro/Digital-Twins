@@ -28,7 +28,9 @@ The foundation. These scripts ingest raw EHR exports and structure them into usa
 
 * **`build_jsons.py`**: The initial ETL step. Converts raw CSVs into per-patient JSON files.
 * **`create_cohort.py`**: Filters the total population down to the study cohort (e.g., MDD patients who are not schizophrenic or bipolar).
-* **`deterministic_narrative.py`**: The logic that deterministically translates structured JSON features (labs, meds, diagnoses) into a human-readable Markdown narrative.
+* **`fit_to_anchor.py`**: Enforces the `YEARS_BACK` chronological window. It truncates encounters, procedures, and medications that cross the boundary and purges ancient history entirely.
+* **`load_patient_data.py`**: Orchestrates the timeline slicing and generates `.rejected` marker files for patients who fail the strict MDD or chronological prerequisites to prevent redundant processing.
+* **`deterministic_narrative.py`**: The logic that deterministically translates structured JSON features (labs, meds, diagnoses) into a human-readable Markdown narrative. Note that the generated narrative only summarizes the precise `YEARS_BACK` window, not the patient's entire lifetime.
 * **`features.py`**: Extractors for specific clinical features.
 * **Definitions**: `diagnoses_definitions.py`, `med_definitions.py`, etc., map codes to clinical text.
 
@@ -199,41 +201,63 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 
 ### General & Reproducibility
 
-* `SEED`: 42 (Ensures deterministic behavior).
-* `WEIGHTING_EXPONENT`: 4.0 (Alpha value for weighting similarity scores in TRD prediction).
-* `TRD_TEST_COUNT`: 200 (Number of patients to sample for evaluation).
+* `SEED`: 42 (Random seed for reproducibility).
+* `YEARS_BACK`: 2 (Defines the strict historical window prior to the anchor date. Patients with less history are discarded).
+* `SCRUB_PATIENT_JSON`: 0 (Flag to force recreation of patient JSONs).
+* `SCRUB_NARRATIVES`: 0 (Flag to force recreation of narratives).
+* `SCRUB_VECTORS`: 0 (Flag to force re-computation of vectors).
 
-### Data Paths (Input)
+### Data Paths
 
+* `PREP_DATA_DIR`: Raw data directory (e.g., `/media/studies/ehr_study/data-EHR-prepped/DV250901v1-PV251208v1/PrepData`).
+* `OUTPUT_DATA_DIR`: Directory for output lists (`/media/studies/ehr_study/data-EHR-prepped/DV250901v1-PV251208v1/OutputData`).
+* `ANALYSIS_DIR`: Root directory for analysis outputs (`/media/studies/ehr_study/analysis/mferguson`).
+* `PROCEDURE_CSV_PATH`, `MEDICATION_CSV_PATH`, `DIAGNOSIS_CSV_PATH`, `ENCOUNTER_CSV_PATH`, `VITALS_CSV_PATH`, `PERSON_CSV_PATH`: Paths to respective raw data tables.
 * `TRD_LIST_PATH`: Path to the text file containing IDs of TRD-positive patients.
-* `PREP_DATA_DIR`: Raw data directory.
-* `COHORT_PATH`: `${ANALYSIS_DIR}/mdd_only_patients.csv`
+* `MDD_MED_DATE_CSV_PATH`: Path to the anchor dates CSV.
+* `PATIENT_JSON_DIR`: Directory for raw patient JSONs.
+* `SLICED_PATIENT_JSON_DIR`: Directory for timeline-sliced patient JSONs.
+* `COHORT_PATH`: Path to the filtered study cohort CSV.
 
-### Models
+### Models & Inference
 
 #### Embedding Model
 
+* `HF_HOME`: HuggingFace cache directory.
 * `EMBEDDER_MODEL_NAME`: `Qwen-Qwen3-Embedding-8B`
-* `EMBEDDER_MODEL_PATH`: `${ANALYSIS_DIR}/models/${EMBEDDER_MODEL_NAME}`
+* `EMBEDDER_MODEL_PATH`: Local path to the embedder model.
 * `EMBEDDER_DEVICE`: `cuda` (Use `cpu` for large strings to prevent OOM).
 * `EMBEDDER_BATCH_SIZE`: 32
 
 #### Generative Model (vLLM)
 
 * `VLLM_MODEL_NAME`: `google_medgemma-27b-text-it`
+* `VLLM_MODEL_PATH`: Local path to the vLLM model.
 * `VLLM_URL`: `http://compute306:8000`
+* `MAX_MODEL_LEN`: 32768
+* `PATIENT_JSON_CHUNK_SIZE`: 32768
 * `MAX_TOKENS`: 8192
 
-### Artifacts & Output
+### Storage & Artifacts
 
-* `ARTIFACTS_DIR`: `${ANALYSIS_DIR}/artifacts/`
-* `VECTORS_DIR`: `${ARTIFACTS_DIR}/${EMBEDDER_MODEL_NAME}/`
-* `JUDGEMENTS_DIR`: `${ARTIFACTS_DIR}/${VLLM_MODEL_NAME}/`
-* `RESULTS_DIR`: `${ARTIFACTS_DIR}/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}/`
+* `ARTIFACTS_DIR`: Root directory for computed artifacts.
+* `DETERMINISTIC_NARRATIVES_DIR`: Storage for generated Markdown narratives.
+* `VECTORS_DIR`: Storage for embedding vectors.
+* `JUDGEMENTS_DIR`: Storage for LLM judgements.
+* `RESULTS_DIR`: Storage for analysis results and logs.
 
-### Retrieval & Search
+### Hyperparameters & Concurrency
 
-* `NUM_NEIGHBOR_PATIENTS`: 200 (Number of candidates to retrieve before LLM scoring).
+* `NUM_WORKERS_NON_LLM_TASK`: 16
+* `NUM_WORKERS_LLM_TASK`: 16
+* `NUM_NEIGHBOR_PATIENTS`: 200 (Total number of neighbors evaluated for density analysis).
+* `K_SCORE`: 50 (Number of closest patients queried for LLM similarity judgement).
+* `HIGH_SIM_THRESHOLD`: 0.95
+* `WEIGHTING_EXPONENT`: 5.0 (Alpha value for weighting similarity scores).
+* `TRD_BLIND_PROBABILITY`: 0.15
+* `TRD_TEST_COUNT`: 200 (Number of patients to sample for evaluation).
+* `LOW_CONFIDENCE_ESS_THRESHOLD`: 20
+* `NUM_PAIRS_SANITY_CHECK`: 1000
 
 ## Usage
 

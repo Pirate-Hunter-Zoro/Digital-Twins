@@ -1,10 +1,12 @@
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import copy
 import os
 
 from dotenv import load_dotenv
 load_dotenv()
+
+from scripts.data_loading.diagnoses_definitions import get_mdd_description
 
 MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
 YEARS_BACK = int(os.environ['YEARS_BACK'])
@@ -52,10 +54,39 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
         Optional[Dict]: Sliced record of the patient or null if they do not meet the window criteria
     """
     # First loop through every encounter and look for an MDD diagnosis which precedes or occurs at the same time as the anchor date
+    mdd_prereq = False
+    earliest_sliced_encounter_date = anchor_date
     for encounter in patient_dict['encounters']:
-        # TODO
-        pass
+        info = encounter['details']
+        enc_start_str = info.get('start_visit')
+        if not isinstance(enc_start_str, str):
+            continue # Skip bad encounters
+        encounter_start_date = datetime.strptime(enc_start_str, '%Y-%m-%d')
+        if encounter_start_date <= anchor_date:
+            # Potential MDD preceding anchor date
+            if encounter_start_date < earliest_sliced_encounter_date:
+                # Update record for earliest encounter date
+                earliest_sliced_encounter_date = encounter_start_date
+            if not mdd_prereq:
+                # Still need to check diagnoses for codes
+                for diagnosis in encounter['diagnoses']:
+                    for code_dict in diagnosis['codes']:
+                        if get_mdd_description(code_dict['code']) != None:
+                            mdd_prereq = True
+                            break
+                    if mdd_prereq:
+                        break
+    # If no MDD diagnosis occurs before anchor date
+    if not mdd_prereq:
+        return None
     
+    # Define cutoff date
+    cutoff_date = anchor_date - timedelta(int(os.environ['YEARS_BACK'])*365)
+    if earliest_sliced_encounter_date > cutoff_date:
+        # Not enough patient history
+        return None
+    
+    # Now process the patient json
     processed_sliced_patient = {
         'patient_id': patient_dict['patient_id'],
         'demographics': patient_dict['demographics'],
@@ -66,7 +97,6 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     
     sliced_med_intervals = {}
     
-    earliest_sliced_encounter_date = anchor_date
     for encounter in patient_dict['encounters']:
         sliced_encounter = {'details': encounter['details'], 'procedures': [], 'diagnoses': encounter['diagnoses'], 'vitals': encounter['vitals'],}
         info = sliced_encounter['details']
@@ -76,8 +106,6 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
             continue # Skip bad encounters
             
         encounter_start_date = datetime.strptime(enc_start_str, '%Y-%m-%d')
-        if encounter_start_date < earliest_sliced_encounter_date:
-            earliest_sliced_encounter_date = encounter_start_date
         
         enc_end_str = info.get('end_visit')
         if isinstance(enc_end_str, str):
@@ -85,8 +113,15 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
         else:
             encounter_end_date = encounter_start_date
 
-        if encounter_start_date > anchor_date:
+        if encounter_end_date < cutoff_date:
+            # Ancient history
             continue
+        if encounter_start_date > anchor_date:
+            # Future
+            continue
+        
+        encounter_start_date = max(encounter_start_date, cutoff_date)
+        encounter_end_date = min(encounter_end_date, anchor_date)
         
         start_offset = -(anchor_date - encounter_start_date).days
         end_offset = -(anchor_date - encounter_end_date).days
@@ -98,21 +133,29 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
             proc_start_str = procedure_copy.get('ProcedureStartInstant')
             if isinstance(proc_start_str, str):
                 procedure_start = datetime.strptime(proc_start_str, '%Y-%m-%d')
-                procedure_copy['ProcedureStartInstant'] = -(anchor_date - procedure_start).days
+                if procedure_start > anchor_date:
+                    # Future
+                    continue
                 
                 # Handle End Date
                 proc_end_str = procedure_copy.get('ProcedureEndInstant')
                 if isinstance(proc_end_str, str):
                     procedure_end = datetime.strptime(proc_end_str, '%Y-%m-%d')
-                    procedure_copy['ProcedureEndInstant'] = -(anchor_date - procedure_end).days
                 else:
-                    procedure_copy['ProcedureEndInstant'] = procedure_copy['ProcedureStartInstant']
+                    procedure_end = procedure_start
+                    
+                if procedure_end < cutoff_date:
+                    # Ancient history
+                    continue
                 
-                # Theoretically the following check should never fail since the encouner precedes the anchor date, BUT...
-                if procedure_start <= anchor_date:
-                    sliced_procedure = copy.deepcopy(procedure_copy)
-                    sliced_procedure['ProcedureEndInstant'] = min(0, sliced_procedure['ProcedureEndInstant'])
-                    sliced_encounter['procedures'].append(sliced_procedure)
+                # Truncate to window
+                procedure_start = max(procedure_start, cutoff_date)
+                procedure_end = min(procedure_end, anchor_date)
+                
+                procedure_copy['ProcedureStartInstant'] = -(anchor_date - procedure_start).days
+                procedure_copy['ProcedureEndInstant'] = -(anchor_date - procedure_end).days
+            
+                sliced_encounter['procedures'].append(procedure_copy)
                 
         if encounter_start_date <= anchor_date:
             processed_sliced_patient['encounters'].append(sliced_encounter)
@@ -125,6 +168,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
             
             med_start_date = datetime.strptime(med_start_str, '%Y-%m-%d')
             if med_start_date > anchor_date:
+                # Started in future
                 continue
                 
             med_end_date_str = med.get('MedEndInstant')
@@ -132,6 +176,12 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
                 med_end_date = datetime.strptime(med_end_date_str, '%Y-%m-%d')
             else:
                 med_end_date = anchor_date
+            if med_end_date < cutoff_date:
+                # Not active during window
+                continue
+            
+            med_start_date = max(med_start_date, cutoff_date)
+            med_end_date = min(med_end_date, anchor_date)
                 
             key = (
                 med.get("MedName"),
@@ -156,32 +206,21 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     
     # Total chronological length
     timespan_sliced = (anchor_date - earliest_sliced_encounter_date).days + 1
+    # We still want to record the actual length of history observed
     processed_sliced_patient['days_of_history'] = timespan_sliced
     
     return processed_sliced_patient
 
 if __name__=="__main__":
     from pathlib import Path
-    import json
-    json_path = Path("/media/studies/ehr_study/analysis/mferguson/sliced_patient_json/")
+    json_path = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
     ids = []
-    empty_ids = []
     record_every = 1000
     done = 0
     for json_file in json_path.glob("*.json"):
-        id = json_file.stem
-        with open(json_file, 'r') as f:
-            contents = f.read()
-            if len(contents) == 0:
-                empty_ids.append(id)
-            else:
-                patient_json = json.loads(contents)
-                if patient_json['days_of_history'] == 1:
-                    ids.append(id)
+        ids.append(json_file.stem)
         done += 1
         if done % record_every == 0:
             print(f"Scanned {done} patient json files...", flush=True)
-    with open(Path("test_data/length_1_ids.txt"), 'w') as f:
+    with open(Path("test_data/valid_ids.txt"), 'w') as f:
         f.write("\n".join(ids))
-    with open(Path("test_data/empty_ids.txt"), 'w') as f:
-        f.write("\n".join(empty_ids))
