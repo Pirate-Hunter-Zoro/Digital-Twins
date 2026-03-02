@@ -60,6 +60,7 @@ Transforms the structured JSONs into textual narratives.
 * **`retriever.py`**:
   * Loads the entire `vectors.db` into memory.
   * Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
+  * **Baseline Mode**: Includes a random sampling flag to generate a blind baseline of random neighbors for comparative analysis.
   * **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
   * **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
 
@@ -103,11 +104,13 @@ graph TD
       1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient).
       2. Scores neighbors via weighting strategies (Uniform, Cosine, LLM, Combined (Harmonic Mean of Cosine and LLM)).
       3. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$).
+  * **Dual-Stream Evaluation**: Automatically splits the retrieved neighbor data into **Semantic** (embedding-based) and **Random** baseline streams to evaluate the true predictive lift of the vector space.
   * **Analysis & Metrics**:
-    * **Discrimination**: ROC AUC, AUPRC.
+    * **Discrimination**: ROC AUC (with bootstrapped 95% CI bands), AUPRC.
     * **Calibration**: Brier Score, **Weighted ECE**, **Calibration Slope & Intercept**.
     * **Confidence**: Effective Sample Size (ESS) and **Risk Extremity Index** (fraction of predictions <0.1 or >0.9).
-  * **Output**: `battle_1_summary.csv` (Metrics), `battle_1_predictions.csv` (Row-level logs), and comparative calibration/ROC plots.
+    * **Optimal Confusion Matrix**: Identifies peak threshold via Youden's J-statistic and calculates Sensitivity, Specificity, F-Score, PLR, and NLR.
+  * **Output**: Mode-prefixed output plots (e.g., `Semantic_COSINE_roc_curve.png`), `battle_1_summary.csv` (Metrics), and `battle_1_predictions.csv` (Row-level logs).
 
 * **`trd_ranking_analysis.py`**:
   * **Battle 2: Ranking & Homophily Analysis.** Investigates whether the LLM retrieves neighbors that are clinically more congruent with the anchor than Cosine alone ("Label Homophily").

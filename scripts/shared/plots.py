@@ -28,6 +28,29 @@ def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, m
     plt.title("Receiver Operating Characteristic")
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
+    
+    # Bootstrapping for error bands
+    base_false_positive_rate = np.linspace(0,1,100)
+    interpolated_true_positive_rates = []
+    for _ in range(1000):
+        sample_indices = np.random.randint(low=0, high=y_true.shape[0], size=y_true.shape[0])
+        y_true_sample = y_true[sample_indices]
+        y_prob_sample = y_prob[sample_indices]
+        if len(np.unique(y_true_sample)) < 2: # Make sure by chance we did not sample only one class
+            continue
+        sample_fp, sample_tp, _ = sklearn.metrics.roc_curve(y_true=y_true_sample, y_score=y_prob_sample)
+        # Different samples will produce different numbers of thresholds, so mapping the arrays onto a baseline is necessary
+        interpolated_roc_curve = np.interp(base_false_positive_rate, sample_fp, sample_tp)
+        interpolated_roc_curve[0] = 0.0
+        interpolated_true_positive_rates.append(interpolated_roc_curve)
+    
+    # Plot error bands
+    interpolated_tp = np.array(interpolated_true_positive_rates)
+    # Since we want a 95% confidence interval, graph an ROC curve at lower 2.5 percentile and one at upper 97.5 percentile
+    q_low = np.percentile(interpolated_tp, 2.5, axis=0)
+    q_high = np.percentile(interpolated_tp, 97.5, axis=0)
+    plt.fill_between(base_false_positive_rate, q_low, q_high, color='gray', alpha=0.2, label='95% CI')
+    
     plt.legend()
     plt.savefig(f"{str(RESULTS_DIR)}/roc_curve_{mode}.png")
     plt.close()
@@ -162,8 +185,25 @@ def plot_optimal_confusion_matrix(y_true: np.array, y_prob: np.array, mode: str)
     # Use threshold to make predictions
     predictions = np.where(y_prob >= threshold, 1, 0)
     matrix = sklearn.metrics.confusion_matrix(y_true=y_true, y_pred=predictions)
+    
+    # Obtain metric on the confusion matrix
+    raveled_matrix = np.ravel(matrix)
+    tn, fp, fn, tp = raveled_matrix[0], raveled_matrix[1], raveled_matrix[2], raveled_matrix[3]
+    sensitivity = tp / (tp + fn) # proportion of all positive samples correctly flagged
+    specificity = tn / (tn + fp) # proportion of all negative samples correctly flagged
+    f_score = 2 * tp / (2 * tp + fp + fn)
+    positive_likelihood_ratio = sensitivity / (1 - specificity + 1e-9)
+    negative_likelihood_ratio = (1 - sensitivity) / (specificity + 1e-9)
+    metrics = f"\
+Sensitivity: {sensitivity:.2f}\n\
+Specificity: {specificity:.2f}\n\
+F_Score: {f_score:.2f}\n\
+Positive Likelihood Ratio: {positive_likelihood_ratio:.2f}\n\
+Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
+"
+    plt.figtext(x=0.5, y=-0.1, ha='center', s=metrics)
     display = sklearn.metrics.ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=['Non-TRD', 'TRD'])
     display.plot(cmap='Blues')
     plt.title(f'Threshold: {threshold}')
-    plt.savefig(f"{str(RESULTS_DIR)}/optimal_threshold_confusion_matrix_{mode}.png")
+    plt.savefig(f"{str(RESULTS_DIR)}/optimal_threshold_confusion_matrix_{mode}.png", bbox_inches='tight')
     plt.close()

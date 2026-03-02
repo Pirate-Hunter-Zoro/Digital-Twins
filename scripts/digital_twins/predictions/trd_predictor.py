@@ -31,11 +31,12 @@ class TRDPredictor:
         """
         return 1 if candidate_patient_id in self.trd_set else 0
     
-    def construct_neighborhood_data(self, index_id: str) -> list[dict]:
+    def construct_neighborhood_data(self, index_id: str, random: bool=False) -> list[dict]:
         """Return the information of all the neighbors of this anchor patient
 
         Args:
             index_id (str): Narrative hash ID of the patient
+            random (bool, optional): Whether the neighborhood is random or picked by an embedding model. Defaults to False.
 
         Returns:
             list[dict]: Similarity scores, etc. of all neighbor patients
@@ -45,7 +46,7 @@ class TRDPredictor:
                 self.retriever.get_vector(id=index_id),\
                     self.retriever.get_patient_id(id=index_id),\
                         self.retriever.get_chronological_length(id=index_id)
-        neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id)
+        neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id, random=random)
         for neighbor_narrative_hash_id, _ in neighbors:
             # Quick check to ensure this patient is not included in the neighbors
             if neighbor_narrative_hash_id == index_id:
@@ -73,6 +74,7 @@ class TRDPredictor:
             # Flag for if this neighbor is trd
             neighbor_trd_flag = self.get_trd_status(candidate_patient_id=neighbor_patient_id)
             neighborhood_data.append({
+                "is_random_baseline": random,
                 "anchor_id": index_id,
                 "chronological_length": chronological_length,
                 "anchor_patient_id": index_patient_id,

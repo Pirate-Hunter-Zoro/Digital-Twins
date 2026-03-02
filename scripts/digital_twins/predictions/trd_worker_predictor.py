@@ -29,7 +29,10 @@ def evaluate_patient(narrative_hash_id: str) -> list[dict]:
     :rtype: list[dict]
     """
     global predictor
-    return predictor.construct_neighborhood_data(index_id=narrative_hash_id)
+    results_random = predictor.construct_neighborhood_data(index_id=narrative_hash_id, random=True)
+    results = predictor.construct_neighborhood_data(index_id=narrative_hash_id)
+    results.extend(results_random)
+    return results
 
 def run():
     """

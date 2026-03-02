@@ -133,6 +133,8 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
 def run_analysis():
     # Merge all evaluation results from different .csv files into one dataframe
     df = load_neighborhood_data()
+    df_non_random = df[df['is_random_baseline'] == False]
+    df_random = df[df['is_random_baseline'] == True]
     anchor_ids = set(df['anchor_patient_id'])
     predictor = TRDPredictor()
     retriever = Retriever()
@@ -141,57 +143,59 @@ def run_analysis():
         for patient_id in anchor_ids
     }
     
-    # Slice data frame to only have cosine ranks of less than or equal to K_SCORE
-    df_battle = df[df['rank_cosine'] <= int(os.environ['K_SCORE'])]
+    # Slice data frame to only have the nearest K_SCORE cosine similarities
+    df_battle_non_random = df_non_random[df_non_random['rank_cosine'] <= int(os.environ['K_SCORE'])]
+    df_battle_random = df_random[df_random['rank_cosine'] <= int(os.environ['K_SCORE'])]
     
     # Create a report to put in a text file
     text_report = "Battle 1 Analysis Report\n\n"
     
     # Run the battle
-    weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
     results = {}
-    # Store for each strategy the TRD predictions of each anchor patient
+    # Store for each mode and strategy the TRD predictions of each anchor patient
     raw_predictions = [] 
-    for strat in weighting_strats:
-        print(f"Running analysis for weighting strategy: {strat.value}...", flush=True)
-        grouped_by_anchor_patient = df_battle.groupby('anchor_id')
-        labels = []
-        risks = []
-        ess_values = []
-        for anchor_hash, group in grouped_by_anchor_patient:
-            risk, ess = calculated_weighted_risk(group=group, strategy=strat)
-            labels.append(anchor_trd_labels[retriever.get_patient_id(anchor_hash)])
-            risks.append(risk)
-            ess_values.append(ess)
-            raw_predictions.append({
-                'anchor_id': anchor_hash,
-                'anchor_patient_id': retriever.get_patient_id(anchor_hash),
-                'predicted_risk': risk,
-                'true_label': labels[-1],
-                'ess': ess,
-                'strategy': strat.name
-            })
-        metrics = compute_metrics(y_true=np.array(labels), y_prob=np.array(risks))
-        plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
-        plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
-        plot_calibration(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
-        plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
-        plot_effective_sample_size_distribution(ess_values=np.array(ess_values), mode=strat.value)
-        plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=strat.value)
-        # Add to text report
-        text_report += f"{strat.value} Metrics:\n\
-'roc_score': {metrics['roc_score']}\n\
-'auprc': {metrics['auprc']}\n\
-'brier_score': {metrics['brier_score']}\n\
-'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\
-'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
-        results[strat.value] = {
-            'roc_score': metrics['roc_score'],
-            'auprc': metrics['auprc'],
-            'brier_score': metrics['brier_score'],
-            'weighted_calibration_error': metrics['weighted_calibration_error'],
-            'Mean_ESS': np.mean(np.array(ess_values))
-        }
+    for mode_name, current_df in [("Non-Random", df_battle_non_random), ("Random", df_battle_random)]:
+        weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
+        for strat in weighting_strats:
+            print(f"Running analysis for weighting strategy: {mode_name}_{strat.value}...", flush=True)
+            grouped_by_anchor_patient = current_df.groupby('anchor_id')
+            labels = []
+            risks = []
+            ess_values = []
+            for anchor_hash, group in grouped_by_anchor_patient:
+                risk, ess = calculated_weighted_risk(group=group, strategy=strat)
+                labels.append(anchor_trd_labels[retriever.get_patient_id(anchor_hash)])
+                risks.append(risk)
+                ess_values.append(ess)
+                raw_predictions.append({
+                    'anchor_id': anchor_hash,
+                    'anchor_patient_id': retriever.get_patient_id(anchor_hash),
+                    'predicted_risk': risk,
+                    'true_label': labels[-1],
+                    'ess': ess,
+                    'strategy': f"{mode_name}_{strat.name}"
+                })
+            metrics = compute_metrics(y_true=np.array(labels), y_prob=np.array(risks))
+            plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
+            plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
+            plot_calibration(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
+            plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
+            plot_effective_sample_size_distribution(ess_values=np.array(ess_values), mode=f'{mode_name}_{strat.value}')
+            plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
+            # Add to text report
+            text_report += f"{mode_name}_{strat.value} Metrics:\n\
+    'roc_score': {metrics['roc_score']}\n\
+    'auprc': {metrics['auprc']}\n\
+    'brier_score': {metrics['brier_score']}\n\
+    'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\
+    'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
+            results[f"{mode_name}_{strat.value}"] = {
+                'roc_score': metrics['roc_score'],
+                'auprc': metrics['auprc'],
+                'brier_score': metrics['brier_score'],
+                'weighted_calibration_error': metrics['weighted_calibration_error'],
+                'Mean_ESS': np.mean(np.array(ess_values))
+            }
     
     results_txt_file = Path(os.environ['RESULTS_DIR']) / 'battle_1_results.txt'
     with open(results_txt_file, 'w') as f:
