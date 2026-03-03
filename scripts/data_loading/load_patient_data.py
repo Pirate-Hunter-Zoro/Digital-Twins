@@ -12,15 +12,18 @@ load_dotenv()
 from scripts.data_loading.fit_to_anchor import slice_and_convert_time
 from scripts.data_loading.create_cohort import create_cohort
 
+# Information on all patients assigned an antidepressant
 MED_DATE_CSV = Path(os.environ['MDD_MED_DATE_CSV_PATH'])
 MED_DATE_DF = pd.read_csv(MED_DATE_CSV, escapechar='\\', low_memory=False)
 MED_DATE_DF.set_index('PatientEpicId_SH', inplace=True)
 
+# Create list of MDD patients
 COHORT_PATH = Path(os.environ['COHORT_PATH'])
 if not COHORT_PATH.exists():
     create_cohort()
 COHORT_DF = pd.read_csv(COHORT_PATH, escapechar='\\', low_memory=False)
 
+# Location of patient jsons
 RAW_JSON_PATH = Path(os.environ['PATIENT_JSON_DIR'])
 SLICED_JSON_PATH = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
 
@@ -63,6 +66,9 @@ def load_patient_data() -> Iterator[Dict]:
     """
     Returns the sliced JSON for all patients
     """
+    # Make sliced directory if it has not yet been made
+    os.makedirs(SLICED_JSON_PATH, exist_ok=True)
+    
     # Find the intersection of the medication dates
     cohort_ids = COHORT_DF['PatientEpicId_SH']
     patients_with_anchor = MED_DATE_DF.loc[MED_DATE_DF.index.isin(cohort_ids)]

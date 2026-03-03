@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=find_anomylous_json
+#SBATCH --job-name=find_valid_patients
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH -o slurm_jobs/quick_runs/logs/find_anomylous_json_out.txt
-#SBATCH -e slurm_jobs/quick_runs/logs/find_anomylous_json_err.txt
+#SBATCH -o slurm_jobs/quick_runs/logs/find_valid_patients_out.txt
+#SBATCH -e slurm_jobs/quick_runs/logs/find_valid_patients_err.txt
 
 # Exit immediately if command fails
 set -e
