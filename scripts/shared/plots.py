@@ -33,20 +33,20 @@ def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, m
     base_false_positive_rate = np.linspace(0,1,100)
     interpolated_true_positive_rates = []
     for _ in range(1000):
+        # Bootstrap - sample entire sample size with replacement
         sample_indices = np.random.randint(low=0, high=y_true.shape[0], size=y_true.shape[0])
         y_true_sample = y_true[sample_indices]
         y_prob_sample = y_prob[sample_indices]
         if len(np.unique(y_true_sample)) < 2: # Make sure by chance we did not sample only one class
             continue
         sample_fp, sample_tp, _ = sklearn.metrics.roc_curve(y_true=y_true_sample, y_score=y_prob_sample)
-        # Different samples will produce different numbers of thresholds, so mapping the arrays onto a baseline is necessary
+        # For FP and TP values, interpolate them on standard np.linspace(0,1,100) to force false positive rates on grid and then estimating respective true positive values
         interpolated_roc_curve = np.interp(base_false_positive_rate, sample_fp, sample_tp)
         interpolated_roc_curve[0] = 0.0
         interpolated_true_positive_rates.append(interpolated_roc_curve)
     
-    # Plot error bands
+    # Error bands are 2.5 percentile and 97.5 percentile for each FP x-value on ROC curve which generates 95% confidence interval
     interpolated_tp = np.array(interpolated_true_positive_rates)
-    # Since we want a 95% confidence interval, graph an ROC curve at lower 2.5 percentile and one at upper 97.5 percentile
     q_low = np.percentile(interpolated_tp, 2.5, axis=0)
     q_high = np.percentile(interpolated_tp, 97.5, axis=0)
     plt.fill_between(base_false_positive_rate, q_low, q_high, color='gray', alpha=0.2, label='95% CI')
