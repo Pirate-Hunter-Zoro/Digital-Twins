@@ -201,6 +201,8 @@ F_Score: {f_score:.2f}\n\
 Positive Likelihood Ratio: {positive_likelihood_ratio:.2f}\n\
 Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
 "
+
+    # Create the confusion matrix display with the text report
     display = sklearn.metrics.ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=['Non-TRD', 'TRD'])
     display.plot(cmap='Blues')
     plt.figtext(x=0.5, y=-0.1, ha='center', s=metrics)
