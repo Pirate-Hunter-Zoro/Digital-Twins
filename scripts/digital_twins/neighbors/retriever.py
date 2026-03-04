@@ -44,7 +44,7 @@ SELECT id, vector, chronological_length FROM vectors
         
         # Create histogram of chronological lengths
         plt.figure(figsize=(10,6))
-        plt.hist(np.array(self.chronological_lengths), bins=100)
+        plt.hist(np.array([l for l in self.chronological_lengths if l < int(os.environ['HISTORY_LENGTH_CUTOFF'])]), bins=100)
         plt.xlabel("Chronological Length (Days)")
         plt.ylabel("Frequency")
         plt.title("Histogram of Patient Chronological History Lengths")
