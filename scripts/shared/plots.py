@@ -201,9 +201,9 @@ F_Score: {f_score:.2f}\n\
 Positive Likelihood Ratio: {positive_likelihood_ratio:.2f}\n\
 Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
 "
-    plt.figtext(x=0.5, y=-0.1, ha='center', s=metrics)
     display = sklearn.metrics.ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=['Non-TRD', 'TRD'])
     display.plot(cmap='Blues')
+    plt.figtext(x=0.5, y=-0.1, ha='center', s=metrics)
     plt.title(f'Threshold: {threshold}')
     plt.savefig(f"{str(RESULTS_DIR)}/optimal_threshold_confusion_matrix_{mode}.png", bbox_inches='tight')
     plt.close()
