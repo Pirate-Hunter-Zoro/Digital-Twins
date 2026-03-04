@@ -181,7 +181,7 @@ def plot_chronological_length_impact(
         fig.savefig(f"{os.environ['RESULTS_DIR']}/scores_by_chronological_length_{strat}.png")
         plt.close(fig)
 
-def main():
+def run_trd_bin_analysis():
     df = load_and_merge_data()
     
     density_metrics_df=compute_density_metrics(df) 
@@ -196,6 +196,3 @@ def main():
     # Again save the .csv so we can see the bin counts
     chronological_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / "chronology_performance_summary.csv")
     plot_chronological_length_impact(chronological_scores_by_bin)
-
-if __name__=="__main__":
-    main()

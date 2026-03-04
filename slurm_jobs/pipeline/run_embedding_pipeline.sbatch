@@ -33,5 +33,6 @@ fi
 set -a; source "${ENV_FILE}"; set +a
 
 # Explicitly pass the memory limit to srun to resolve the conflict
-python -m scripts.digital_twins.forge_narratives
-python -m scripts.digital_twins.forge_vectors
+python -m scripts.digital_twins.narratives.forge_narratives
+python -m scripts.digital_twins.embeddings.forge_vectors
+python -m scripts.digital_twins.embeddings.vector_audit

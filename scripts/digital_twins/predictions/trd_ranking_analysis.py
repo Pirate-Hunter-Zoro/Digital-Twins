@@ -115,7 +115,7 @@ def plot_agreement_curves(agreement_df: pd.DataFrame):
     plt.savefig(RESULTS_DIR / 'battle_2_agreement_curve.png')
     plt.close()
 
-def main():
+def run_trd_ranking_analysis():
     results_df = load_neighborhood_data()
     results_df['anchor_trd_label'] = results_df['anchor_patient_id'].apply(PREDICTOR.get_trd_status)
     # Remove self from neighbors
@@ -133,6 +133,3 @@ def main():
     correlation_diagnostics = compute_diagnostics(df=results_df)
     with open(RESULTS_DIR / 'battle_2_correlation_results_cos_vs_llm.json', 'w') as f:
         json.dump(correlation_diagnostics, f, indent=4)
-        
-if __name__=="__main__":
-    main()

@@ -37,3 +37,6 @@ def forge():
         if len(current_narrative_batch) > 0:
             # One last leftover batch
             embedder.vectorize((current_patient_id_batch, current_narrative_batch))
+            
+if __name__=="__main__":
+    forge()

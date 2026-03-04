@@ -74,6 +74,6 @@ def run_cosine_check():
     plt.savefig(Path(os.environ['RESULTS_DIR']) / 'cosine_score_random_vs_neighbor.png')
     plt.close()
     
-if __name__=="__main__":
+def run_trd_sanity_checks():
     run_chonology_check()
     run_cosine_check()

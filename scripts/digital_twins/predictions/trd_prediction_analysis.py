@@ -130,7 +130,7 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
         'proportion_risk_score_>0.9': high_proportion,
     }
     
-def run_analysis():
+def run_trd_prediction_analysis():
     # Merge all evaluation results from different .csv files into one dataframe
     df = load_neighborhood_data()
     df_non_random = df[df['is_random_baseline'] == False]
@@ -206,6 +206,3 @@ def run_analysis():
     results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_summary.csv')
     pd.DataFrame(raw_predictions).to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_predictions.csv')
     print("Battle 1 analysis complete!", flush=True)
-    
-if __name__=="__main__":
-    run_analysis()

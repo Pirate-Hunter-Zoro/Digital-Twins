@@ -14,11 +14,14 @@ from scripts.digital_twins.neighbors.retriever import Retriever
 
 class Scorer:
     
-    def __init__(self):
+    def __init__(self, require_client:bool = True):
+        """Initialize vllm client and internal database
+
+        Args:
+            require_client (bool, optional): Boolean for whether or not to load the VLLM server. Defaults to True.
         """
-        Initialize vllm client and internal database
-        """
-        self.client = VllmClient()
+        if require_client:
+            self.client = VllmClient()
         self.prompt_loader = PromptLoader()
         self.retriever = Retriever()
         self._init_db()
