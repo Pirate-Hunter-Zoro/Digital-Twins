@@ -24,7 +24,16 @@ SELECT id_a, id_b, full_response FROM llm_judgements ORDER BY overall_score ASC 
         # Create report including the first narrative, the second narrative, and the third narrative
         id_a, id_b, response = row
         # Fetch two corresponding narratives
-        
+        vector_cursor.execute('''
+SELECT text FROM vectors WHERE id=?
+''', (id_a,))
+        narrative_a = vector_cursor.fetchone()
+        vector_cursor.execute('''
+SELECT text FROM vectors WHERE id=?
+''', (id_b,))
+        narrative_b = vector_cursor.fetchone()
+        response_indented = json.dumps(json.loads(response), indent=4)
+        # TODO - ensure everything in this 'row in rows' loop is correct and then write to txt file named cleverly
     
     # Find the highest 5 overall scores
     scorer.cursor.execute('''
