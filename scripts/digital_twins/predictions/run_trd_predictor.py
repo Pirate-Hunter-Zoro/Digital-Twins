@@ -43,14 +43,14 @@ def run():
     cursor = connection.cursor()
     # Randomly pick n patients but ensure that half are TRD positive and half are TRD negative
     cursor.execute("""
-SELECT id, patient_id FROM vectors                          
+SELECT patient_id FROM vectors                          
 """
     ) 
     rows = cursor.fetchall()
     predictor = TRDPredictor()
     n = int(os.environ['TRD_TEST_COUNT'])
-    trd_positive = [row for row in rows if predictor.get_trd_status(candidate_patient_id=row[1]) == 1]
-    trd_negative = [row for row in rows if predictor.get_trd_status(candidate_patient_id=row[1]) == 0]
+    trd_positive = [row for row in rows if predictor.get_trd_status(candidate_patient_id=row[0]) == 1]
+    trd_negative = [row for row in rows if predictor.get_trd_status(candidate_patient_id=row[0]) == 0]
     print(f"Found {len(trd_positive)} TRD positive and {len(trd_negative)} TRD negative patients", flush=True)
     
     # Each worker is going to do this, and we need them all to yield the same sample - hence the seeding

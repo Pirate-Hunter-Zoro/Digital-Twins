@@ -10,8 +10,6 @@ import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.shared.utils import generate_string_id
-
 class PatientEmbedder:
     """
     A simplified class that uses the sentence-transformers library to embed text.
@@ -47,8 +45,7 @@ class PatientEmbedder:
         self.connection = sqlite3.connect(self.vectors_path / 'vectors.db')
         self.connection.execute('''
 CREATE TABLE IF NOT EXISTS vectors (
-    id TEXT PRIMARY KEY,
-    patient_id TEXT,
+    patient_id TEXT PRIMARY KEY,
     vector BLOB,
     text TEXT,
     chronological_length INTEGER
@@ -74,15 +71,14 @@ CREATE TABLE IF NOT EXISTS vectors (
         vectors = [None for _ in patient_ids]
         to_compute = []
         to_compute_indices = []
-        for i, string in enumerate(narratives):
-            id = generate_string_id(text=string)
-            cursor.execute("SELECT vector FROM vectors WHERE id=?", (id,))
+        for i, (patient_id, narrative) in enumerate(zip(patient_ids, narratives)):
+            cursor.execute("SELECT vector FROM vectors WHERE patient_id=?", (patient_id,))
             # See if we already have this string vectorized (and we're not scrubbing)
             row = cursor.fetchone()
             if row == None or self.scrub_vectors:
                 # Need to recompute vector
                 to_compute_indices.append(i)
-                to_compute.append(string)
+                to_compute.append(narrative)
             else:
                 vectors[i] = np.frombuffer(row[0], dtype=np.float32)
                 
@@ -97,13 +93,12 @@ CREATE TABLE IF NOT EXISTS vectors (
             new_records = []
             for i, missing_vector in zip(to_compute_indices, missing_vectors):
                 vectors[i] = missing_vector
-                id = generate_string_id(text=narratives[i])
                 vector_bytes = missing_vector.tobytes()
-                new_records.append((id, patient_ids[i], vector_bytes, narratives[i], self.narrative_chronological_lengths[patient_ids[i]]))
+                new_records.append((patient_ids[i], vector_bytes, narratives[i], self.narrative_chronological_lengths[patient_ids[i]]))
                 
             self.connection.executemany(
                 '''
-INSERT OR REPLACE INTO vectors (id, patient_id, vector, text, chronological_length) VALUES (?, ?, ?, ?, ?)
+INSERT OR REPLACE INTO vectors (patient_id, vector, text, chronological_length) VALUES (?, ?, ?, ?)
 ''',
                 new_records
             )

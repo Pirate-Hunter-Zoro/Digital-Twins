@@ -15,7 +15,7 @@ def run_chonology_check():
     """Helper function to evaluate TRD prediction performance over varying chronological lengths of patient history
     """
     # Load the actual prediction risk scores
-    risk_scores_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_predictions.csv')
+    risk_scores_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / 'predictions.csv')
     
     # Load patient chronological lengths
     retriever = Retriever()
@@ -40,14 +40,16 @@ def run_chonology_check():
         plt.xlabel('Chronological Length (Days) of Patient History')
         plt.ylabel('TRD Probability Prediction Error')
         plt.title(f'Error vs. History Length: {weighting_strat}')
-        plt.savefig(Path(os.environ['RESULTS_DIR']) / f'battle_1_chronology_check_{weighting_strat}.png')
+        save_path = Path(os.environ['RESULTS_DIR']) / 'chronology_checks' / f'chronology_check_{weighting_strat}.png'
+        os.makedirs(save_path.parent, exist_ok=True)
+        plt.savefig(str(save_path))
         plt.close()
         check_results.append({
             'weighting_strategy': weighting_strat,
             'spearman_rho_correlation': correlation,
             'p_value': p_value,
         })
-    pd.DataFrame(check_results).to_csv(Path(os.environ['RESULTS_DIR']) / f'battle_1_chronology_check.csv')
+    pd.DataFrame(check_results).to_csv(Path(os.environ['RESULTS_DIR']) / f'chronology_check.csv')
 
 def run_cosine_check():
     """Helper function to produce a graph of cosine similarity over random patient pairs versus neighbor patient pairs

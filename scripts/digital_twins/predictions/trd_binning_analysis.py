@@ -19,7 +19,7 @@ def load_and_merge_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: Resulting array that for each anchor patient describes neighborhood similarity and the TRD flag and risk score information
     """
-    predictions_results_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / "battle_1_predictions.csv")
+    predictions_results_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / "predictions.csv")
     neighbor_df = load_neighborhood_data()
     # Group by anchor id but then turn back into regular column
     neighbor_df = neighbor_df.groupby('anchor_id').agg({\
@@ -115,7 +115,9 @@ def plot_density_impact(
         ax1.legend(loc='upper left')
         ax2.set_ylabel('Brier Score')
         ax2.legend(loc='upper right')
-        fig.savefig(f"{os.environ['RESULTS_DIR']}/scores_by_density_{strat}.png")
+        save_path = Path(os.environ['RESULTS_DIR']) / "density_binning" / f"scores_by_density_{strat}.png"
+        os.makedirs(save_path.parent, exist_ok=True)
+        fig.savefig(str(save_path))
         plt.close(fig)
 
 def stratify_by_chronology(
@@ -178,7 +180,9 @@ def plot_chronological_length_impact(
         ax1.legend(loc='upper left')
         ax2.set_ylabel('Brier Score')
         ax2.legend(loc='upper right')
-        fig.savefig(f"{os.environ['RESULTS_DIR']}/scores_by_chronological_length_{strat}.png")
+        save_path = Path(os.environ['RESULTS_DIR']) / "chronological_binning" / f"scores_by_chronological_length_{strat}.png"
+        os.makedirs(save_path.parent, exist_ok=True)
+        fig.savefig(str(save_path))
         plt.close(fig)
 
 def run_trd_bin_analysis():

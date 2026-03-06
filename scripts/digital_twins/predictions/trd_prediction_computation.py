@@ -130,7 +130,7 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
         'proportion_risk_score_>0.9': high_proportion,
     }
     
-def run_trd_prediction_analysis():
+def run_trd_prediction_computation():
     # Merge all evaluation results from different .csv files into one dataframe
     df = load_neighborhood_data()
     df_non_random = df[df['is_random_baseline'] == False]
@@ -197,12 +197,12 @@ def run_trd_prediction_analysis():
                 'Mean_ESS': np.mean(np.array(ess_values))
             }
     
-    results_txt_file = Path(os.environ['RESULTS_DIR']) / 'battle_1_results.txt'
+    results_txt_file = Path(os.environ['RESULTS_DIR']) / 'results.txt'
     with open(results_txt_file, 'w') as f:
         f.write(text_report)
     
     # Turn results into a pandas data frame and save the .csv
     results_df = pd.DataFrame(results)
-    results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_summary.csv')
-    pd.DataFrame(raw_predictions).to_csv(Path(os.environ['RESULTS_DIR']) / 'battle_1_predictions.csv')
+    results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'summary.csv')
+    pd.DataFrame(raw_predictions).to_csv(Path(os.environ['RESULTS_DIR']) / 'predictions.csv')
     print("Battle 1 analysis complete!", flush=True)

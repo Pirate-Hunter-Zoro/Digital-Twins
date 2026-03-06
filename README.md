@@ -53,6 +53,14 @@ Transforms the structured JSONs into textual narratives.
 
 * **Artifacts**: This stage populates the SQLite database `vectors.db`.
 
+* **`vector_audit.py`**:
+  * **The Auditor.** Validates the geometry of the embedding space before expensive scoring.
+  * **Checks**:
+    1. **Normalization**: Verifies if vector norms are uniform (1.0) or variable.
+    2. **Anisotropy (The Cone)**: Measures embedding collapse by comparing the distribution of Random Pair similarities vs. Neighbor similarities.
+    3. **Metric Monotonicity**: Tests if Euclidean distance offers distinct ranking signals compared to Cosine similarity.
+  * **Output**: `vector_norms.png`, `cos_random_vs_neighbor.png`, `cos_vs_euclidean.png`.
+
 ### 4. Stage 3: Retrieval & Scoring (`scripts/digital_twins/neighbors`)
 
 **The Judge.** Finds and scores patient similarity.
@@ -64,18 +72,16 @@ Transforms the structured JSONs into textual narratives.
   * **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
   * **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
 
-* **`vector_audit.py`**:
-  * **The Auditor.** Validates the geometry of the embedding space before expensive scoring.
-  * **Checks**:
-    1. **Normalization**: Verifies if vector norms are uniform (1.0) or variable.
-    2. **Anisotropy (The Cone)**: Measures embedding collapse by comparing the distribution of Random Pair similarities vs. Neighbor similarities.
-    3. **Metric Monotonicity**: Tests if Euclidean distance offers distinct ranking signals compared to Cosine similarity.
-  * **Output**: `vector_norms.png`, `cos_random_vs_neighbor.png`, `cos_vs_euclidean.png`.
-
 * **`scorer.py`**:
   * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
   * **Caching**: Stores expensive LLM outputs in `judgements.db` (Table: `llm_judgements`) to prevent redundant inference.
   * **Logic**: Checks cache -> Formats Prompt -> Calls vLLM -> Parses JSON -> Saves Result.
+
+* **`llm_similarity_audit.py`**:
+  * The Auditor. Extracts concrete examples of the LLM's scoring logic for manual review.
+  * **Cross-Database Extraction**: Bridges the `judgements.db` (for scores and raw JSON responses) and `vectors.db` (for the original patient narratives).
+  * **Extremes Sampling**: Queries the top 5 highest and bottom 5 lowest similarity scores to isolate and demonstrate the model's behavior at the margins.
+  * **Reporting**: Generates isolated `.txt` files containing both compared narratives alongside the formatted JSON output for readable human analysis.
 
 ### 5. Stage 4: Prediction & Evaluation (`scripts/digital_twins/predictions`)
 
@@ -98,7 +104,7 @@ graph TD
 
 ```
 
-* **`trd_prediction_analysis.py`**:
+* **`trd_prediction_computation.py`**:
   * **Battle 1: Prediction & Calibration.**
   * **Digital Twin Matcher Logic**:
       1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient).
@@ -110,7 +116,7 @@ graph TD
     * **Calibration**: Brier Score, **Weighted ECE**, **Calibration Slope & Intercept**.
     * **Confidence**: Effective Sample Size (ESS) and **Risk Extremity Index** (fraction of predictions <0.1 or >0.9).
     * **Optimal Confusion Matrix**: Identifies peak threshold via Youden's J-statistic and calculates Sensitivity, Specificity, F-Score, PLR, and NLR.
-  * **Output**: Mode-prefixed output plots (e.g., `Semantic_COSINE_roc_curve.png`), `battle_1_summary.csv` (Metrics), and `battle_1_predictions.csv` (Row-level logs).
+  * **Output**: Mode-prefixed output plots (e.g., `Semantic_COSINE_roc_curve.png`), `summary.csv` (Metrics), and `predictions.csv` (Row-level logs).
 
 * **`trd_ranking_analysis.py`**:
   * **Battle 2: Ranking & Homophily Analysis.** Investigates whether the LLM retrieves neighbors that are clinically more congruent with the anchor than Cosine alone ("Label Homophily").
@@ -119,14 +125,14 @@ graph TD
     * **Spearman Correlation**: Quantifies the correlation between Cosine Similarity and LLM Similarity to check for signal redundancy.
     * **Separation AUC**: (Proxy) Evaluates the LLM's ability to distinguish between "Close" neighbors (Rank $\le 5$) and "Far" neighbors (Rank $\ge 45$).
   * **Density**: Computes **kNN Radius** and **LLM Effective Sample Size (ESS=$\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$)** to profile the density of patient neighborhoods.
-  * **Output**: Generates `battle_2_agreement_curve.png`, `battle_2_agreement_summary.csv`, and `battle_2_correlation_results.json`.
+  * **Output**: Generates `agreement_curve.png`, `agreement_summary.csv`, and `correlation_results.json`.
 
 * **`trd_sanity_checks.py`**:
   * **Battle 3: Deep Diagnostics & Validity.**
   * **Embedding Validity**: Validates that retrieved neighbors are statistically distinct from random noise. Computes the $N \times N$ similarity matrix of the anchor cohort to generate a "Random Pair" distribution and overlays it against the "Neighbor" distribution.
   * **Chronology Confounding**: Tests if the model is cheating by using "Data Richness" as a proxy for risk. Merges prediction errors with patient history lengths ($L_i$) and calculates the **Spearman Correlation** ($\rho$) for each weighting strategy.
-  * **Output**: Generates `cosine_score_random_vs_neighbor.png` (Visual Validity) and `battle_1_chronology_check.csv` (Confounding Metrics + Scatter Plots).
-  * **Output**: `battle_1_summary.csv` (Metrics), `battle_1_predictions.csv` (Row-level logs), and comparative calibration/ROC plots.
+  * **Output**: Generates `cosine_score_random_vs_neighbor.png` (Visual Validity) and `chronology_check.csv` (Confounding Metrics + Scatter Plots).
+  * **Output**: `summary.csv` (Metrics), `predictions.csv` (Row-level logs), and comparative calibration/ROC plots.
 
 * **`trd_binning_analysis.py`**:
   * **Battle 3: Environmental Diagnostics (Density & Chronology).** Investigates how the structural environment of the embedding space and data richness impact model reliability.
@@ -151,7 +157,7 @@ Interfaces for the neural networks.
 * **`similarity.py`**: **The Search Engine.**
 * Computes Cosine Similarity between patient IDs.
 * **Caching**: Uses the `similarities` table in `vectors.db`.
-* **`utils.py`**: Core helpers (hashing logic `generate_string_id`, etc.).
+* **`utils.py`**: Core helpers (loading in results .csv files `load_neighborhood_data`, etc.).
 * **`io.py`**: Standardized file handling.
 
 ---
@@ -167,20 +173,10 @@ Stores the raw embeddings.
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `id` | `TEXT (PK)` | MD5 Hash of the narrative text. |
-| `patient_id` | `TEXT` | Patient ID of the corresponding narrative. |
+| `patient_id` | `TEXT (PK)` | Patient ID of the corresponding narrative. |
 | `vector` | `BLOB` | The numpy array (`float32`) serialized to bytes. |
 | `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
 | `chronological_length` | `INTEGER` | Chronological length in days of the patient's pre-anchor history. |
-
-**Table: `similarities**`
-Stores the cosine similarity of the embeddings associated with the string hash ids.
-
-| Column | Type | Description |
-| --- | --- | --- |
-| `id_a` | `TEXT (PK)` | MD5 Hash (alphabetically first) of one of the narrative texts. |
-| `id_b` | `TEXT (PK)` | MD5 Hash (alphabetically second) of the other narrative text. |
-| `score` | `REAL` | The cosine similarity between the two embeddings. |
 
 ### Judgement Storage (`judgements.db`)
 
@@ -191,8 +187,8 @@ Caches the expensive qualitative evaluations from the LLM.
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `id_a` | `TEXT (PK)` | First Patient ID. |
-| `id_b` | `TEXT (PK)` | Second Patient ID. |
+| `patient_id_a` | `TEXT (PK)` | First Patient ID. |
+| `patient_id_b` | `TEXT (PK)` | Second Patient ID. |
 | `overall_score` | `INTEGER` | Numeric Similarity Score |
 | `full_response` | `TEXT` | Full Response from LLM Including Justification |
 

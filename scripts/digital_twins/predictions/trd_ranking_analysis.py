@@ -112,7 +112,7 @@ def plot_agreement_curves(agreement_df: pd.DataFrame):
     plt.axhline(y=0.5, linestyle='--') # Random
     plt.legend()
     plt.title('Agreement of Nearest Neighbors with Anchor TRD Label')
-    plt.savefig(RESULTS_DIR / 'battle_2_agreement_curve.png')
+    plt.savefig(RESULTS_DIR / 'agreement_curve.png')
     plt.close()
 
 def run_trd_ranking_analysis():
@@ -126,10 +126,10 @@ def run_trd_ranking_analysis():
     # Find TRD agreement of anchor patient with nearby neighbors
     k_values = [5, 10, 25, 50]
     agreement_df = agreement(results_df=results_df, k_values=k_values)  
-    agreement_df.to_csv(RESULTS_DIR / 'battle_2_agreement_summary.csv')
+    agreement_df.to_csv(RESULTS_DIR / 'agreement_summary.csv')
     plot_agreement_curves(agreement_df=agreement_df)
     
     # Compute correlation values for llm and cosine similarity
     correlation_diagnostics = compute_diagnostics(df=results_df)
-    with open(RESULTS_DIR / 'battle_2_correlation_results_cos_vs_llm.json', 'w') as f:
+    with open(RESULTS_DIR / 'correlation_results_cos_vs_llm.json', 'w') as f:
         json.dump(correlation_diagnostics, f, indent=4)

@@ -52,7 +52,9 @@ def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, m
     plt.fill_between(base_false_positive_rate, q_low, q_high, color='gray', alpha=0.2, label='95% CI')
     
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/roc_curve_{mode}.png")
+    save_path = RESULTS_DIR / "roc_curves" / f"roc_curve_{mode}.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    plt.savefig(str(save_path))
     plt.close()
 
 def plot_precision_recall(y_true: np.array, y_prob: np.array, mode: str):
@@ -73,7 +75,9 @@ def plot_precision_recall(y_true: np.array, y_prob: np.array, mode: str):
     plt.ylabel("Precision")
     plt.title("Precision Recall Curve")
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/pr_curve_{mode}.png")
+    save_path = RESULTS_DIR / "pr_curves" / f"pr_curve_{mode}.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    plt.savefig(str(save_path))
     plt.close()
 
 def plot_calibration(y_true: np.array, y_prob: np.array, mode: str):
@@ -95,7 +99,9 @@ def plot_calibration(y_true: np.array, y_prob: np.array, mode: str):
     plt.ylabel("Fraction of Positives")
     plt.title("Calibration Curve")
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/calibration_curve_{mode}.png")
+    save_path = RESULTS_DIR / "calibration_curves" / f"calibration_curve_{mode}.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    plt.savefig(str(save_path))
     plt.close()
 
 def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array, mode: str):
@@ -146,7 +152,9 @@ def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array, mode: str):
     plt.title("Decision Curve Analysis")
     plt.ylim(bottom=-0.1)
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/decision_curve_analysis_{mode}.png")
+    save_path = RESULTS_DIR / "decision_curves" / f"decision_curve_{mode}.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    plt.savefig(str(save_path))
     plt.close()
 
 def plot_effective_sample_size_distribution(ess_values: np.array, mode: str):
@@ -164,7 +172,9 @@ def plot_effective_sample_size_distribution(ess_values: np.array, mode: str):
     plt.title("Effective Sample Size Distribution")
     plt.axvline(x=int(os.environ['LOW_CONFIDENCE_ESS_THRESHOLD']), color='red', linestyle='--', linewidth=2, label='Low Confidence (<20)')
     plt.legend()
-    plt.savefig(f"{str(RESULTS_DIR)}/effective_sample_size_distribution_{mode}.png")
+    save_path = RESULTS_DIR / "ess_distributions" / f"ess_distribution_{mode}.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    plt.savefig(str(save_path))
     plt.close()
     
 def plot_optimal_confusion_matrix(y_true: np.array, y_prob: np.array, mode: str):
@@ -207,5 +217,7 @@ Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
     display.plot(cmap='Blues')
     plt.figtext(x=0.5, y=-0.1, ha='center', s=metrics)
     plt.title(f'Threshold: {threshold}')
-    plt.savefig(f"{str(RESULTS_DIR)}/optimal_threshold_confusion_matrix_{mode}.png", bbox_inches='tight')
+    save_path = RESULTS_DIR / "confusion_matrices" / f"confusion_matrix_{mode}.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    plt.savefig(save_path, bbox_inches='tight')
     plt.close()
