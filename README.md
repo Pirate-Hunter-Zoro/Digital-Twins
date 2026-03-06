@@ -13,9 +13,10 @@ graph LR
     D --> E[Markdown Narratives]
     E --> F[Stage 2: Embedding]
     F --> G[(Vectors.db)]
-    G --> H[Stage 3: Retrieval]
-    H --> I[Stage 4: Prediction]
-    I --> J[Diagnostics & Sanity Checks]
+    G --> H[Stage 3: Retrieval & Scoring]
+    H --> I[(Judgements.db)]
+    I --> J[Stage 4: Prediction]
+    J --> K[Diagnostics & Sanity Checks]
 
 
 ```
