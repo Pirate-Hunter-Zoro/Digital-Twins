@@ -40,7 +40,7 @@ def vector_analysis(vectors: np.array) -> np.array:
     plt.title("Histogram of Norms of Vectorized Patients")
     plt.xlabel("Vector Norm")
     plt.ylabel("Frequency")
-    plt.savefig(str(RESULTS_DIR) / 'vector_norms.png'))
+    plt.savefig(str(RESULTS_DIR) / 'vector_norms.png')
     plt.close()
     return vector_norms
     
