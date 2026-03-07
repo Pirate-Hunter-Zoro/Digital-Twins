@@ -132,15 +132,14 @@ graph TD
   * **Battle 3: Deep Diagnostics & Validity.**
   * **Embedding Validity**: Validates that retrieved neighbors are statistically distinct from random noise. Computes the $N \times N$ similarity matrix of the anchor cohort to generate a "Random Pair" distribution and overlays it against the "Neighbor" distribution.
   * **Chronology Confounding**: Tests if the model is cheating by using "Data Richness" as a proxy for risk. Merges prediction errors with patient history lengths ($L_i$) and calculates the **Spearman Correlation** ($\rho$) for each weighting strategy.
-  * **Output**: Generates `cosine_score_random_vs_neighbor.png` (Visual Validity) and `chronology_check.csv` (Confounding Metrics + Scatter Plots).
-  * **Output**: `summary.csv` (Metrics), `predictions.csv` (Row-level logs), and comparative calibration/ROC plots.
+  * **Output**: Generates `cosine_score_random_vs_neighbor.png` (Visual Validity), `chronology_check.csv` (Confounding Metrics + Scatter Plots), `summary.csv` (Metrics), `predictions.csv` (Row-level logs), and comparative calibration/ROC plots.
 
 * **`trd_binning_analysis.py`**:
-  * **Battle 3: Environmental Diagnostics (Density & Chronology).** Investigates how the structural environment of the embedding space and data richness impact model reliability.
+  * **Battle 4: Environmental Diagnostics (Density & Chronology).** Investigates how the structural environment of the embedding space and data richness impact model reliability.
   * **Density Stratification**: Bins patients into quintiles based on their **kNN Radius** (mean distance of top-$k$ neighbors - e.g. 1 - mean(cos_sims)) to evaluate if sparse neighborhoods degrade model discrimination (AUC) or calibration (Brier Score).
   * **Chronology Confounding**: Bins patients into quintiles based on their **Chronological Length** (days of patient history) to test if the model is inappropriately leveraging data volume as a proxy for clinical risk.
-  * **Metrics**: Calculates AUC, Brier Score, and Patient Count per bin across all weighting strategies (Uniform, Cosine, LLM, Combined).
-  * **Output**: Generates dual-axis performance plots (`scores_by_density_{strategy}.png` and `scores_by_chronological_length_{strategy}.png`) to visualize degradation trends.
+  * **Metrics**: Calculates AUC, Brier Score, and Patient Count per bin across all weighting strategies (Uniform, Cosine, LLM, Combined). Computes Spearman Rank Correlation ($\rho$) and p-values to evaluate the statistical significance of monotonic performance trends across bins.
+  * **Output**: Generates dual-axis performance plots (`scores_by_{bin_type}_{strategy}.png`) with statistical correlation metrics embedded in the titles to visualize degradation trends.
 
 ### 6. Models (`scripts/models`)
 
