@@ -5,6 +5,7 @@ from sklearn.metrics import (
     roc_auc_score,
     brier_score_loss,
 )
+from scipy.stats import spearmanr
 from pathlib import Path
 import os
 
@@ -93,33 +94,6 @@ def compute_density_bin_scores(
         return pd.Series([roc_score, brier_score, patient_count_in_bin], index=['roc_score', 'brier_score', 'patient_count_in_bin'])
     return grouped_df.apply(extractor, include_groups=False).reset_index()
 
-def plot_density_impact(
-    performance_summary: pd.DataFrame, 
-) -> None:
-    """
-    Generates a dual-axis line plot:
-    - X-Axis: Density Bin (Dense -> Sparse)
-    - Y-Axis Left: AUC (Higher is better)
-    - Y-Axis Right: ECE/Brier (Lower is better)
-    
-    Saves the plot to output_path.
-    """
-    for strat in performance_summary['strategy'].unique():
-        fig, ax1 = plt.subplots(figsize=(10,6))
-        ax2 = ax1.twinx() # Share x axis
-        filtered_df = performance_summary[performance_summary['strategy'] == strat]
-        ax1.plot(filtered_df['density_bin'].astype(str), filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
-        ax2.plot(filtered_df['density_bin'].astype(str), filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
-        ax1.set_xlabel('Density Bin')
-        ax1.set_ylabel('ROC Score')
-        ax1.legend(loc='upper left')
-        ax2.set_ylabel('Brier Score')
-        ax2.legend(loc='upper right')
-        save_path = Path(os.environ['RESULTS_DIR']) / "density_binning" / f"scores_by_density_{strat}.png"
-        os.makedirs(save_path.parent, exist_ok=True)
-        fig.savefig(str(save_path))
-        plt.close(fig)
-
 def stratify_by_chronology(
     df: pd.DataFrame, 
     metric_col: str = 'chronological_length', 
@@ -158,30 +132,51 @@ def compute_chronological_bin_scores(
         return pd.Series([roc_score, brier_score, patient_count_in_bin], index=['roc_score', 'brier_score', 'patient_count_in_bin'])
     return grouped_df.apply(extractor, include_groups=False).reset_index()
 
-def plot_chronological_length_impact(
+def plot_bin_impact(
     performance_summary: pd.DataFrame, 
+    bin_type: str
 ) -> None:
     """
     Generates a dual-axis line plot:
-    - X-Axis: Chronological Length Bin (shorter -> longer)
+    - X-Axis: Specified Bin (e.g. Density, Chronological)
     - Y-Axis Left: AUC (Higher is better)
     - Y-Axis Right: ECE/Brier (Lower is better)
+    - Computes Spearman Rho association between bin index and both metrics
     
     Saves the plot to output_path.
     """
     for strat in performance_summary['strategy'].unique():
+        # Set up graph and filter performance summary according to strategy
         fig, ax1 = plt.subplots(figsize=(10,6))
         ax2 = ax1.twinx() # Share x axis
         filtered_df = performance_summary[performance_summary['strategy'] == strat]
-        ax1.plot(filtered_df['chronological_bin'].astype(str), filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
-        ax2.plot(filtered_df['chronological_bin'].astype(str), filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
-        ax1.set_xlabel('Chronological Length Bin')
+        
+        # Extract roc scores, brier scores, and bin numbers
+        roc_scores, brier_scores, bins, bin_counts = filtered_df['roc_score'],\
+                                            filtered_df['brier_score'],\
+                                                np.arange(len(filtered_df[f'{bin_type}_bin'])),\
+                                                    filtered_df['patient_count_in_bin']
+        rho_roc, p_value_roc = spearmanr(roc_scores, bins)
+        rho_brier, p_value_brier = spearmanr(brier_scores, bins)
+        bin_labels = [f'{bin_interval}\nN={count}' for bin_interval, count in zip(filtered_df[f'{bin_type}_bin'].astype(str), bin_counts)]
+        metrics = f"\
+Rho_ROC: {rho_roc:.2f}\n\
+P-Value_ROC: {p_value_roc:.2f}\n\
+Rho_BRIER: {rho_brier:.2f}\n\
+P-Value_BRIER: {p_value_brier:.2f}\
+"
+        
+        ax1.plot(bin_labels, filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
+        ax2.plot(bin_labels, filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
+        ax1.set_xlabel(f'{bin_type.capitalize()} Bin')
         ax1.set_ylabel('ROC Score')
         ax1.legend(loc='upper left')
         ax2.set_ylabel('Brier Score')
         ax2.legend(loc='upper right')
-        save_path = Path(os.environ['RESULTS_DIR']) / "chronological_binning" / f"scores_by_chronological_length_{strat}.png"
+        fig.suptitle(metrics)
+        save_path = Path(os.environ['RESULTS_DIR']) / f"{bin_type}_binning" / f"scores_by_{bin_type}_{strat}.png"
         os.makedirs(save_path.parent, exist_ok=True)
+        fig.tight_layout()
         fig.savefig(str(save_path))
         plt.close(fig)
 
@@ -193,10 +188,10 @@ def run_trd_bin_analysis():
     density_scores_by_bin = compute_density_bin_scores(density_stratified)
     # Save the .csv so we can see the bin counts
     density_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / "density_performance_summary.csv")
-    plot_density_impact(density_scores_by_bin)
+    plot_bin_impact(density_scores_by_bin, bin_type='density')
     
     chronological_stratified = stratify_by_chronology(df)
     chronological_scores_by_bin = compute_chronological_bin_scores(chronological_stratified)
     # Again save the .csv so we can see the bin counts
     chronological_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / "chronology_performance_summary.csv")
-    plot_chronological_length_impact(chronological_scores_by_bin)
+    plot_bin_impact(chronological_scores_by_bin, bin_type='chronological')
