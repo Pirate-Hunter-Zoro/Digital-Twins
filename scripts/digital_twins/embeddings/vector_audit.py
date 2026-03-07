@@ -10,6 +10,9 @@ import os
 from pathlib import Path
 import random
 
+RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
 from scripts.shared.utils import load_neighborhood_data
 
 def vector_analysis(vectors: np.array) -> np.array:
@@ -22,7 +25,7 @@ def vector_analysis(vectors: np.array) -> np.array:
         np.array: Norm of all vectors
     """
     ndim = vectors.shape
-    with open(Path(os.environ['RESULTS_DIR']) / 'vectors_shape.txt', 'w') as f:
+    with open(RESULTS_DIR / 'vectors_shape.txt', 'w') as f:
         f.write(f"Vector Dimensions Over All Patients: {ndim}")
     
     # Compute norm of all vectors
@@ -37,7 +40,7 @@ def vector_analysis(vectors: np.array) -> np.array:
     plt.title("Histogram of Norms of Vectorized Patients")
     plt.xlabel("Vector Norm")
     plt.ylabel("Frequency")
-    plt.savefig(str(Path(os.environ['RESULTS_DIR']) / 'vector_norms.png'))
+    plt.savefig(str(RESULTS_DIR) / 'vector_norms.png'))
     plt.close()
     return vector_norms
     
@@ -80,7 +83,7 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple
     plt.xlabel("Cosine Similarity Score")
     plt.ylabel("Frequency")
     plt.legend()
-    plt.savefig(str(Path(os.environ['RESULTS_DIR']) / 'cos_random_vs_neighbor.png'))
+    plt.savefig(str(RESULTS_DIR / 'cos_random_vs_neighbor.png'))
     plt.close()
     
     return (pairs, random_similarities)
@@ -103,7 +106,7 @@ def monotonicity_analysis(vectors: np.array, random_pairs: list[tuple[int,int]],
     plt.xlabel("Euclidean Distance")
     plt.ylabel("Cosine Distances")
     plt.title(f"Euclidean vs. Cosine (Rho={rho}, P-Value={p_value})")
-    plt.savefig(str(Path(os.environ['RESULTS_DIR']) / 'cos_vs_euclidean.png'))
+    plt.savefig(str(RESULTS_DIR / 'cos_vs_euclidean.png'))
     plt.close()
 
 def main():
