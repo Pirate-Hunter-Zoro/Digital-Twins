@@ -19,7 +19,7 @@ def main():
     
     # Find the lowest 5 overall scores
     scorer.cursor.execute('''
-SELECT patient_id_a, patient_id_b, full_response FROM llm_judgements ORDER BY overall_score ASC LIMIT 5;
+SELECT id_a, id_b, full_response FROM llm_judgements ORDER BY overall_score ASC LIMIT 5;
 ''')
     rows = scorer.cursor.fetchall()
     for row in rows:
@@ -45,7 +45,7 @@ SELECT text FROM vectors WHERE patient_id=?
     
     # Find the highest 5 overall scores
     scorer.cursor.execute('''
-SELECT patient_id_a, patient_id_b, full_response FROM llm_judgements ORDER BY overall_score DESC LIMIT 5;
+SELECT id_a, id_b, full_response FROM llm_judgements ORDER BY overall_score DESC LIMIT 5;
 ''')
     rows = scorer.cursor.fetchall()
     rows = scorer.cursor.fetchall()
