@@ -21,18 +21,18 @@ def main():
     # Grab some judgements
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     judgement_cursor.execute("""
-SELECT id_a, id_b, overall_score, full_response FROM llm_judgements                          
+SELECT patient_id_a, patient_id_b, overall_score, full_response FROM llm_judgements                          
 """)
     rows = judgement_cursor.fetchall()
     for row in random.sample(rows, min(len(rows), SAMPLE_SIZE)):
         id_a, id_b, overall_score, full_response = row
         # Grab the narratives
         vector_cursor.execute("""
-SELECT text, patient_id FROM vectors WHERE id = ?
+SELECT text, patient_id FROM vectors WHERE patient_id = ?
 """, (id_a,))
         narrative_a, patient_id_a = vector_cursor.fetchone()
         vector_cursor.execute("""
-SELECT text, patient_id FROM vectors WHERE id = ?
+SELECT text, patient_id FROM vectors WHERE patient_id = ?
 """, (id_b,))
         narrative_b, patient_id_b = vector_cursor.fetchone()
         

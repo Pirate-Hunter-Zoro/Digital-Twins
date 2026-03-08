@@ -23,7 +23,7 @@ class Retriever:
         # Load all patient vectors
         self.cursor.execute(
             """
-SELECT id, vector, chronological_length FROM vectors
+SELECT patient_id, vector, chronological_length FROM vectors
             """
         )
         # List of tuples - (id string of narrative, vector in bytes)
@@ -62,7 +62,7 @@ SELECT id, vector, chronological_length FROM vectors
         """
         self.cursor.execute(
             """
-SELECT text FROM vectors WHERE id=?
+SELECT text FROM vectors WHERE patient_id=?
             """,
             (id,))
         return self.cursor.fetchone()[0]
@@ -78,7 +78,7 @@ SELECT text FROM vectors WHERE id=?
         """
         self.cursor.execute(
             """
-SELECT patient_id FROM vectors WHERE id=?
+SELECT patient_id FROM vectors WHERE patient_id=?
             """,
             (id,))
         return self.cursor.fetchone()[0]
@@ -94,7 +94,7 @@ SELECT patient_id FROM vectors WHERE id=?
         """
         self.cursor.execute(
             """
-SELECT vector FROM vectors WHERE id=?
+SELECT vector FROM vectors WHERE patient_id=?
             """,
             (id,))
         return np.frombuffer(self.cursor.fetchone()[0], dtype=np.float32)
@@ -110,7 +110,7 @@ SELECT vector FROM vectors WHERE id=?
         """
         self.cursor.execute(
             """
-SELECT chronological_length FROM vectors WHERE id=?
+SELECT chronological_length FROM vectors WHERE patient_id=?
             """,
             (id,))
         return self.cursor.fetchone()[0]
