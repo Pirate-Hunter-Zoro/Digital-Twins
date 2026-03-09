@@ -215,7 +215,7 @@ Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
     # Create the confusion matrix display with the text report
     display = sklearn.metrics.ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=['Non-TRD', 'TRD'])
     display.plot(cmap='Blues')
-    plt.figtext(x=0.5, y=-0.1, ha='center', s=metrics)
+    plt.figtext(x=0.5, y=-0.25, ha='center', s=metrics)
     plt.title(f'Threshold: {threshold}')
     save_path = RESULTS_DIR / "confusion_matrices" / f"confusion_matrix_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
