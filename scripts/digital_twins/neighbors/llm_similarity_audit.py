@@ -66,8 +66,8 @@ SELECT text FROM vectors WHERE patient_id=?
         # Write the two narratives and the response to a .txt file named after the two patients
         with open(results_dir / f"judgement_{patient_id_a}_{patient_id_b}.txt", 'w') as f:
             f.write(f"Narrative A:\n{narrative_a}\n\n\n\
-                Narrative B:\n{narrative_b}\n\n\n\
-                    Response:\n{response_indented}")
+Narrative B:\n{narrative_b}\n\n\n\
+Response:\n{response_indented}")
     
 if __name__=="__main__":
     main()
