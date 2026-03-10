@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 from tqdm import tqdm
 import multiprocessing
+import numpy as np
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 
@@ -17,6 +18,7 @@ predictor = None
 
 def init_worker():
     global predictor
+    np.random.seed(int(os.environ['SEED']))
     predictor = TRDPredictor()
 
 def evaluate_patient(narrative_hash_id: str) -> list[dict]:
@@ -55,6 +57,7 @@ SELECT patient_id FROM vectors
     
     # Each worker is going to do this, and we need them all to yield the same sample - hence the seeding
     random.seed(int(os.environ['SEED']))
+    np.random.seed(int(os.environ['SEED']))
     patient_sample = random.sample(trd_positive, min(len(trd_positive), n//2)) + random.sample(trd_negative, min(len(trd_negative), n//2))
     
     # Now break up the patient sample to different workers
