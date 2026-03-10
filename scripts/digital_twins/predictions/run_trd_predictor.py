@@ -58,7 +58,8 @@ SELECT patient_id FROM vectors
     # Each worker is going to do this, and we need them all to yield the same sample - hence the seeding
     random.seed(int(os.environ['SEED']))
     np.random.seed(int(os.environ['SEED']))
-    patient_sample = random.sample(trd_positive, min(len(trd_positive), n//2)) + random.sample(trd_negative, min(len(trd_negative), n//2))
+    patient_sample = random.sample(trd_positive, min(len(trd_positive), n//2))\
+        + random.sample(trd_negative, min(len(trd_negative), n//2))
     
     # Now break up the patient sample to different workers
     slurm_task_id = int(os.environ['SLURM_ARRAY_TASK_ID'])
@@ -69,7 +70,7 @@ SELECT patient_id FROM vectors
     start_idx = slurm_task_id*chunk_length
     end_idx = len(patient_sample) if slurm_task_id == slurm_task_count - 1 else start_idx + chunk_length
     # Python handles out of range end_idx
-    patient_chunk_for_worker = patient_sample[start_idx: end_idx] # For the worker below, we will only grab the narrative Hash ID; not the patient ID
+    patient_chunk_for_worker = patient_sample[start_idx: end_idx]
     
     results = []
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker) as pool:

@@ -143,10 +143,6 @@ def run_trd_prediction_computation():
         for patient_id in anchor_ids
     }
     
-    # Slice data frame to only have the nearest K_SCORE cosine similarities
-    df_battle_non_random = df_non_random[df_non_random['rank_cosine'] <= int(os.environ['K_SCORE'])]
-    df_battle_random = df_random[df_random['rank_cosine'] <= int(os.environ['K_SCORE'])]
-    
     # Create a report to put in a text file
     text_report = "Battle 1 Analysis Report\n\n"
     
@@ -154,7 +150,7 @@ def run_trd_prediction_computation():
     results = {}
     # Store for each mode and strategy the TRD predictions of each anchor patient
     raw_predictions = [] 
-    for mode_name, current_df in [("Non-Random", df_battle_non_random), ("Random", df_battle_random)]:
+    for mode_name, current_df in [("Non-Random", df_non_random), ("Random", df_random)]:
         weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
         for strat in weighting_strats:
             print(f"Running analysis for weighting strategy: {mode_name}_{strat.value}...", flush=True)

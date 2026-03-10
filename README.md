@@ -249,8 +249,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 
 * `NUM_WORKERS_NON_LLM_TASK`: 16
 * `NUM_WORKERS_LLM_TASK`: 16
-* `NUM_NEIGHBOR_PATIENTS`: 200 (Total number of neighbors evaluated for density analysis).
-* `K_SCORE`: 50 (Number of closest patients queried for LLM similarity judgement).
+* `NUM_NEIGHBOR_PATIENTS`: 50 (Total number of neighbors evaluated for density analysis).
 * `HIGH_SIM_THRESHOLD`: 0.95
 * `WEIGHTING_EXPONENT`: 5.0 (Alpha value for weighting similarity scores).
 * `TRD_BLIND_PROBABILITY`: 0.15

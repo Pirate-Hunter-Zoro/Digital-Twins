@@ -67,22 +67,6 @@ SELECT text FROM vectors WHERE patient_id=?
             (id,))
         return self.cursor.fetchone()[0]
         
-    def get_patient_id(self, id: str) -> str:
-        """
-        Helper method to return the patient id corresponding with the narrative that has the input hashed ID calculated from the narrative
-        
-        :param id: Hashed ID from narrative of patient
-        :type id: str
-        :return: Respective patient ID
-        :rtype: str
-        """
-        self.cursor.execute(
-            """
-SELECT patient_id FROM vectors WHERE patient_id=?
-            """,
-            (id,))
-        return self.cursor.fetchone()[0]
-
     def get_vector(self, id: str) -> np.array:
         """
         Helper method to return the vector corresponding with the narrative that has the input hashed ID calculated from the narrative

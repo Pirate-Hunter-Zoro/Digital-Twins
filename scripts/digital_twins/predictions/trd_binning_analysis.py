@@ -40,13 +40,11 @@ def compute_density_metrics(merged_df: pd.DataFrame, ) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Resulting information for each anchor patient on their neighborhood density
     """
-    k = int(os.environ['K_SCORE'])
     threshold = float(os.environ['HIGH_SIM_THRESHOLD'])
     def calculate_metrics(scores):
         scores.sort(reverse=True)
-        top_k = np.array(scores[:k])
-        knn_rad = 1 - np.mean(top_k)
-        high_sim_count = np.sum(top_k > threshold)
+        knn_rad = 1 - np.mean(scores)
+        high_sim_count = np.sum(scores > threshold)
         return pd.Series({
             "knn_radius": knn_rad, 
             "high_similarity_count": high_sim_count,
