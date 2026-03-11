@@ -1,11 +1,13 @@
 import os
 from pathlib import Path
+from enum import Enum
 
 from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.digital_twins.neighbors.retriever import Retriever
 from scripts.digital_twins.neighbors.scorer import Scorer
+from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 
 class TRDPredictor:
     
@@ -27,12 +29,12 @@ class TRDPredictor:
         """
         return 1 if candidate_patient_id in self.trd_set else 0
     
-    def construct_neighborhood_data(self, index_id: str, random: bool=False) -> list[dict]:
-        """Return the information of all the neighbors of this anchor patient
+    def construct_neighborhood_data(self, index_id: str, scheme: NeighborScheme) -> list[dict]:
+        """Return the information of all the neighbors of this anchor patient retrieved according to the given scheme
 
         Args:
-            index_id (str): Narrative hash ID of the patient
-            random (bool, optional): Whether the neighborhood is random or picked by an embedding model. Defaults to False.
+            index_id (str): ID of the patient
+            scheme (PredictionScheme): Scheme for how we generate the neighborhood of patients (random, nearest, farthest, etc.)
 
         Returns:
             list[dict]: Similarity scores, etc. of all neighbor patients
@@ -41,7 +43,7 @@ class TRDPredictor:
             self.retriever.get_narrative(id=index_id),\
                 self.retriever.get_vector(id=index_id),\
                         self.retriever.get_chronological_length(id=index_id)
-        neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id, random=random)
+        neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id, scheme=scheme)
         for neighbor_id, _ in neighbors:
             # Quick check to ensure this patient is not included in the neighbors
             if neighbor_id == index_id:
@@ -57,7 +59,7 @@ class TRDPredictor:
             # Flag for if this neighbor is trd
             neighbor_trd_flag = self.get_trd_status(candidate_patient_id=neighbor_id)
             neighborhood_data.append({
-                "is_random_baseline": random,
+                "prediction_scheme": scheme.value,
                 "chronological_length": chronological_length,
                 "anchor_patient_id": index_id,
                 "neighbor_patient_id": neighbor_id,

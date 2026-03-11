@@ -158,14 +158,14 @@ def run_trd_prediction_computation():
             labels = []
             risks = []
             ess_values = []
-            for anchor_hash, group in grouped_by_anchor_patient:
+            for anchor_id, group in grouped_by_anchor_patient:
                 risk, ess = calculated_weighted_risk(group=group, strategy=strat)
-                labels.append(anchor_trd_labels[retriever.get_patient_id(anchor_hash)])
+                labels.append(anchor_trd_labels[retriever.get_patient_id(anchor_id)])
                 risks.append(risk)
                 ess_values.append(ess)
                 raw_predictions.append({
-                    'anchor_id': anchor_hash,
-                    'anchor_patient_id': retriever.get_patient_id(anchor_hash),
+                    'anchor_id': anchor_id,
+                    'anchor_patient_id': retriever.get_patient_id(anchor_id),
                     'predicted_risk': risk,
                     'true_label': labels[-1],
                     'ess': ess,

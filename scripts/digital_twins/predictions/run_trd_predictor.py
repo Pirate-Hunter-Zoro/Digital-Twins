@@ -21,18 +21,18 @@ def init_worker():
     np.random.seed(int(os.environ['SEED']))
     predictor = TRDPredictor()
 
-def evaluate_patient(narrative_hash_id: str) -> list[dict]:
+def evaluate_patient(patient_id: str) -> list[dict]:
     """
     Obtain all of the patient's neighborhood prediction information
     
-    :param narrative_hash_id: narrative hash ID of patient
+    :param patient_id:ID of patient
     :type patient_info: str
     :return: patient neighborhood results
     :rtype: list[dict]
     """
     global predictor
-    results_random = predictor.construct_neighborhood_data(index_id=narrative_hash_id, random=True)
-    results = predictor.construct_neighborhood_data(index_id=narrative_hash_id)
+    results_random = predictor.construct_neighborhood_data(index_id=patient_id, random=True)
+    results = predictor.construct_neighborhood_data(index_id=patient_id)
     results.extend(results_random)
     return results
 

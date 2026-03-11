@@ -71,7 +71,7 @@ Transforms the structured JSONs into textual narratives.
   * Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
   * **Baseline Mode**: Includes a random sampling flag to generate a blind baseline of random neighbors for comparative analysis.
   * **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
-  * **Note**: Handles retrieval of raw narratives and mapping of hashed IDs back to Patient IDs.
+  * **Note**: Handles retrieval of raw narratives.
 
 * **`scorer.py`**:
   * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
@@ -148,7 +148,7 @@ Interfaces for the neural networks.
 * **`patient_embedder.py`**:
 * Wraps `SentenceTransformer` (e.g., Qwen).
 * **Storage**: Manages a SQLite connection to `vectors.db`.
-* **Logic**: Checks the DB for existing IDs (MD5 hash of text). If missing, computes the embedding and inserts it as a binary BLOB.
+* **Logic**: Checks the DB for existing IDs. If missing, computes the embedding and inserts it as a binary BLOB.
 * **Scrubbing**: Respects `SCRUB_VECTORS` env var to force re-computation.
 * **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation or scoring).
 

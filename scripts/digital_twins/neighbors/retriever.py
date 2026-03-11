@@ -2,11 +2,13 @@ import sqlite3
 import numpy as np
 from pathlib import Path
 import os
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 import matplotlib.pyplot as plt
 
 from dotenv import load_dotenv
 load_dotenv()
+
+from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 
 VECTORS_DIR = Path(os.environ['VECTORS_DIR'])
 
@@ -53,11 +55,11 @@ SELECT patient_id, vector, chronological_length FROM vectors
         
     def get_narrative(self, id: str) -> str:
         """
-        Helper method to return the narrative corresponding with the input hashed ID calculated from the narrative
+        Helper method to return the narrative corresponding with the input ID of the patient
         
-        :param id: Hashed ID from narrative
+        :param id: patient ID
         :type id: str
-        :return: Narrative producing inputted hash ID
+        :return: Narrative of patient
         :rtype: str
         """
         self.cursor.execute(
@@ -69,9 +71,9 @@ SELECT text FROM vectors WHERE patient_id=?
         
     def get_vector(self, id: str) -> np.array:
         """
-        Helper method to return the vector corresponding with the narrative that has the input hashed ID calculated from the narrative
+        Helper method to return the vector corresponding with the narrative that has the input patient ID
         
-        :param id: Hashed ID from narrative of patient
+        :param id: Patient ID of patient with corresponding narrative
         :type id: str
         :return: Respective vector
         :rtype: np.array
@@ -85,11 +87,11 @@ SELECT vector FROM vectors WHERE patient_id=?
         
     def get_chronological_length(self, id: str) -> int:
         """
-        Helper method to return the chronological length in days of the corresponding with the narrative that has the input hashed ID calculated from the narrative
+        Helper method to return the chronological length in days of the corresponding with the narrative of the patient with the corresponding ID
         
-        :param id: Hashed ID from narrative of patient
+        :param id: ID of patient
         :type id: str
-        :return: Respective vector
+        :return: Respective vector of patient's narrative
         :rtype: np.array
         """
         self.cursor.execute(
@@ -99,7 +101,7 @@ SELECT chronological_length FROM vectors WHERE patient_id=?
             (id,))
         return self.cursor.fetchone()[0]
         
-    def search(self, query_vector: np.array, exclude_id: str=None, random: bool=False) -> List[Tuple[str, float]]:
+    def search(self, query_vector: np.array, exclude_id: str, scheme: bool=False) -> List[Tuple[str, float]]:
         """
         Find the nearest patients to this patient in terms of cosine similarity of the vectors
         
@@ -122,6 +124,7 @@ SELECT chronological_length FROM vectors WHERE patient_id=?
             idx = self.ids_to_index[exclude_id]
             similarities[idx] = -1.0
         
+        # TODO
         if not random: # Find nearest neighbors by cosine similarity
             # Go through and find the kth largest value, and ensure everything to the right is bigger than it, so grab the last k values of this partitioned array to get the largest similarity values
             unsorted_top_k_indices = np.argpartition(similarities, -k)[-k:]
