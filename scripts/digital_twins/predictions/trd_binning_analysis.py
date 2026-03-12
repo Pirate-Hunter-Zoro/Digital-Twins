@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.shared.utils import load_neighborhood_data
+from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 
 def load_and_merge_data() -> pd.DataFrame:
     """Loads the neighbor data for each anchor patient, as well as the evaluation results for each anchor patient and merges them into a single array
@@ -31,7 +32,7 @@ def load_and_merge_data() -> pd.DataFrame:
     merged = pd.merge(predictions_results_df, neighbor_df, on='anchor_id').rename(columns={'cosine_sim': 'neighbor_scores'})
     return merged
 
-def compute_density_metrics(merged_df: pd.DataFrame, ) -> pd.DataFrame:
+def compute_density_metrics(merged_df: pd.DataFrame) -> pd.DataFrame:
     """Computes various density metrics on each anchor patient with their neighborhoods
 
     Args:
@@ -144,39 +145,40 @@ def plot_bin_impact(
     Saves the plot to output_path.
     """
     for strat in performance_summary['strategy'].unique():
-        # Set up graph and filter performance summary according to strategy
-        fig, ax1 = plt.subplots(figsize=(10,6))
-        ax2 = ax1.twinx() # Share x axis
-        filtered_df = performance_summary[performance_summary['strategy'] == strat]
-        
-        # Extract roc scores, brier scores, and bin numbers
-        roc_scores, brier_scores, bins, bin_counts = filtered_df['roc_score'],\
-                                            filtered_df['brier_score'],\
-                                                np.arange(len(filtered_df[f'{bin_type}_bin'])),\
-                                                    filtered_df['patient_count_in_bin']
-        rho_roc, p_value_roc = spearmanr(roc_scores, bins)
-        rho_brier, p_value_brier = spearmanr(brier_scores, bins)
-        bin_labels = [f'{bin_interval}\nN={count}' for bin_interval, count in zip(filtered_df[f'{bin_type}_bin'].astype(str), bin_counts)]
-        metrics = f"\
-Rho_ROC: {rho_roc:.2f}\n\
-P-Value_ROC: {p_value_roc:.2f}\n\
-Rho_BRIER: {rho_brier:.2f}\n\
-P-Value_BRIER: {p_value_brier:.2f}\
-"
-        
-        ax1.plot(bin_labels, filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
-        ax2.plot(bin_labels, filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
-        ax1.set_xlabel(f'{bin_type.capitalize()} Bin')
-        ax1.set_ylabel('ROC Score')
-        ax1.legend(loc='upper left')
-        ax2.set_ylabel('Brier Score')
-        ax2.legend(loc='upper right')
-        fig.suptitle(metrics)
-        save_path = Path(os.environ['RESULTS_DIR']) / f"{bin_type}_binning" / f"scores_by_{bin_type}_{strat}.png"
-        os.makedirs(save_path.parent, exist_ok=True)
-        fig.tight_layout()
-        fig.savefig(str(save_path))
-        plt.close(fig)
+        for scheme in NeighborScheme:
+            # Set up graph and filter performance summary according to strategy
+            fig, ax1 = plt.subplots(figsize=(10,6))
+            ax2 = ax1.twinx() # Share x axis
+            filtered_df = performance_summary[performance_summary['strategy'] == strat & performance_summary['prediction_scheme'] == scheme]
+            
+            # Extract roc scores, brier scores, and bin numbers
+            roc_scores, brier_scores, bins, bin_counts = filtered_df['roc_score'],\
+                                                filtered_df['brier_score'],\
+                                                    np.arange(len(filtered_df[f'{bin_type}_bin'])),\
+                                                        filtered_df['patient_count_in_bin']
+            rho_roc, p_value_roc = spearmanr(roc_scores, bins)
+            rho_brier, p_value_brier = spearmanr(brier_scores, bins)
+            bin_labels = [f'{bin_interval}\nN={count}' for bin_interval, count in zip(filtered_df[f'{bin_type}_bin'].astype(str), bin_counts)]
+            metrics = f"\
+    Rho_ROC: {rho_roc:.2f}\n\
+    P-Value_ROC: {p_value_roc:.2f}\n\
+    Rho_BRIER: {rho_brier:.2f}\n\
+    P-Value_BRIER: {p_value_brier:.2f}\
+    "
+            
+            ax1.plot(bin_labels, filtered_df['roc_score'], color='green', linestyle='dashed', label='ROC Score')
+            ax2.plot(bin_labels, filtered_df['brier_score'], color='red', linestyle='solid', label='Brier Score')
+            ax1.set_xlabel(f'{bin_type.capitalize()} Bin')
+            ax1.set_ylabel('ROC Score')
+            ax1.legend(loc='upper left')
+            ax2.set_ylabel('Brier Score')
+            ax2.legend(loc='upper right')
+            fig.suptitle(metrics)
+            save_path = Path(os.environ['RESULTS_DIR']) / f"{bin_type}_binning" / f"scores_by_{bin_type}_{scheme}_{strat}.png"
+            os.makedirs(save_path.parent, exist_ok=True)
+            fig.tight_layout()
+            fig.savefig(str(save_path))
+            plt.close(fig)
 
 def run_trd_bin_analysis():
     df = load_and_merge_data()

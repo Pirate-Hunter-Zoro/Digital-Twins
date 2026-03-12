@@ -15,6 +15,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
+from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 from scripts.shared.utils import load_neighborhood_data
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
@@ -101,18 +102,21 @@ def compute_diagnostics(df: pd.DataFrame) -> dict:
     results['roc_score_llm_predict_close'] = roc_auc_score(y_true=cos_closeness_labels, y_score=llm_sims)
     return results
 
-def plot_agreement_curves(agreement_df: pd.DataFrame):
+def plot_agreement_curves(agreement_df: pd.DataFrame, prediction_scheme: str):
     """Helper method to plot the agreement curves associated with TRD flags of nearby patients compared to anchor patients
 
     Args:
         results_df (pd.DataFrame): Anchor patients and neighbors information
+        prediction_scheme (str): Prediction scheme for how neighbors were selected
     """
     plt.figure(figsize=(10,6))
     lineplot(agreement_df, x='k', y='Agreement', hue='Strategy', marker='o')
     plt.axhline(y=0.5, linestyle='--') # Random
     plt.legend()
     plt.title('Agreement of Nearest Neighbors with Anchor TRD Label')
-    plt.savefig(RESULTS_DIR / 'agreement_curve.png')
+    fig_path = RESULTS_DIR / 'agreement_curves' / f'agreement_curve_{prediction_scheme}.png'
+    os.makedirs(fig_path.parent, exist_ok=True)
+    plt.savefig(str(fig_path))
     plt.close()
 
 def run_trd_ranking_analysis():
@@ -120,16 +124,21 @@ def run_trd_ranking_analysis():
     results_df['anchor_trd_label'] = results_df['anchor_patient_id'].apply(PREDICTOR.get_trd_status)
     # Remove self from neighbors
     results_df = results_df[results_df['anchor_id'] != results_df['neighbor_id']]
-    # This should be redundant but just in case
-    results_df = results_df[results_df['anchor_patient_id'] != results_df['neighbor_patient_id']]
     
-    # Find TRD agreement of anchor patient with nearby neighbors
+    schemes = results_df['prediction_scheme'].unique()
     k_values = [5, 10, 25, 50]
-    agreement_df = agreement(results_df=results_df, k_values=k_values)  
-    agreement_df.to_csv(RESULTS_DIR / 'agreement_summary.csv')
-    plot_agreement_curves(agreement_df=agreement_df)
-    
-    # Compute correlation values for llm and cosine similarity
-    correlation_diagnostics = compute_diagnostics(df=results_df)
-    with open(RESULTS_DIR / 'correlation_results_cos_vs_llm.json', 'w') as f:
-        json.dump(correlation_diagnostics, f, indent=4)
+    for scheme in schemes:
+        # Find TRD agreement of anchor patient with nearby neighbors
+        filtered_df = results_df[results_df['prediction_scheme'] == scheme]
+        agreement_df = agreement(results_df=filtered_df, k_values=k_values)  
+        agreement_path = RESULTS_DIR / 'agreements' / f'agreement_summary_{scheme}.csv'
+        os.makedirs(agreement_path.parent, exist_ok=True)
+        agreement_df.to_csv(agreement_path)
+        plot_agreement_curves(agreement_df=agreement_df, prediction_scheme=scheme)
+        
+        # Compute correlation values for llm and cosine similarity
+        correlation_diagnostics = compute_diagnostics(df=filtered_df)
+        correlation_path = RESULTS_DIR / 'correlations' / f'correlation_results_cos_vs_llm_{scheme}.json'
+        os.makedirs(correlation_path.parent, exist_ok=True)
+        with open(correlation_path, 'w') as f:
+            json.dump(correlation_diagnostics, f, indent=4)

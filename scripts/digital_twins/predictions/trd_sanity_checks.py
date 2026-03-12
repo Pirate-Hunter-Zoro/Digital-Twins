@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 
 from scripts.digital_twins.neighbors.retriever import Retriever
+from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 from scripts.shared.utils import load_neighborhood_data
 
 from dotenv import load_dotenv
@@ -56,6 +57,7 @@ def run_cosine_check():
     """
     # Load anchor patient neighborhood data frame
     df = load_neighborhood_data()
+    df = df[df['prediction_scheme'] == NeighborScheme.NEAREST.value]
     
     # Compute anchor to anchor similarities
     retriever = Retriever()

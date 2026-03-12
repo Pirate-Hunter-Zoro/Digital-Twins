@@ -8,6 +8,7 @@ import multiprocessing
 import numpy as np
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
+from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -31,9 +32,9 @@ def evaluate_patient(patient_id: str) -> list[dict]:
     :rtype: list[dict]
     """
     global predictor
-    results_random = predictor.construct_neighborhood_data(index_id=patient_id, random=True)
-    results = predictor.construct_neighborhood_data(index_id=patient_id)
-    results.extend(results_random)
+    results = []
+    for scheme in NeighborScheme:
+        results.extend(predictor.construct_neighborhood_data(index_id=patient_id, scheme=scheme))
     return results
 
 def run():

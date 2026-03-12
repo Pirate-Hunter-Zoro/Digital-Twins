@@ -133,8 +133,7 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
 def run_trd_prediction_computation():
     # Merge all evaluation results from different .csv files into one dataframe
     df = load_neighborhood_data()
-    df_non_random = df[df['is_random_baseline'] == False]
-    df_random = df[df['is_random_baseline'] == True]
+    modes = df['prediction_scheme'].unique()
     anchor_ids = set(df['anchor_patient_id'])
     predictor = TRDPredictor()
     retriever = Retriever()
@@ -144,13 +143,13 @@ def run_trd_prediction_computation():
     }
     
     # Create a report to put in a text file
-    text_report = "Battle 1 Analysis Report\n\n"
+    text_report = "Prediction Analysis Report\n\n"
     
     # Run the battle
     results = {}
     # Store for each mode and strategy the TRD predictions of each anchor patient
     raw_predictions = [] 
-    for mode_name, current_df in [("Non-Random", df_non_random), ("Random", df_random)]:
+    for mode_name, current_df in [(mode, df[df['prediction_scheme'] == mode]) for mode in modes]:
         weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
         for strat in weighting_strats:
             print(f"Running analysis for weighting strategy: {mode_name}_{strat.value}...", flush=True)
@@ -201,4 +200,4 @@ def run_trd_prediction_computation():
     results_df = pd.DataFrame(results)
     results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'summary.csv')
     pd.DataFrame(raw_predictions).to_csv(Path(os.environ['RESULTS_DIR']) / 'predictions.csv')
-    print("Battle 1 analysis complete!", flush=True)
+    print("Prediction analysis complete!", flush=True)

@@ -101,7 +101,7 @@ SELECT chronological_length FROM vectors WHERE patient_id=?
             (id,))
         return self.cursor.fetchone()[0]
         
-    def search(self, query_vector: np.array, exclude_id: str, scheme: bool=False) -> List[Tuple[str, float]]:
+    def search(self, query_vector: np.array, exclude_id: str, scheme: NeighborScheme) -> List[Tuple[str, float]]:
         """
         Find the nearest patients to this patient in terms of cosine similarity of the vectors
         
@@ -119,27 +119,35 @@ SELECT chronological_length FROM vectors WHERE patient_id=?
             normalized_vector = query_vector / mag
         # Find the cosine similarity of this vector with all other vectors in our database
         similarities = self.vectors @ normalized_vector # NOTE - due to normalization, dot product IS cosine similarity
-        if exclude_id != None and exclude_id in self.ids_to_index.keys():
-            # Kill this similarity score so it won't be one of the top ones
-            idx = self.ids_to_index[exclude_id]
-            similarities[idx] = -1.0
         
-        # TODO
-        if not random: # Find nearest neighbors by cosine similarity
-            # Go through and find the kth largest value, and ensure everything to the right is bigger than it, so grab the last k values of this partitioned array to get the largest similarity values
-            unsorted_top_k_indices = np.argpartition(similarities, -k)[-k:]
-            unsorted_top_k_scores = similarities[unsorted_top_k_indices]
-            # Sort only the most similar indices
-            sorted_k_indices = np.argsort(unsorted_top_k_scores)[::-1] # DESCENDING sorting order - return the indices that would put the highest similarity scores first
-            top_k_indices = unsorted_top_k_indices[sorted_k_indices]
-            top_k_scores = unsorted_top_k_scores[sorted_k_indices]
-            
+        if scheme.name == NeighborScheme.NEAREST: # Find nearest neighbors by cosine similarity
+            sorted_indices = np.argsort(similarities)[::-1] # Highest similarity first
+            top_k_indices = sorted_indices[1:k+1] # The very nearest will be the id we need to exclude - assert this is the case or someone is calling this function wrong or the embeddings are wack
+            if not self.ids[sorted_indices[0]] == exclude_id:
+                raise ValueError(f"Error - ID to exclude should be the patient ID of {self.ids[sorted_indices[0]]}, but was {exclude_id}...")
+            top_k_scores = similarities[top_k_indices]
             return [(self.ids[index], score) for index, score in zip(top_k_indices, top_k_scores)]
-        else:
-            # Find random neighbors
+        elif scheme.name == NeighborScheme.FARTHEST:
+            sorted_indices = np.argsort(similarities)[::-1] # Lowest similarity first
+            top_k_indices = sorted_indices[:k]
+            top_k_scores = similarities[top_k_indices]
+            return [(self.ids[index], score) for index, score in zip(top_k_indices, top_k_scores)]
+        elif scheme.name == NeighborScheme.SUBSAMPLE:
+            # Subsample method
+            sample_size = int(os.environ['SUBSAMPLE_POOL_SIZE'])
             available_ids = self.ids.copy()
-            if exclude_id != None and exclude_id in self.ids_to_index.keys():
-                available_ids.remove(exclude_id)
+            available_ids.remove(exclude_id)
+            available_ids = np.array(available_ids)
+            random_neighbors = np.random.choice(available_ids, size=sample_size, replace=False).tolist()
+            corresponding_similarities = similarities[[self.ids_to_index[id] for id in random_neighbors]]
+            nearest_similarities_indices_from_sample = np.argsort(corresponding_similarities)[::-1][:k]
+            nearest_ids_from_sample = random_neighbors[nearest_similarities_indices_from_sample]
+            return [(id, similarities[self.ids_to_index[id]]) for id in nearest_ids_from_sample]
+        else:
+            # Random neighbors
+            available_ids = self.ids.copy()
+            available_ids.remove(exclude_id)
             available_ids = np.array(available_ids)
             random_neighbors = np.random.choice(available_ids, size=k, replace=False).tolist()
+            
             return [(id, similarities[self.ids_to_index[id]]) for id in random_neighbors]

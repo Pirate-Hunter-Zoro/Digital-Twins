@@ -68,8 +68,11 @@ Transforms the structured JSONs into textual narratives.
 
 * **`retriever.py`**:
   * Loads the entire `vectors.db` into memory.
-  * Performs fast cosine similarity search (Pre-filter) to find top-K candidates.
-  * **Baseline Mode**: Includes a random sampling flag to generate a blind baseline of random neighbors for comparative analysis.
+  * Performs fast cosine similarity search (Pre-filter) to find candidates using four distinct retrieval modes:
+    * **Nearest (`global`)**: Finds the top-K closest vectors by cosine similarity.
+    * **Farthest (`farthest`)**: Finds the top-K most distant vectors by cosine similarity to establish a negative baseline.
+    * **Random (`random`)**: Blindly samples K neighbors from the database.
+    * **Subsampled (`subsampled`)**: Two-stage retrieval that pulls a large random pool (`SUBSAMPLE_POOL_SIZE`) and filters it down to the top-K by cosine similarity to force diversity and bypass geometric hubs.
   * **Self-Exclusion**: Implements logic to exclude specific IDs from search results (essential for backtesting).
   * **Note**: Handles retrieval of raw narratives.
 
@@ -106,12 +109,12 @@ graph TD
 ```
 
 * **`trd_prediction_computation.py`**:
-  * **Battle 1: Prediction & Calibration.**
+  * **Prediction & Calibration.**
   * **Digital Twin Matcher Logic**:
       1. Retrieves top-K neighbors via `retriever.py` (excluding the query patient).
       2. Scores neighbors via weighting strategies (Uniform, Cosine, LLM, Combined (Harmonic Mean of Cosine and LLM)).
       3. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$).
-  * **Dual-Stream Evaluation**: Automatically splits the retrieved neighbor data into **Semantic** (embedding-based) and **Random** baseline streams to evaluate the true predictive lift of the vector space.
+  * **Multi-Stream Evaluation**: Automatically processes the retrieved neighbor data across all four retrieval schemes (**Nearest**, **Farthest**, **Random**, and **Subsampled**) to isolate the true predictive lift of the semantic vector space against varied baselines.
   * **Analysis & Metrics**:
     * **Discrimination**: ROC AUC (with bootstrapped 95% CI bands), AUPRC.
     * **Calibration**: Brier Score, **Weighted ECE**, **Calibration Slope & Intercept**.
@@ -120,7 +123,7 @@ graph TD
   * **Output**: Mode-prefixed output plots (e.g., `Semantic_COSINE_roc_curve.png`), `summary.csv` (Metrics), and `predictions.csv` (Row-level logs).
 
 * **`trd_ranking_analysis.py`**:
-  * **Battle 2: Ranking & Homophily Analysis.** Investigates whether the LLM retrieves neighbors that are clinically more congruent with the anchor than Cosine alone ("Label Homophily").
+  * **Ranking & Homophily Analysis.** Investigates whether the LLM retrieves neighbors that are clinically more congruent with the anchor than Cosine alone ("Label Homophily").
   * **Agreement Curves**: Computes and plots the "Agreement Score" (homophily) for Top-$k$ neighbors ($k \in \{5, 10, 25, 50\}$) comparing **Cosine Strategy** vs. **LLM Strategy**.
   * **Diagnostics**:
     * **Spearman Correlation**: Quantifies the correlation between Cosine Similarity and LLM Similarity to check for signal redundancy.
@@ -250,6 +253,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `NUM_WORKERS_NON_LLM_TASK`: 16
 * `NUM_WORKERS_LLM_TASK`: 16
 * `NUM_NEIGHBOR_PATIENTS`: 50 (Total number of neighbors evaluated for density analysis).
+* `SUBSAMPLE_POOL_SIZE`: 500 (Size of the initial random net cast during the two-stage subsampled retrieval mode).
 * `HIGH_SIM_THRESHOLD`: 0.95
 * `WEIGHTING_EXPONENT`: 5.0 (Alpha value for weighting similarity scores).
 * `TRD_BLIND_PROBABILITY`: 0.15
