@@ -157,18 +157,13 @@ Interfaces for the neural networks.
 
 ### 7. Shared Utilities (`scripts/shared`)
 
-* **Caching**: Uses the `similarities` table in `vectors.db`.
 * **`utils.py`**: Core helpers (loading in results .csv files `load_neighborhood_data`, etc.).
-* **`io.py`**: Standardized file handling.
 * **`plots.py`**: **The Visualizer.**
   * Wraps `matplotlib` and `sklearn` to generate diagnostic visualizations.
   * **Outputs**: Computes and saves ROC curves (with bootstrapped error bands), Precision-Recall curves, Calibration curves, Decision Curve Analyses (DCA), Effective Sample Size distributions, and Optimal Confusion Matrices.
 * **`prompts.py`**: **The Template Manager.**
   * Strict loader for the LLM system and user prompt templates located in the `./prompts` directory.
   * **Logic**: Formats and injects patient narratives into the structured evaluation prompts for the vLLM server.
-* **`metrics.py`**: **The Statistician.**
-  * Computes and writes correlation statistics to text artifacts.
-  * **Logic**: Calculates Spearman's rank correlation coefficient (rho) and p-values to evaluate the statistical relationship between different scoring distributions.
 
 ---
 
