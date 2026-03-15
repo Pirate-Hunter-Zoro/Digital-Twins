@@ -25,7 +25,7 @@ def run_chonology_check():
         'chronological_length': retriever.chronological_lengths
     })
     # Merge that into the risk scores dataframe
-    risk_scores_df = risk_scores_df.merge(lengths_df, left_on='anchor_id', right_on='id', how='left')
+    risk_scores_df = risk_scores_df.merge(lengths_df, left_on='anchor_patient_id', right_on='id', how='left')
     
     risk_scores_df['prediction_error'] = (risk_scores_df['predicted_risk'] - risk_scores_df['true_label']).abs()
     grouped_risk_scores_df = risk_scores_df.groupby('strategy') # Group results by weighting strategy used
@@ -61,7 +61,7 @@ def run_cosine_check():
     
     # Compute anchor to anchor similarities
     retriever = Retriever()
-    unique_anchor_ids = df['anchor_id'].unique()
+    unique_anchor_ids = df['anchor_patient_id'].unique()
     anchor_indices = np.array([retriever.ids_to_index[id] for id in unique_anchor_ids])
     anchor_vectors = retriever.vectors[anchor_indices]
     sim_matrix = np.dot(anchor_vectors, anchor_vectors.T) # (N x k) x (k x N) -> (N x N) similarities

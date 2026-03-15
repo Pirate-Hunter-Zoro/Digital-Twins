@@ -24,12 +24,12 @@ def load_and_merge_data() -> pd.DataFrame:
     predictions_results_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / "predictions.csv")
     neighbor_df = load_neighborhood_data()
     # Group by anchor id but then turn back into regular column
-    neighbor_df = neighbor_df.groupby('anchor_id').agg({\
+    neighbor_df = neighbor_df.groupby('anchor_patient_id').agg({\
                                         'cosine_sim': list,
                                         'chronological_length': 'first'\
                                         })\
                                     .reset_index()
-    merged = pd.merge(predictions_results_df, neighbor_df, on='anchor_id').rename(columns={'cosine_sim': 'neighbor_scores'})
+    merged = pd.merge(predictions_results_df, neighbor_df, on='anchor_patient_id').rename(columns={'cosine_sim': 'neighbor_scores'})
     return merged
 
 def compute_density_metrics(merged_df: pd.DataFrame) -> pd.DataFrame:

@@ -153,18 +153,17 @@ def run_trd_prediction_computation():
         weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
         for strat in weighting_strats:
             print(f"Running analysis for weighting strategy: {mode_name}_{strat.value}...", flush=True)
-            grouped_by_anchor_patient = current_df.groupby('anchor_id')
+            grouped_by_anchor_patient = current_df.groupby('anchor_patient_id')
             labels = []
             risks = []
             ess_values = []
             for anchor_id, group in grouped_by_anchor_patient:
                 risk, ess = calculated_weighted_risk(group=group, strategy=strat)
-                labels.append(anchor_trd_labels[retriever.get_patient_id(anchor_id)])
+                labels.append(anchor_id)
                 risks.append(risk)
                 ess_values.append(ess)
                 raw_predictions.append({
-                    'anchor_id': anchor_id,
-                    'anchor_patient_id': retriever.get_patient_id(anchor_id),
+                    'anchor_patient_id': anchor_id,
                     'predicted_risk': risk,
                     'true_label': labels[-1],
                     'ess': ess,

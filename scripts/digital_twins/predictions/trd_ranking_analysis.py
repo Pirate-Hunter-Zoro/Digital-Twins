@@ -56,24 +56,24 @@ def agreement(results_df: pd.DataFrame, k_values: list[int]) -> pd.DataFrame:
     sorted_by_cos = analysis_df.sort_values(by='cosine_sim', ascending=False) # Descending cosine similarity
     sorted_by_llm = analysis_df.sort_values(by='llm_sim', ascending=False) # Descending LLM similarity
     for k in k_values:
-        k_analysis_df = sorted_by_cos.groupby(by='anchor_id').head(k) # Grab the top k neighbors
-        k_results_cos = k_analysis_df.groupby(by='anchor_id').apply(homophily_helper)
+        k_analysis_df = sorted_by_cos.groupby(by='anchor_patient_id').head(k) # Grab the top k neighbors
+        k_results_cos = k_analysis_df.groupby(by='anchor_patient_id').apply(homophily_helper)
         for anchor_id, score in k_results_cos.items():
             all_results.append({
                 'k': k, 
                 'Strategy': 'Cosine', 
-                'anchor_id': anchor_id, 
+                'anchor_patient_id': anchor_id, 
                 'Agreement': score
             })
         
         # LLM similarity ranking
-        k_analysis_df = sorted_by_llm[sorted_by_llm['llm_sim'].notna()].groupby(by='anchor_id').head(k)
-        k_results_llm = k_analysis_df.groupby(by='anchor_id').apply(homophily_helper)
+        k_analysis_df = sorted_by_llm[sorted_by_llm['llm_sim'].notna()].groupby(by='anchor_patient_id').head(k)
+        k_results_llm = k_analysis_df.groupby(by='anchor_patient_id').apply(homophily_helper)
         for anchor_id, score in k_results_llm.items():
             all_results.append({
                 'k': k,
                 'Strategy': 'LLM',
-                'anchor_id': anchor_id,
+                'anchor_patient_id': anchor_id,
                 'Agreement': score
             })
             
@@ -123,7 +123,7 @@ def run_trd_ranking_analysis():
     results_df = load_neighborhood_data()
     results_df['anchor_trd_label'] = results_df['anchor_patient_id'].apply(PREDICTOR.get_trd_status)
     # Remove self from neighbors
-    results_df = results_df[results_df['anchor_id'] != results_df['neighbor_id']]
+    results_df = results_df[results_df['anchor_patient_id'] != results_df['neighbor_id']]
     
     schemes = results_df['prediction_scheme'].unique()
     k_values = [5, 10, 25, 50]
