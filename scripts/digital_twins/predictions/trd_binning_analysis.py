@@ -26,7 +26,8 @@ def load_and_merge_data() -> pd.DataFrame:
     # Group by anchor id but then turn back into regular column
     neighbor_df = neighbor_df.groupby('anchor_patient_id').agg({\
                                         'cosine_sim': list,
-                                        'chronological_length': 'first'\
+                                        'chronological_length': 'first',\
+                                        'prediction_scheme': 'first'\
                                         })\
                                     .reset_index()
     merged = pd.merge(predictions_results_df, neighbor_df, on='anchor_patient_id').rename(columns={'cosine_sim': 'neighbor_scores'})
@@ -43,7 +44,6 @@ def compute_density_metrics(merged_df: pd.DataFrame) -> pd.DataFrame:
     """
     threshold = float(os.environ['HIGH_SIM_THRESHOLD'])
     def calculate_metrics(scores):
-        scores.sort(reverse=True)
         scores = np.array(scores)
         knn_rad = 1 - np.mean(scores)
         high_sim_count = np.sum(scores > threshold)
@@ -83,7 +83,7 @@ def compute_density_bin_scores(
     
     Returns a summary DataFrame indexed by bin.
     """
-    grouped_df = stratified_df.groupby(['density_bin', 'strategy'], observed=False)
+    grouped_df = stratified_df.groupby(['density_bin', 'strategy', 'prediction_scheme'], observed=False)
     def extractor(df_bin):
         true_labels = df_bin['true_label']
         predicted_risks = df_bin['predicted_risk']
@@ -121,7 +121,7 @@ def compute_chronological_bin_scores(
     
     Returns a summary DataFrame indexed by bin.
     """
-    grouped_df = stratified_df.groupby(['chronological_bin', 'strategy'], observed=False)
+    grouped_df = stratified_df.groupby(['chronological_bin', 'strategy', 'prediction_scheme'], observed=False)
     def extractor(df_bin):
         true_labels = df_bin['true_label']
         predicted_risks = df_bin['predicted_risk']
@@ -150,7 +150,7 @@ def plot_bin_impact(
             # Set up graph and filter performance summary according to strategy
             fig, ax1 = plt.subplots(figsize=(10,6))
             ax2 = ax1.twinx() # Share x axis
-            filtered_df = performance_summary[(performance_summary['strategy'] == strat) & (performance_summary['prediction_scheme'] == scheme)]
+            filtered_df = performance_summary[(performance_summary['strategy'] == strat) & (performance_summary['prediction_scheme'] == scheme.value)]
             
             # Extract roc scores, brier scores, and bin numbers
             roc_scores, brier_scores, bins, bin_counts = filtered_df['roc_score'],\
