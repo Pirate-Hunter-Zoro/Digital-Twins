@@ -136,7 +136,6 @@ def run_trd_prediction_computation():
     modes = df['prediction_scheme'].unique()
     anchor_ids = set(df['anchor_patient_id'])
     predictor = TRDPredictor()
-    retriever = Retriever()
     anchor_trd_labels = {
         patient_id: predictor.get_trd_status(candidate_patient_id=patient_id)
         for patient_id in anchor_ids
@@ -159,7 +158,7 @@ def run_trd_prediction_computation():
             ess_values = []
             for anchor_id, group in grouped_by_anchor_patient:
                 risk, ess = calculated_weighted_risk(group=group, strategy=strat)
-                labels.append(anchor_id)
+                labels.append(anchor_trd_labels[anchor_id])
                 risks.append(risk)
                 ess_values.append(ess)
                 raw_predictions.append({
