@@ -123,7 +123,7 @@ def run_trd_ranking_analysis():
     results_df = load_neighborhood_data()
     results_df['anchor_trd_label'] = results_df['anchor_patient_id'].apply(PREDICTOR.get_trd_status)
     # Remove self from neighbors
-    results_df = results_df[results_df['anchor_patient_id'] != results_df['neighbor_id']]
+    results_df = results_df[results_df['anchor_patient_id'] != results_df['neighbor_patient_id']]
     
     schemes = results_df['prediction_scheme'].unique()
     k_values = [5, 10, 25, 50]
