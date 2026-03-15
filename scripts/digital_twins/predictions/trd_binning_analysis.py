@@ -44,6 +44,7 @@ def compute_density_metrics(merged_df: pd.DataFrame) -> pd.DataFrame:
     threshold = float(os.environ['HIGH_SIM_THRESHOLD'])
     def calculate_metrics(scores):
         scores.sort(reverse=True)
+        scores = np.array(scores)
         knn_rad = 1 - np.mean(scores)
         high_sim_count = np.sum(scores > threshold)
         return pd.Series({
@@ -149,7 +150,7 @@ def plot_bin_impact(
             # Set up graph and filter performance summary according to strategy
             fig, ax1 = plt.subplots(figsize=(10,6))
             ax2 = ax1.twinx() # Share x axis
-            filtered_df = performance_summary[performance_summary['strategy'] == strat & performance_summary['prediction_scheme'] == scheme]
+            filtered_df = performance_summary[(performance_summary['strategy'] == strat) & (performance_summary['prediction_scheme'] == scheme)]
             
             # Extract roc scores, brier scores, and bin numbers
             roc_scores, brier_scores, bins, bin_counts = filtered_df['roc_score'],\
