@@ -99,16 +99,34 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
     # Brier score
     brier_score = brier_score_loss(y_true=y_true, y_proba=y_prob)
     
-    # Break patients up into bins and calculate the true and predicted mean TRD-positive probabilities for each patient bin
-    prob_true, prob_pred = calibration_curve(y_true=y_true, y_prob=y_prob, n_bins=10)
-    # We must weight the bins by their count
-    bin_weights = np.histogram(y_prob, bins=10, range=(0,1))[0] / len(y_prob)
-    bin_weights = bin_weights[bin_weights != 0] # Calibration curve bins were already non-zero filtered
-    ece = np.sum(bin_weights * np.abs(prob_true - prob_pred))
-    
+    num_bins = 10
+    bin_edges = np.linspace(0.0, 1.0, num_bins+1)
+    # Put each of the risk scores into bins
+    binned_risks = np.digitize(y_prob, bin_edges) - 1
+    binned_risks[binned_risks == num_bins] = num_bins-1
+    ece = 0.0
+    prob_true_bins = []
+    prob_pred_bins = []
+    for i in range(num_bins):
+        bin_mask = binned_risks == i
+        if np.any(bin_mask): # We did have some probability values that landed in this bin
+            # Find mean probability of actual trd_positive values in this bin
+            mean_prob = np.mean(y_true[bin_mask])
+            # Find mean predicted risk score
+            mean_score = np.mean(y_prob[bin_mask])
+            # Weight of this bin is the number of items in the bin divided by the total number of anchor patients
+            bin_weight = np.sum(bin_mask) / y_prob.shape[0]
+            # Add to error
+            ece += bin_weight * np.abs(mean_prob - mean_score)
+            # Add to the bins
+            prob_true_bins.append(mean_prob)
+            prob_pred_bins.append(mean_score)
+   
     # Calibration slope and intercept
+    prob_pred_bins = np.array(prob_pred_bins)
+    prob_true_bins = np.array(prob_true_bins)
     model = LinearRegression()
-    model.fit(prob_pred.reshape(-1,1), prob_true)
+    model.fit(prob_pred_bins.reshape(-1,1), prob_true_bins)
     slope, intercept = model.coef_[0], model.intercept_
     
     # Count extreme predictions
