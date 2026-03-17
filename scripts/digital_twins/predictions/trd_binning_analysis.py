@@ -14,6 +14,7 @@ load_dotenv()
 
 from scripts.shared.utils import load_neighborhood_data
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
+from scripts.digital_twins.predictions.weighting_strategy import WeightingStrategy
 
 def load_and_merge_data() -> pd.DataFrame:
     """Loads the neighbor data for each anchor patient, as well as the evaluation results for each anchor patient and merges them into a single array
@@ -23,14 +24,13 @@ def load_and_merge_data() -> pd.DataFrame:
     """
     predictions_results_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / "predictions.csv")
     neighbor_df = load_neighborhood_data()
-    # Group by anchor id but then turn back into regular column
-    neighbor_df = neighbor_df.groupby('anchor_patient_id').agg({\
+    # Group by anchor id and prediction scheme but then turn back into regular column
+    neighbor_df = neighbor_df.groupby(['anchor_patient_id', 'neighbor_scheme']).agg({\
                                         'cosine_sim': list,
                                         'chronological_length': 'first',\
-                                        'prediction_scheme': 'first'\
                                         })\
                                     .reset_index()
-    merged = pd.merge(predictions_results_df, neighbor_df, on='anchor_patient_id').rename(columns={'cosine_sim': 'neighbor_scores'})
+    merged = pd.merge(predictions_results_df, neighbor_df, on=['anchor_patient_id', 'neighbor_scheme'])
     return merged
 
 def compute_density_metrics(merged_df: pd.DataFrame) -> pd.DataFrame:
@@ -52,7 +52,7 @@ def compute_density_metrics(merged_df: pd.DataFrame) -> pd.DataFrame:
             "high_similarity_count": high_sim_count,
         })
     # Get data frame with knn_rad and high_sim_count for each anchor patient
-    metrics_df = merged_df['neighbor_scores'].apply(calculate_metrics)
+    metrics_df = merged_df['cosine_sim'].apply(calculate_metrics)
     return pd.concat([merged_df, metrics_df], axis=1)
     
 
@@ -83,7 +83,7 @@ def compute_density_bin_scores(
     
     Returns a summary DataFrame indexed by bin.
     """
-    grouped_df = stratified_df.groupby(['density_bin', 'strategy', 'prediction_scheme'], observed=False)
+    grouped_df = stratified_df.groupby(['density_bin', 'weighting_strategy', 'neighbor_scheme'], observed=False)
     def extractor(df_bin):
         true_labels = df_bin['true_label']
         predicted_risks = df_bin['predicted_risk']
@@ -121,7 +121,7 @@ def compute_chronological_bin_scores(
     
     Returns a summary DataFrame indexed by bin.
     """
-    grouped_df = stratified_df.groupby(['chronological_bin', 'strategy', 'prediction_scheme'], observed=False)
+    grouped_df = stratified_df.groupby(['chronological_bin', 'weighting_strategy', 'neighbor_scheme'], observed=False)
     def extractor(df_bin):
         true_labels = df_bin['true_label']
         predicted_risks = df_bin['predicted_risk']
@@ -145,12 +145,12 @@ def plot_bin_impact(
     
     Saves the plot to output_path.
     """
-    for strat in performance_summary['strategy'].unique():
-        for scheme in NeighborScheme:
+    for scheme in NeighborScheme:
+        for strat in WeightingStrategy:
             # Set up graph and filter performance summary according to strategy
             fig, ax1 = plt.subplots(figsize=(10,6))
             ax2 = ax1.twinx() # Share x axis
-            filtered_df = performance_summary[(performance_summary['strategy'] == strat) & (performance_summary['prediction_scheme'] == scheme.value)]
+            filtered_df = performance_summary[(performance_summary['weighting_strategy'] == strat.name) & (performance_summary['neighbor_scheme'] == scheme.name)]
             
             # Extract roc scores, brier scores, and bin numbers
             roc_scores, brier_scores, bins, bin_counts = filtered_df['roc_score'],\
@@ -175,7 +175,7 @@ def plot_bin_impact(
             ax2.set_ylabel('Brier Score')
             ax2.legend(loc='upper right')
             fig.suptitle(metrics)
-            save_path = Path(os.environ['RESULTS_DIR']) / f"{bin_type}_binning" / f"scores_by_{bin_type}_{scheme}_{strat}.png"
+            save_path = Path(os.environ['RESULTS_DIR']) / f"{bin_type}_binning" / f"scores_by_{bin_type}_{scheme.name}_{strat.name}.png"
             os.makedirs(save_path.parent, exist_ok=True)
             fig.tight_layout()
             fig.savefig(str(save_path))

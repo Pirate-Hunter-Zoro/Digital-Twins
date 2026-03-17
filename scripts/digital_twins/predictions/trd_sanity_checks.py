@@ -28,9 +28,9 @@ def run_chonology_check():
     risk_scores_df = risk_scores_df.merge(lengths_df, left_on='anchor_patient_id', right_on='id', how='left')
     
     risk_scores_df['prediction_error'] = (risk_scores_df['predicted_risk'] - risk_scores_df['true_label']).abs()
-    grouped_risk_scores_df = risk_scores_df.groupby('strategy') # Group results by weighting strategy used
+    grouped_risk_scores_df = risk_scores_df.groupby(['weighting_strategy', 'neighbor_scheme']) # Group results by weighting strategy used
     check_results = []
-    for weighting_strat, results in grouped_risk_scores_df:
+    for (weighting_strat, neighbor_scheme), results in grouped_risk_scores_df:
         chronological_lengths = results['chronological_length']
         prediction_error = results['prediction_error']
         # Find correlation between time length and prediction error
@@ -40,8 +40,8 @@ def run_chonology_check():
         plt.scatter(chronological_lengths, prediction_error)
         plt.xlabel('Chronological Length (Days) of Patient History')
         plt.ylabel('TRD Probability Prediction Error')
-        plt.title(f'Error vs. History Length: {weighting_strat}')
-        save_path = Path(os.environ['RESULTS_DIR']) / 'chronology_checks' / f'chronology_check_{weighting_strat}.png'
+        plt.title(f'Error vs. History Length: {neighbor_scheme}_{weighting_strat}')
+        save_path = Path(os.environ['RESULTS_DIR']) / 'chronology_checks' / f'chronology_check_{neighbor_scheme}_{weighting_strat}.png'
         os.makedirs(save_path.parent, exist_ok=True)
         plt.savefig(str(save_path))
         plt.close()
@@ -57,7 +57,7 @@ def run_cosine_check():
     """
     # Load anchor patient neighborhood data frame
     df = load_neighborhood_data()
-    df = df[df['prediction_scheme'] == NeighborScheme.NEAREST.value]
+    df = df[df['neighbor_scheme'] == NeighborScheme.NEAREST.name]
     
     # Compute anchor to anchor similarities
     retriever = Retriever()

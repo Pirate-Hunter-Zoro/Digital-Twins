@@ -102,19 +102,19 @@ def compute_diagnostics(df: pd.DataFrame) -> dict:
     results['roc_score_llm_predict_close'] = roc_auc_score(y_true=cos_closeness_labels, y_score=llm_sims)
     return results
 
-def plot_agreement_curves(agreement_df: pd.DataFrame, prediction_scheme: str):
+def plot_agreement_curves(agreement_df: pd.DataFrame, neighbor_scheme: str):
     """Helper method to plot the agreement curves associated with TRD flags of nearby patients compared to anchor patients
 
     Args:
         results_df (pd.DataFrame): Anchor patients and neighbors information
-        prediction_scheme (str): Prediction scheme for how neighbors were selected
+        neighbor_scheme (str): Prediction scheme for how neighbors were selected
     """
     plt.figure(figsize=(10,6))
     lineplot(agreement_df, x='k', y='Agreement', hue='Strategy', marker='o')
     plt.axhline(y=0.5, linestyle='--') # Random
     plt.legend()
     plt.title('Agreement of Nearest Neighbors with Anchor TRD Label')
-    fig_path = RESULTS_DIR / 'agreement_curves' / f'agreement_curve_{prediction_scheme}.png'
+    fig_path = RESULTS_DIR / 'agreement_curves' / f'agreement_curve_{neighbor_scheme}.png'
     os.makedirs(fig_path.parent, exist_ok=True)
     plt.savefig(str(fig_path))
     plt.close()
@@ -125,20 +125,19 @@ def run_trd_ranking_analysis():
     # Remove self from neighbors
     results_df = results_df[results_df['anchor_patient_id'] != results_df['neighbor_patient_id']]
     
-    schemes = results_df['prediction_scheme'].unique()
     k_values = [5, 10, 25, 50]
-    for scheme in schemes:
+    for scheme in NeighborScheme:
         # Find TRD agreement of anchor patient with nearby neighbors
-        filtered_df = results_df[results_df['prediction_scheme'] == scheme]
+        filtered_df = results_df[results_df['neighbor_scheme'] == scheme.name]
         agreement_df = agreement(results_df=filtered_df, k_values=k_values)  
-        agreement_path = RESULTS_DIR / 'agreements' / f'agreement_summary_{scheme}.csv'
+        agreement_path = RESULTS_DIR / 'agreements' / f'agreement_summary_{scheme.name}.csv'
         os.makedirs(agreement_path.parent, exist_ok=True)
         agreement_df.to_csv(agreement_path)
-        plot_agreement_curves(agreement_df=agreement_df, prediction_scheme=scheme)
+        plot_agreement_curves(agreement_df=agreement_df, neighbor_scheme=scheme.name)
         
         # Compute correlation values for llm and cosine similarity
         correlation_diagnostics = compute_diagnostics(df=filtered_df)
-        correlation_path = RESULTS_DIR / 'correlations' / f'correlation_results_cos_vs_llm_{scheme}.json'
+        correlation_path = RESULTS_DIR / 'correlations' / f'correlation_results_cos_vs_llm_{scheme.name}.json'
         os.makedirs(correlation_path.parent, exist_ok=True)
         with open(correlation_path, 'w') as f:
             json.dump(correlation_diagnostics, f, indent=4)

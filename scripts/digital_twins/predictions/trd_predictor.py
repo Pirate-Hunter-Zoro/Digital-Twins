@@ -59,7 +59,7 @@ class TRDPredictor:
             # Flag for if this neighbor is trd
             neighbor_trd_flag = self.get_trd_status(candidate_patient_id=neighbor_id)
             neighborhood_data.append({
-                "prediction_scheme": scheme.value,
+                "neighbor_scheme": scheme.name,
                 "chronological_length": chronological_length,
                 "anchor_patient_id": index_id,
                 "neighbor_patient_id": neighbor_id,

@@ -10,14 +10,14 @@ from sklearn.metrics import (
     precision_recall_curve, 
     auc,
 )
-from sklearn.calibration import calibration_curve
 from sklearn.linear_model import LinearRegression
 
 from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
-from scripts.digital_twins.neighbors.retriever import Retriever
+from scripts.digital_twins.predictions.weighting_strategy import WeightingStrategy
+from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 from scripts.shared.plots import (
     plot_receiving_operator_characteristic,
     plot_precision_recall,
@@ -27,12 +27,6 @@ from scripts.shared.plots import (
     plot_optimal_confusion_matrix
 )
 from scripts.shared.utils import load_neighborhood_data
-
-class WeightingStrategy(Enum):
-    UNIFORM = "UNIFORM"
-    COSINE = "COSINE"
-    LLM = "LLM"
-    COMBINED = "COMBINED"
 
 def calculated_weighted_risk(group: pd.DataFrame, strategy: WeightingStrategy) -> tuple[float, float]:
     """Method to calculate the weighted risk of TRD of a patient along with their essential sample size
@@ -71,7 +65,7 @@ def calculated_weighted_risk(group: pd.DataFrame, strategy: WeightingStrategy) -
     # Compute risk by dotting weights with flags and dividing by weights
     weight_sum = np.sum(weights)
     if weight_sum == 0:
-        raise ValueError(f"ERROR: all weights zero for patient with ID: {patient_id} using strategy {strategy.value}...")
+        raise ValueError(f"ERROR: all weights zero for patient with ID: {patient_id} using strategy {strategy.name}...")
     risk_score = np.dot(weights, trds) / weight_sum
     
     # Compute effective sample size
@@ -151,7 +145,6 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
 def run_trd_prediction_computation():
     # Merge all evaluation results from different .csv files into one dataframe
     df = load_neighborhood_data()
-    modes = df['prediction_scheme'].unique()
     anchor_ids = set(df['anchor_patient_id'])
     predictor = TRDPredictor()
     anchor_trd_labels = {
@@ -166,10 +159,9 @@ def run_trd_prediction_computation():
     results = {}
     # Store for each mode and strategy the TRD predictions of each anchor patient
     raw_predictions = [] 
-    for mode_name, current_df in [(mode, df[df['prediction_scheme'] == mode]) for mode in modes]:
-        weighting_strats = [WeightingStrategy.UNIFORM, WeightingStrategy.COSINE, WeightingStrategy.LLM, WeightingStrategy.COMBINED]
-        for strat in weighting_strats:
-            print(f"Running analysis for weighting strategy: {mode_name}_{strat.value}...", flush=True)
+    for scheme, current_df in [(mode, df[df['neighbor_scheme'] == mode.name]) for mode in NeighborScheme]:
+        for strat in WeightingStrategy:
+            print(f"Running analysis for weighting strategy: {scheme.name}_{strat.name}...", flush=True)
             grouped_by_anchor_patient = current_df.groupby('anchor_patient_id')
             labels = []
             risks = []
@@ -184,23 +176,24 @@ def run_trd_prediction_computation():
                     'predicted_risk': risk,
                     'true_label': labels[-1],
                     'ess': ess,
-                    'strategy': f"{mode_name}_{strat.name}"
+                    'weighting_strategy': strat.name,
+                    'neighbor_scheme': scheme.name,
                 })
             metrics = compute_metrics(y_true=np.array(labels), y_prob=np.array(risks))
-            plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
-            plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
-            plot_calibration(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
-            plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
-            plot_effective_sample_size_distribution(ess_values=np.array(ess_values), mode=f'{mode_name}_{strat.value}')
-            plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{mode_name}_{strat.value}')
+            plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
+            plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
+            plot_calibration(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
+            plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
+            plot_effective_sample_size_distribution(ess_values=np.array(ess_values), mode=f'{scheme.name}_{strat.name}')
+            plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
             # Add to text report
-            text_report += f"{mode_name}_{strat.value} Metrics:\n\
+            text_report += f"{scheme.name}_{strat.name} Metrics:\n\
     'roc_score': {metrics['roc_score']}\n\
     'auprc': {metrics['auprc']}\n\
     'brier_score': {metrics['brier_score']}\n\
     'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\
     'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
-            results[f"{mode_name}_{strat.value}"] = {
+            results[f"{scheme.name}_{strat.name}"] = {
                 'roc_score': metrics['roc_score'],
                 'auprc': metrics['auprc'],
                 'brier_score': metrics['brier_score'],
