@@ -258,7 +258,6 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `SUBSAMPLE_POOL_SIZE`: 500 (Size of the initial random net cast during the two-stage subsampled retrieval mode).
 * `HIGH_SIM_THRESHOLD`: 0.95
 * `WEIGHTING_EXPONENT`: 5.0 (Alpha value for weighting similarity scores).
-* `TRD_BLIND_PROBABILITY`: 0.15
 * `TRD_TEST_COUNT`: 1000 (Number of patients to sample for evaluation).
 * `LOW_CONFIDENCE_ESS_THRESHOLD`: 20
 * `NUM_PAIRS_SANITY_CHECK`: 1000
