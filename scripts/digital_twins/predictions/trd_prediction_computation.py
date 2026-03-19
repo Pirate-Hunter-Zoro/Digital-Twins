@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from enum import Enum
+import shutil
 
 from sklearn.metrics import (
     roc_auc_score, 
@@ -145,6 +145,15 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
 def run_trd_prediction_computation():
     # Merge all evaluation results from different .csv files into one dataframe
     df = load_neighborhood_data()
+    
+    subdirs = ["roc_curves", "pr_curves",
+    "calibration_curves", "decision_curves",      
+    "ess_distributions", "confusion_matrices"]
+    for subdir in subdirs:                        
+        target = Path(os.environ['RESULTS_DIR']) / subdir                                       
+        if target.exists():
+            shutil.rmtree(target)
+            
     anchor_ids = set(df['anchor_patient_id'])
     predictor = TRDPredictor()
     anchor_trd_labels = {
