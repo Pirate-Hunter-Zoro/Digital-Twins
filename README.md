@@ -58,9 +58,8 @@ Transforms the structured JSONs into textual narratives.
   * **The Auditor.** Validates the geometry of the embedding space before expensive scoring.
   * **Checks**:
     1. **Normalization**: Verifies if vector norms are uniform (1.0) or variable.
-    2. **Anisotropy (The Cone)**: Measures embedding collapse by comparing the distribution of Random Pair similarities vs. Neighbor similarities.
-    3. **Metric Monotonicity**: Tests if Euclidean distance offers distinct ranking signals compared to Cosine similarity.
-  * **Output**: `vector_norms.png`, `cos_random_vs_neighbor.png`, `cos_vs_euclidean.png`.
+    2. **Metric Monotonicity**: Tests if Euclidean distance offers distinct ranking signals compared to Cosine similarity.
+  * **Output**: `vector_norms.png`, `cos_vs_euclidean.png`.
 
 ### 4. Stage 3: Retrieval & Scoring (`scripts/digital_twins/neighbors`)
 

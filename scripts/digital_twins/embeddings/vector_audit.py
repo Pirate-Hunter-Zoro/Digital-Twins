@@ -45,7 +45,7 @@ def vector_analysis(vectors: np.array) -> np.array:
     return vector_norms
     
 def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple[int,int]], np.array]:
-    """Analyze baseline random cosine similarity value
+    """Obtain random pairs and their cosine similarity values
 
     Args:
         vectors (np.array): All vectors of interest
@@ -72,19 +72,6 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple
     b_vectors = vectors[b_indices]
     b_vectors = b_vectors / vector_norms[b_indices][:, np.newaxis]
     random_similarities = np.sum(a_vectors * b_vectors, axis=1)
-    # We want to compare this with the cosine similarities from our results
-    results_df = load_neighborhood_data()
-    neighbor_cosines = results_df['cosine_sim']
-    
-    # Create a histogram comparing the random similarities with the neighbor similarities
-    plt.figure(figsize=(10,6))
-    plt.hist(random_similarities, label="Random Similarity Values", alpha=0.5, density=True, bins=100)
-    plt.hist(neighbor_cosines, label="Neighbor Cosine Similarities", alpha=0.5, density=True, bins=100)
-    plt.xlabel("Cosine Similarity Score")
-    plt.ylabel("Frequency")
-    plt.legend()
-    plt.savefig(str(RESULTS_DIR / 'cos_random_vs_neighbor.png'))
-    plt.close()
     
     return (pairs, random_similarities)
     
