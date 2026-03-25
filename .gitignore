@@ -9,3 +9,5 @@ scratch/
 cancel_pipeline.sh
 results/
 references/
+.claude/
+.vscode/
