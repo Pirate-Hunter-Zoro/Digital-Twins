@@ -103,7 +103,12 @@ def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
         if found_mdd:
             break
                 
-    HEADER = f"### COHORT & INDEX\nCondition: {condition} | Index date: {sliced_json['anchor_date']} | Baseline window: {-365*int(os.environ['YEARS_BACK'])}...0 days\n"
+    HEADER = f"### COHORT & INDEX\nCondition: {condition} | \
+Index date: {sliced_json['anchor_date']} | \
+Baseline window: {-365*int(os.environ['YEARS_BACK'])}...0 days | \
+MDD-to-anchor gap: {sliced_json['mdd_to_anchor_days']} days | \
+Encounters in window: {sliced_json['num_encounters']} | \
+MDD within window: {get_bool_str(sliced_json['mdd_to_anchor_days']  <= 365 * YEARS_BACK)}\n"
     
     # Demographics
     demographics = [f'{demographic}: {sliced_json["demographics"].get(demographic, "Missing")}' for demographic in demographics_of_interests]

@@ -56,6 +56,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     # First loop through every encounter and look for an MDD diagnosis which precedes or occurs at the same time as the anchor date
     mdd_prereq = False
     earliest_sliced_encounter_date = anchor_date
+    latest_mdd_date = None
     for encounter in patient_dict['encounters']:
         info = encounter['details']
         enc_start_str = info.get('start_visit')
@@ -67,18 +68,20 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
             if encounter_start_date < earliest_sliced_encounter_date:
                 # Update record for earliest encounter date
                 earliest_sliced_encounter_date = encounter_start_date
-            if not mdd_prereq:
-                # Still need to check diagnoses for codes
-                for diagnosis in encounter['diagnoses']:
-                    for code_dict in diagnosis['codes']:
-                        if get_mdd_description(code_dict['code']) != None:
-                            mdd_prereq = True
-                            break
-                    if mdd_prereq:
-                        break
+            # Still need to check diagnoses for codes
+            for diagnosis in encounter['diagnoses']:
+                for code_dict in diagnosis['codes']:
+                    if get_mdd_description(code_dict['code']) != None:
+                        mdd_prereq = True
+                        if latest_mdd_date == None:
+                            latest_mdd_date = encounter_start_date
+                        else:
+                            latest_mdd_date = max(latest_mdd_date, encounter_start_date)
+                            
     # If no MDD diagnosis occurs before anchor date
     if not mdd_prereq:
         return None
+    mdd_to_anchor_days = (anchor_date - latest_mdd_date).days
     
     # Define cutoff date
     cutoff_date = anchor_date - timedelta(int(os.environ['YEARS_BACK'])*365)
@@ -91,6 +94,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
         'patient_id': patient_dict['patient_id'],
         'demographics': patient_dict['demographics'],
         'anchor_date': anchor_date.strftime('%Y-%m-%d'),
+        'mdd_to_anchor_days': mdd_to_anchor_days,
         'active_medications': [],
         'encounters': []
     }
@@ -208,6 +212,8 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     timespan_sliced = (anchor_date - earliest_sliced_encounter_date).days + 1
     # We still want to record the actual length of history observed
     processed_sliced_patient['days_of_history'] = timespan_sliced
+    # We also want the number of visits within the time window
+    processed_sliced_patient['num_encounters'] = len(processed_sliced_patient['encounters'])
     
     return processed_sliced_patient
 
