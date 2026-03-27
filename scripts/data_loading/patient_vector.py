@@ -2,6 +2,7 @@ from typing import Dict
 import os
 from pathlib import Path
 import random
+import json
 import numpy as np
 
 from dotenv import load_dotenv
@@ -57,6 +58,19 @@ for key in sorted(SAFETY_ARMS):
     ATTRIBUTE_INDICES[f"safety_{key}"] = len(ATTRIBUTE_INDICES)
 for key in sorted(ALL_ARMS):
     ATTRIBUTE_INDICES[f"trials_{key}"] = len(ATTRIBUTE_INDICES)
+
+CATEGORICAL_FIELDS = ["Sex", "PreferredLanguage", "SexualOrientation", "MaritalStatus", "Religion", "SmokingStatus", "Race_Ethnicity"]
+KNOWN_CATEGORIES = {k: set() for k in CATEGORICAL_FIELDS}
+sliced_json_dir = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
+for sliced_json_file in sliced_json_dir.glob("*.json"):
+    with open(sliced_json_file, 'r') as f:
+        demographics = json.load(f)['demographics']
+        for key in CATEGORICAL_FIELDS:
+            val = demographics.get(key, None)
+            if val != None and not (isinstance(val, float) and np.isnan(val)) and not (val not in KNOWN_CATEGORIES[key]):
+                KNOWN_CATEGORIES[key].add(val)
+                # TODO
+                ATTRIBUTE_INDICES[f""] = len(ATTRIBUTE_INDICES)
 
 def get_bool_int(val: bool) -> int:
     if val:
