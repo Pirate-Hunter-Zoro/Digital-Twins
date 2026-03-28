@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.data_loading.diagnoses_definitions import get_mdd_description
+from scripts.data_loading.diagnoses_definitions import get_mdd_components
 
 MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
 YEARS_BACK = int(os.environ['YEARS_BACK'])
@@ -44,7 +44,7 @@ def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict)
             )
 
 def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optional[Dict]:
-    """Verify that the patient has an MDD diagnosis prior to their anchor date, and that their history extends 2 years or more, and if so return their sliced record
+    """Verify that the patient has an MDD diagnosis prior to their anchor date, and that their history extends the required number of years back or more, and if so return their sliced record
 
     Args:
         patient_dict (Dict): Raw json of the patient
@@ -57,6 +57,8 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     mdd_prereq = False
     earliest_sliced_encounter_date = anchor_date
     latest_mdd_date = None
+    latest_mdd_recurrence = None
+    latest_mdd_severity = None
     for encounter in patient_dict['encounters']:
         info = encounter['details']
         enc_start_str = info.get('start_visit')
@@ -71,12 +73,13 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
             # Still need to check diagnoses for codes
             for diagnosis in encounter['diagnoses']:
                 for code_dict in diagnosis['codes']:
-                    if get_mdd_description(code_dict['code']) != None:
+                    mdd_rec, mdd_sev = get_mdd_components(code_dict['code'])
+                    if mdd_rec != None:
                         mdd_prereq = True
-                        if latest_mdd_date == None:
+                        if latest_mdd_date == None or latest_mdd_date < encounter_start_date:
                             latest_mdd_date = encounter_start_date
-                        else:
-                            latest_mdd_date = max(latest_mdd_date, encounter_start_date)
+                            latest_mdd_recurrence, latest_mdd_severity = mdd_rec, mdd_sev
+                            
                             
     # If no MDD diagnosis occurs before anchor date
     if not mdd_prereq:
@@ -95,6 +98,8 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
         'demographics': patient_dict['demographics'],
         'anchor_date': anchor_date.strftime('%Y-%m-%d'),
         'mdd_to_anchor_days': mdd_to_anchor_days,
+        'mdd_recurrence': latest_mdd_recurrence,
+        'mdd_severity': latest_mdd_severity,
         'active_medications': [],
         'encounters': []
     }

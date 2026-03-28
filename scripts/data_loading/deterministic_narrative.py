@@ -6,7 +6,6 @@ import random
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.data_loading.diagnoses_definitions import get_mdd_description
 from scripts.data_loading.features import (
     psych_comorbidity, 
     medical_comorbidity, 
@@ -88,20 +87,8 @@ def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
     # Header
     condition = "MDD" # Default
     # Search for specifics
-    found_mdd = False
-    for encounter in sliced_json['encounters']:
-        for diagnosis in encounter['diagnoses']:
-            for code_dict in diagnosis['codes']:
-                code = code_dict['code']
-                description = get_mdd_description(code)
-                if description != None:
-                    condition += f" ({description})"
-                    found_mdd = True
-                    break
-            if found_mdd:
-                break 
-        if found_mdd:
-            break
+    if sliced_json['mdd_recurrence'] != None:
+        condition += f" ({sliced_json['mdd_recurrence']}, {sliced_json['mdd_severity']})"
                 
     HEADER = f"### COHORT & INDEX\nCondition: {condition} | \
 Index date: {sliced_json['anchor_date']} | \

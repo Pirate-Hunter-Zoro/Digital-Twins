@@ -23,17 +23,17 @@ ICD9_MDD_SEVERITY_MAP = {
     '6' : "Remission"
 }
 
-def get_mdd_description(code: str) -> str:
-    """
-    Helper method for getting the severity and recurrence for the given MDD code
-    
-    :param code: Input MDD code
-    :type code: str
-    :return: Describes severity and recurrence of diagnosis
-    :rtype: str
+def get_mdd_components(code: str) -> tuple[str, str]:
+    """Get MDD recurrence and severity of diagnosis code
+
+    Args:
+        code (str): Diangosis code
+
+    Returns:
+        tuple[str,str]: Resulting recurrence and severity
     """
     if code == "300.4":
-        return "Dysthymia, Unspecified"
+        return ("Dysthymia", "Unspecified")
     code_segments = code.split(".")
     
     # ICD-9 Check
@@ -56,10 +56,9 @@ def get_mdd_description(code: str) -> str:
             recurrence, severity = MDD_RECURRENCE_MAP[code_segments[0]], "Unspecified"
         else:
             # Non-mdd code
-            return None
+            return (None, None)
         
-    return f"{recurrence}, {severity}"
-    
+    return (recurrence, severity)
 
 DIAGNOSIS_CODES = {
     "MDD" : [

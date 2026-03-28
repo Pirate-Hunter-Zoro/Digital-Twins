@@ -11,7 +11,7 @@ from scripts.data_loading.diagnoses_definitions import (
     DYSTHYMIA,
     SUICIDE_ATTEMPT,
     SUICIDE_IDEATION,
-    get_mdd_description,
+    get_mdd_components,
     get_sud_substance
 )
 
@@ -32,7 +32,7 @@ def test_dysthymia_regex():
     Confirm various regexes for Dysthymia work as expected.
     """
     assert get_diagnosis_arm(diagnosis_code="300.4") == DYSTHYMIA\
-        and get_mdd_description(code="300.4") == "Dysthymia, Unspecified"
+        and get_mdd_components(code="300.4") == ("Dysthymia", "Unspecified")
 
 def test_sud_regex():
     """
@@ -65,12 +65,12 @@ def test_mdd_severity_parsing():
     """
     Confirm severity and recurrence are properly parsed for given codes
     """
-    assert get_mdd_description(code="F32.0")=="Single Episode, Mild"\
-        and get_mdd_description(code="F33.2")=="Recurrent, Severe"\
-            and get_mdd_description(code="F33.3")=="Recurrent, Psychotic"\
-                and get_mdd_description(code="F33.4")=="Recurrent, Remission"\
-                    and get_mdd_description(code="F32.9")=="Single Episode, Unspecified"\
-                        and get_mdd_description(code="F32")=="Single Episode, Unspecified"\
-                            and get_mdd_description(code="296.20")=="Single Episode, Unspecified"\
-                                and get_mdd_description(code="296.32")=="Recurrent, Moderate"\
-                                    and get_mdd_description(code="296.2")=="Single Episode, Unspecified"
+    assert get_mdd_components(code="F32.0")==("Single Episode", "Mild")\
+        and get_mdd_components(code="F33.2")==("Recurrent", "Severe")\
+            and get_mdd_components(code="F33.3")==("Recurrent", "Psychotic")\
+                and get_mdd_components(code="F33.4")==("Recurrent", "Remission")\
+                    and get_mdd_components(code="F32.9")==("Single Episode", "Unspecified")\
+                        and get_mdd_components(code="F32")==("Single Episode", "Unspecified")\
+                            and get_mdd_components(code="296.20")==("Single Episode", "Unspecified")\
+                                and get_mdd_components(code="296.32")==("Recurrent", "Moderate")\
+                                    and get_mdd_components(code="296.2")==("Single Episode", "Unspecified")
