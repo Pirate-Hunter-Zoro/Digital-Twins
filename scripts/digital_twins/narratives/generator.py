@@ -3,7 +3,6 @@ Runs workers to produce narratives."""
 
 from __future__ import annotations
 import os
-from typing import Dict, Tuple
 import multiprocessing
 import pandas as pd
 from pathlib import Path

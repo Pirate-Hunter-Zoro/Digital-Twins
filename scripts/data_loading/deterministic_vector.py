@@ -1,7 +1,6 @@
 from typing import Dict
 import os
 from pathlib import Path
-import random
 import json
 import numpy as np
 
@@ -32,7 +31,7 @@ from scripts.data_loading.features import (
 YEARS_BACK = int(os.environ['YEARS_BACK'])
 
 ANALYSIS_DIR = Path(os.environ['ANALYSIS_DIR'])
-PATIENT_ATTRIBUTES_DIR = ANALYSIS_DIR / "patient_attributes.json"
+PATIENT_ATTRIBUTES_PATH = ANALYSIS_DIR / "patient_attributes.json"
 
 ATTRIBUTE_INDICES = {}
 CATEGORICAL_FIELDS = ["Sex", "PreferredLanguage", "SexualOrientation", "MaritalStatus", "Religion", "SmokingStatus", "Race_Ethnicity"]
@@ -45,7 +44,7 @@ def initialize_attribute_indices():
     global ATTRIBUTE_INDICES
     global KNOWN_CATEGORIES
     # We need a function to write to a json recording what components are in each deterministic patient vector component
-    if (not PATIENT_ATTRIBUTES_DIR.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
+    if (not PATIENT_ATTRIBUTES_PATH.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
         # Not already done
         ATTRIBUTE_INDICES = {
             'mdd_to_anchor_days' : 0,
@@ -104,24 +103,23 @@ def initialize_attribute_indices():
             ATTRIBUTE_INDICES[f"mdd_sev_{severity}"] = len(ATTRIBUTE_INDICES)
                 
         # Cache this record
-        with open(PATIENT_ATTRIBUTES_DIR, 'w') as f:
+        with open(PATIENT_ATTRIBUTES_PATH, 'w') as f:
             json.dump(ATTRIBUTE_INDICES, f, indent=4)
     elif ATTRIBUTE_INDICES == {}:
-        with open(PATIENT_ATTRIBUTES_DIR, 'r') as f:
+        with open(PATIENT_ATTRIBUTES_PATH, 'r') as f:
             ATTRIBUTE_INDICES = json.load(f)
             # Still need to grab the categorical fields
             for key in CATEGORICAL_FIELDS:
                 # Grab everything preceding the '{key}_'
                 attribute_val_keys = [label[len(key)+1:] for label in ATTRIBUTE_INDICES if label.startswith(f"{key}_")]
                 KNOWN_CATEGORIES[key] = set(attribute_val_keys)
-        
 
 def get_bool_int(val: bool) -> int:
     if val:
         return 1
     return 0
 
-def generate_deterministic_vector(sliced_json: Dict) -> np.array:
+def generate_deterministic_vector(sliced_json: Dict):
     """Parse the sliced patient json to generate a deterministic vector to represent the patient
 
     Args:
@@ -232,9 +230,3 @@ def generate_deterministic_vector(sliced_json: Dict) -> np.array:
     patient_vector = np.array(patient_vector, dtype=np.float32)
     os.makedirs(vector_save_path.parent, exist_ok=True)
     np.save(vector_save_path, patient_vector)
-    return patient_vector
-
-if __name__=="__main__":
-    # Take a sample of produced narratives and put them in the local test_data directory
-    # TODO - sample random narratives and their respective vectors
-    pass

@@ -3,20 +3,23 @@
 
 This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"—vectorized representations of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
 
-The pipeline is divided into **Data Loading**, **Stage 1 (Narrative Generation)**, **Stage 2 (Vector Embedding)**, **Stage 3 (Neighbor Retrieval)**, and **Stage 4 (Prediction)**.
+The pipeline is divided into **Data Loading**, **Stage 1 (Narrative & Vector Generation)**, **Stage 2 (Vector Embedding)**, **Stage 3 (Neighbor Retrieval)**, and **Stage 4 (Prediction)**.
 
 ```mermaid
 graph LR
     A[Raw EHR Data] --> B(Data Loading)
     B --> C{Patient JSONs}
-    C --> D[Stage 1: Narrative Gen]
-    D --> E[Markdown Narratives]
-    E --> F[Stage 2: Embedding]
-    F --> G[(Vectors.db)]
-    G --> H[Stage 3: Retrieval & Scoring]
-    H --> I[(Judgements.db)]
-    I --> J[Stage 4: Prediction]
-    J --> K[Diagnostics & Sanity Checks]
+    C --> D[Stage 1a: Narrative Gen]
+    C --> E[Stage 1b: Deterministic Vector Gen]
+    D --> F[Markdown Narratives]
+    F --> G[Stage 2: Embedding]
+    G --> H[(Vectors.db)]
+    E --> I[Deterministic Vectors .npy]
+    H --> J[Stage 3: Retrieval & Scoring]
+    J --> K[(Judgements.db)]
+    K --> L[Stage 4: Prediction]
+    I --> L
+    L --> M[Diagnostics & Sanity Checks]
 
 
 ```
@@ -32,15 +35,23 @@ The foundation. These scripts ingest raw EHR exports and structure them into usa
 * **`fit_to_anchor.py`**: Enforces the `YEARS_BACK` chronological window. It truncates encounters, procedures, and medications that cross the boundary and purges ancient history entirely.
 * **`load_patient_data.py`**: Orchestrates the timeline slicing and generates `.rejected` marker files for patients who fail the strict MDD or chronological prerequisites to prevent redundant processing.
 * **`deterministic_narrative.py`**: The logic that deterministically translates structured JSON features (labs, meds, diagnoses) into a human-readable Markdown narrative. Note that the generated narrative only summarizes the precise `YEARS_BACK` window, not the patient's entire lifetime.
+* **`deterministic_vector.py`**: Constructs a fixed-length numeric feature vector for each patient from the sliced JSON. Includes numeric features (vitals, counts, days), binary flags, one-hot encoded comorbidities (psych, medical, safety), adequate trial counts, categorical demographics (discovered from data), SUD substances, SDOH categories, and MDD recurrence/severity. Vectors are saved as `.npy` files. Attribute indices are cached to `patient_attributes.json` via `initialize_attribute_indices()` to avoid rescanning 16k patient JSONs on every run.
 * **`features.py`**: Extractors for specific clinical features.
-* **Definitions**: `diagnoses_definitions.py`, `med_definitions.py`, etc., map codes to clinical text.
+* **Definitions**: `diagnoses_definitions.py` (includes `get_mdd_components()` for extracting MDD recurrence and severity as separate fields), `med_definitions.py`, etc., map codes to clinical text.
 
-### 2. Stage 1: Narrative Generation (`scripts/digital_twins/narratives`)
+### 2a. Stage 1a: Narrative Generation (`scripts/digital_twins/narratives`)
 
 Transforms the structured JSONs into textual narratives.
 
 * **`generator.py`**: Iterates through the cohort, applies the `deterministic_narrative` logic, and saves `.md` files to the `DETERMINISTIC_NARRATIVES_DIR`.
 * **`runner.py`**: Orchestrates the generation job via Slurm.
+
+### 2b. Stage 1b: Deterministic Vector Generation (`scripts/digital_twins/vectors`)
+
+Constructs fixed-length numeric feature vectors directly from the structured patient JSONs, bypassing the narrative/embedding pipeline entirely. These vectors serve as a classical ML baseline to compare against the high-dimensional embedding vectors.
+
+* **`generator.py`**: Uses multiprocessing to iterate the cohort and call `generate_deterministic_vector` for each patient. Calls `initialize_attribute_indices()` before spawning workers to prevent race conditions on the attribute cache. Produces a sanity check report sampling 10 random vectors alongside their narratives and the attribute index mapping.
+* **`runner.py`**: Thin orchestrator that invokes the generator.
 
 ### 3. Stage 2: Vector Embedding (`scripts/digital_twins/embeddings`)
 
@@ -208,7 +219,8 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `YEARS_BACK`: 2 (Defines the strict historical window prior to the anchor date. Patients with less history are discarded).
 * `SCRUB_PATIENT_JSON`: 0 (Flag to force recreation of patient JSONs).
 * `SCRUB_NARRATIVES`: 0 (Flag to force recreation of narratives).
-* `SCRUB_VECTORS`: 0 (Flag to force re-computation of vectors).
+* `SCRUB_DETERMINISTIC_VECTORS`: 0 (Flag to force recreation of deterministic feature vectors and the attribute index cache).
+* `SCRUB_VECTORS`: 0 (Flag to force re-computation of embedding vectors).
 
 ### Data Paths
 
@@ -245,6 +257,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 
 * `ARTIFACTS_DIR`: Root directory for computed artifacts.
 * `DETERMINISTIC_NARRATIVES_DIR`: Storage for generated Markdown narratives.
+* `DETERMINISTIC_VECTORS_DIR`: Storage for deterministic feature vectors (`.npy` files).
 * `VECTORS_DIR`: Storage for embedding vectors.
 * `JUDGEMENTS_DIR`: Storage for LLM judgements.
 * `RESULTS_DIR`: Storage for analysis results and logs.
