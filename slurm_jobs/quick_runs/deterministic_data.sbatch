@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=embedding_pipeline
+#SBATCH --job-name=deterministic_data
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1

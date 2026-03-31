@@ -1,5 +1,4 @@
 import os
-import json
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 
@@ -21,8 +20,6 @@ def create_train_test_split() -> tuple[set[str], set[str]]:
         train_ids, test_ids = train_test_split(all_patient_ids, test_size=0.2, stratify=[predictor.get_trd_status(id) for id in all_patient_ids], random_state=int(os.environ['SEED']))
         with open(test_ids_path, 'w') as f:
             f.write("\n".join(test_ids))
-        train_ids = set(train_ids)
-        test_ids = set(test_ids)
         
     # Load in the test IDs to implicitly find the train ones
     with open(test_ids_path, 'r') as f:
