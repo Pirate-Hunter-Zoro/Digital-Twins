@@ -3,8 +3,8 @@
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=256G
 #SBATCH -o slurm_jobs/quick_runs/logs/deterministic_data_out.txt
 #SBATCH -e slurm_jobs/quick_runs/logs/deterministic_data_err.txt
 
@@ -31,6 +31,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
+python -m scripts.data_loading.build_jsons
 python -m scripts.digital_twins.narratives.forge_narratives
 python -m scripts.digital_twins.vectors.forge_vectors
 
