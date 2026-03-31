@@ -52,5 +52,6 @@ def generate_deterministic_vectors():
                 + narrative
             return result
         report += "\n".join([get_patient_dump(sample_ids[i], sample_vector_paths[i], sample_narrative_paths[i]) for i in range(n_samples)])
+        os.makedirs(Path(os.environ['RESULTS_DIR']), exist_ok=True)
         with open(Path(os.environ['RESULTS_DIR']) / 'vector_sanity_check.txt', 'w') as f:
             f.write(report)
