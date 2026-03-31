@@ -7,7 +7,7 @@ import numpy as np
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.data_loading.diagnoses_definitions import get_mdd_components, PSYCH_ARMS, MEDICAL_ARMS, SAFETY_ARMS, SDOH_MAP
+from scripts.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, SAFETY_ARMS, SDOH_MAP
 from scripts.data_loading.med_definitions import ALL_ARMS
 from scripts.data_loading.features import (
     psych_comorbidity, 

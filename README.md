@@ -57,7 +57,7 @@ Constructs fixed-length numeric feature vectors directly from the structured pat
 
 **The Forge.** Converts text narratives into high-dimensional vectors using the `PatientEmbedder`.
 
-* **`forge_vectors.py`**: The main driver.
+* **`forge_embeddings.py`**: The main driver.
 
 1. Reads `.md` files from Stage 1.
 2. Batches them.
@@ -65,7 +65,7 @@ Constructs fixed-length numeric feature vectors directly from the structured pat
 
 * **Artifacts**: This stage populates the SQLite database `vectors.db`.
 
-* **`vector_audit.py`**:
+* **`embedding_audit.py`**:
   * **The Auditor.** Validates the geometry of the embedding space before expensive scoring.
   * **Checks**:
     1. **Normalization**: Verifies if vector norms are uniform (1.0) or variable.

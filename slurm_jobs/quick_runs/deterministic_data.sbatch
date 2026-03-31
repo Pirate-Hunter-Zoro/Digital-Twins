@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=trd_prediction_pipeline
+#SBATCH --job-name=embedding_pipeline
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/pipeline/logs/trd_prediction_analysis_out.txt
-#SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_analysis_err.txt
+#SBATCH -o slurm_jobs/quick_runs/logs/deterministic_data_out.txt
+#SBATCH -e slurm_jobs/quick_runs/logs/deterministic_data_err.txt
 
 # Exit immediately if command fails
 set -e
@@ -31,14 +31,9 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-python -m scripts.digital_twins.embeddings.embedding_audit
-python -m scripts.digital_twins.neighbors.llm_similarity_audit
-python -m scripts.digital_twins.predictions.analyze_trd_prediction
+python -m scripts.digital_twins.narratives.forge_narratives
+python -m scripts.digital_twins.vectors.forge_vectors
 
-# Copy all files from the RESULTS_DIR to the local results/ directory for easier access
-LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
-mkdir -p "${LOCAL_RESULTS_DIR}"
-rsync -av "${RESULTS_DIR}/" "${LOCAL_RESULTS_DIR}/"
-
-# Cancel the job
-bash slurm_jobs/pipeline/cancel_pipeline.sh
+# Copy all files from the RESULTS_DIR to the local test_data directory for easier access
+LOCAL_RESULTS_DIR="test_data/"
+rsync -av "${RESULTS_DIR}/vector_sanity_check.txt" "${LOCAL_RESULTS_DIR}/"
