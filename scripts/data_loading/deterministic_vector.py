@@ -40,6 +40,86 @@ MDD_RECURRENCES = sorted(["Single Episode", "Recurrent", "Dysthymia"])
 MDD_SEVERITIES = sorted(["Mild", "Moderate", "Severe", "Psychotic", "Remission", "Unspecified"]) 
 SDOH_CATEGORIES = sorted(SDOH_MAP.values())
 KNOWN_CATEGORIES = {k: set() for k in CATEGORICAL_FIELDS}
+
+LANGUAGE_MAP = {
+    "English":    "English Only",
+    "Spanish":    "Spanish",
+    "German":     "Other Indo-European",
+    "Russian":    "Other Indo-European",
+    "Farsi":      "Other Indo-European",
+    "Greek":      "Other Indo-European",
+    "Swedish":    "Other Indo-European",
+    "Turkish":    "Other Indo-European",
+    "Urdu":       "Other Indo-European",
+    "Burmese":    "Asian and Pacific Island",
+    "Cantonese":  "Asian and Pacific Island",
+    "Hmong":      "Asian and Pacific Island",
+    "Korean":     "Asian and Pacific Island",
+    "Mandarin":   "Asian and Pacific Island",
+    "Thai":       "Asian and Pacific Island",
+    "Vietnamese": "Asian and Pacific Island",
+}
+
+MARITAL_MAP = {
+    "Married":            "Now Married",
+    "Significant Other":  "Now Married",
+    "Single":             "Never Married",
+    "Other":              "Never Married",
+    "Divorced":           "Divorced",
+    "Legally Separated":  "Separated",
+    "Widowed":            "Widowed",
+}
+
+SMOKING_MAP = {
+    "Every Day":                             "Current Smoker",
+    "Some Days":                             "Current Smoker",
+    "Heavy Smoker":                          "Current Smoker",
+    "Light Smoker":                          "Current Smoker",
+    "Smoker Current Status Unknown":         "Current Smoker",
+    "Former":                                "Former Smoker",
+    "Never":                                 "Never Smoker",
+    "Passive Smoke Exposure - Never Smoker": "Never Smoker",
+}
+
+RELIGION_MAP = {
+    "Baptist":                        "Protestant",
+    "Methodist":                      "Protestant",
+    "Lutheran":                       "Protestant",
+    "Presbyterian":                   "Protestant",
+    "Episcopalian":                   "Protestant",
+    "Pentecostal":                    "Protestant",
+    "Assembly of God":                "Protestant",
+    "Church Of Christ":               "Protestant",
+    "Church Of God":                  "Protestant",
+    "Free Will Baptist":              "Protestant",
+    "Gospel":                         "Protestant",
+    "Nazarene":                       "Protestant",
+    "Non-Denominational":             "Protestant",
+    "Seventh Day Adventist":          "Protestant",
+    "Reorganized Latter Day Saints":  "Protestant",
+    "Latter Day Saints":              "Protestant",
+    "Anglican":                       "Protestant",
+    "United Church Of Christ":        "Protestant",
+    "Independent":                    "Protestant",
+    "Catholic":                       "Catholic",
+    "Orthodox":                       "Orthodox",
+    "Jewish":                         "Non-Christian",
+    "Muslim":                         "Non-Christian",
+    "Buddhist":                       "Non-Christian",
+    "Hindu":                          "Non-Christian",
+    "Scientologist":                  "Non-Christian",
+    "Other":                          "Other/Unknown",
+    "Privacy Requested":              "Other/Unknown",
+    "Unitarian":                      "Other/Unknown",
+}
+
+CATEGORICAL_MAPS = {
+    "PreferredLanguage": LANGUAGE_MAP,
+    "MaritalStatus":     MARITAL_MAP,
+    "SmokingStatus":     SMOKING_MAP,
+    "Religion":          RELIGION_MAP,
+}
+
 def initialize_attribute_indices():
     global ATTRIBUTE_INDICES
     global KNOWN_CATEGORIES

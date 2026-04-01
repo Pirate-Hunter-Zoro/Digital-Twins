@@ -122,7 +122,7 @@ def process_patient(patient_id: str, raw: bool=False) -> bool:
     
     :param patient_id: ID of patient
     :type patient_id: str
-    :param raw: Flag for if thee json should be the raw result from the .csv files or cleaned to remove useless "null" data
+    :param raw: Flag for if the json should be the raw result from the .csv files or cleaned to remove useless "null" data
     :type raw: bool
     :return: Flag to indicate if it was necessary to create the json from scratch or if it was already found
     :rtype: bool
