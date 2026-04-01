@@ -48,7 +48,7 @@ def generate_deterministic_vectors():
         def get_patient_dump(id, vec_path, narrative_path) -> str:
             with open(narrative_path, 'r') as f:
                 narrative = f.read()
-            result = id + '\n' + str(np.load(vec_path).tolist()) + '\n'\
+            result = id + '\n' + str(np.load(vec_path, allow_pickle=True).tolist()) + '\n'\
                 + narrative
             return result
         report += "\n".join([get_patient_dump(sample_ids[i], sample_vector_paths[i], sample_narrative_paths[i]) for i in range(n_samples)])

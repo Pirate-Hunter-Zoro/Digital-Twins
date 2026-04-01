@@ -34,7 +34,7 @@ ANALYSIS_DIR = Path(os.environ['ANALYSIS_DIR'])
 PATIENT_ATTRIBUTES_PATH = ANALYSIS_DIR / "patient_attributes.json"
 
 ATTRIBUTE_INDICES = {}
-CATEGORICAL_FIELDS = ["Sex", "PreferredLanguage", "SexualOrientation", "MaritalStatus", "Religion", "SmokingStatus", "Race_Ethnicity"]
+CATEGORICAL_FIELDS = ["Sex", "PreferredLanguage", "MaritalStatus", "Religion", "SmokingStatus", "Race_Ethnicity"]
 SUD_SUBSTANCES = sorted(["Alcohol", "Opioid", "Cannabis", "Sedative/Hypnotic", "Cocaine", "Other Stimulant", "Hallucinogen", "Nicotine", "Inhalant", "Other Substance"])
 MDD_RECURRENCES = sorted(["Single Episode", "Recurrent", "Dysthymia"])                                                                 
 MDD_SEVERITIES = sorted(["Mild", "Moderate", "Severe", "Psychotic", "Remission", "Unspecified"]) 
@@ -162,13 +162,21 @@ def initialize_attribute_indices():
             with open(sliced_json_file, 'r') as f:
                 demographics = json.load(f)['demographics']
                 for key in CATEGORICAL_FIELDS:
-                    val = demographics.get(key, None)
-                    if val != None and not (isinstance(val, float) and np.isnan(val)) and (val not in KNOWN_CATEGORIES[key]):
-                        KNOWN_CATEGORIES[key].add(val)
+                    raw_val = demographics.get(key, None)
+                    
+                    if raw_val != None and not (isinstance(raw_val, float) and np.isnan(raw_val)):
+                        if key in CATEGORICAL_MAPS.keys():
+                            # We don't want the raw value - we want the value this maps to
+                            value_map = CATEGORICAL_MAPS[key]
+                            value = value_map.get(raw_val, None)
+                            if value != None:  
+                                KNOWN_CATEGORIES[key].add(value)
+                        elif raw_val not in KNOWN_CATEGORIES[key]:
+                            KNOWN_CATEGORIES[key].add(raw_val)
         # Indices of each category value
         for key in CATEGORICAL_FIELDS:
-            for val in sorted(KNOWN_CATEGORIES[key]):
-                ATTRIBUTE_INDICES[f"{key}_{val}"] = len(ATTRIBUTE_INDICES) 
+            for raw_val in sorted(KNOWN_CATEGORIES[key]):
+                ATTRIBUTE_INDICES[f"{key}_{raw_val}"] = len(ATTRIBUTE_INDICES) 
                
         for substance in SUD_SUBSTANCES:
             ATTRIBUTE_INDICES[f"sud_{substance}"] = len(ATTRIBUTE_INDICES)
@@ -211,7 +219,7 @@ def generate_deterministic_vector(sliced_json: Dict):
     initialize_attribute_indices()
     vector_save_path = Path(os.environ['DETERMINISTIC_VECTORS_DIR']) / f"{sliced_json['patient_id']}.npy"
     if vector_save_path.exists() and int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 0:
-        return np.load(vector_save_path)
+        return np.load(vector_save_path, allow_pickle=True)
     
     psych_comorbidity_dict = psych_comorbidity(sliced_json)
     
@@ -286,6 +294,10 @@ def generate_deterministic_vector(sliced_json: Dict):
     # One-hot encoding demographics
     for field in CATEGORICAL_FIELDS:
         patient_val = sliced_json['demographics'].get(field, None)
+        if field in CATEGORICAL_MAPS.keys():
+            # Mapped value one hot encoding - change the patient's value to whatever value it maps to
+            mapped_vals = CATEGORICAL_MAPS[field]
+            patient_val = mapped_vals.get(patient_val, None)
         for val in sorted(KNOWN_CATEGORIES[field]):
             patient_vector.append(get_bool_int(patient_val == val))
             
