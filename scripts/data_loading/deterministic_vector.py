@@ -129,7 +129,7 @@ def initialize_attribute_indices():
     global ATTRIBUTE_INDICES
     global KNOWN_CATEGORIES
     # We need a function to write to a json recording what components are in each deterministic patient vector component
-    if (not PATIENT_ATTRIBUTES_PATH.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
+    if (not PATIENT_ATTRIBUTES_PATH.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1 and ATTRIBUTE_INDICES == {}):
         # Not already done
         ATTRIBUTE_INDICES = {
             'mdd_to_anchor_days' : 0,
