@@ -14,9 +14,9 @@ VECTORS_DIR = Path(os.environ['VECTORS_DIR'])
 
 class Retriever:
     
-    def __init__(self):
+    def __init__(self, exclude_ids: set[str]):
         """
-        Loads all patient vectors and their corresponding narrative string IDs
+        Loads all patient vectors and their corresponding narrative string IDs, excluding the specified anchor patients
         """
         vectors_db_path = VECTORS_DIR / "vectors.db"
         self.connection = sqlite3.connect(vectors_db_path)
@@ -35,8 +35,10 @@ SELECT patient_id, vector, chronological_length FROM vectors
         vectors = []
         self.chronological_lengths = []
         for row in self.patient_vectors:
-            self.ids.append(row[0])
-            vectors.append(np.frombuffer(row[1], dtype=np.float32))
+            if row[0] not in exclude_ids:
+                self.ids.append(row[0])
+                vectors.append(np.frombuffer(row[1], dtype=np.float32))
+            # Regardless, we'd still like to see all of our chronological lengths for our histogram of such things
             self.chronological_lengths.append(row[2])
         self.ids_to_index = {id: i for i, id in enumerate(self.ids)}
         self.vectors = np.vstack(vectors)
@@ -101,16 +103,18 @@ SELECT chronological_length FROM vectors WHERE patient_id=?
             (id,))
         return self.cursor.fetchone()[0]
         
-    def search(self, query_vector: np.array, exclude_id: str, scheme: NeighborScheme) -> List[Tuple[str, float]]:
-        """
-        Find the nearest patients to this patient in terms of cosine similarity of the vectors
-        
-        :param query_vector: Vector of interest which came from a patient
-        :type query_vector: np.array
-        :param exclude_id: ID to exclude when considering nearby neighbors (e.g. don't let the patient themself count as a neighbor)
-        :type query_vector: str
-        :return: Resulting nearest patients and their similarity scores
-        :rtype: List[Tuple[str, float]]
+    def search(self, query_vector: np.array, scheme: NeighborScheme) -> List[Tuple[str, float]]:
+        """Find the nearest patients to this patient in terms of cosine similarity of the vectors
+
+        Args:
+            query_vector (np.array): Vector to find neighbors of
+            scheme (NeighborScheme): Nearest, Farthest, Subsample, Random
+
+        Raises:
+            ValueError: If one of the excluded IDs suddenly becomes a neighbor
+
+        Returns:
+            List[Tuple[str, float]]: IDs and scores of respective neighbors
         """
         k = int(os.environ['NUM_NEIGHBOR_PATIENTS'])
         # Normalize query vector
@@ -122,9 +126,7 @@ SELECT chronological_length FROM vectors WHERE patient_id=?
         
         if scheme == NeighborScheme.NEAREST: # Find nearest neighbors by cosine similarity
             sorted_indices = np.argsort(similarities)[::-1] # Highest similarity first
-            top_k_indices = sorted_indices[1:k+1] # The very nearest will be the id we need to exclude - assert this is the case or someone is calling this function wrong or the embeddings are wack
-            if not self.ids[sorted_indices[0]] == exclude_id:
-                raise ValueError(f"Error - ID to exclude should be the patient ID of {self.ids[sorted_indices[0]]}, but was {exclude_id}...")
+            top_k_indices = sorted_indices[:k]
             top_k_scores = similarities[top_k_indices]
             return [(self.ids[index], score) for index, score in zip(top_k_indices, top_k_scores)]
         elif scheme == NeighborScheme.FARTHEST:
@@ -136,7 +138,6 @@ SELECT chronological_length FROM vectors WHERE patient_id=?
             # Subsample method
             sample_size = int(os.environ['SUBSAMPLE_POOL_SIZE'])
             available_ids = self.ids.copy()
-            available_ids.remove(exclude_id)
             available_ids = np.array(available_ids)
             random_neighbors = np.random.choice(available_ids, size=sample_size, replace=False)
             corresponding_similarities = similarities[[self.ids_to_index[id] for id in random_neighbors.tolist()]]
@@ -146,7 +147,6 @@ SELECT chronological_length FROM vectors WHERE patient_id=?
         else:
             # Random neighbors
             available_ids = self.ids.copy()
-            available_ids.remove(exclude_id)
             available_ids = np.array(available_ids)
             random_neighbors = np.random.choice(available_ids, size=k, replace=False).tolist()
             

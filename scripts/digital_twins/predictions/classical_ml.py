@@ -8,8 +8,19 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
+from sklearn.ensemble import (
+    RandomForestClassifier,
+    GradientBoostingClassifier
+)
+from xgboost import XGBClassifier
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
+from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
+from scripts.shared.plots import (
+    plot_receiving_operator_characteristic,
+    plot_precision_recall,
+    plot_calibration
+)
 
 def load_data_set(patient_ids: set[str]) -> Tuple[np.array, np.array]:
     """Load all the patient vectors and find their labels
@@ -17,7 +28,7 @@ def load_data_set(patient_ids: set[str]) -> Tuple[np.array, np.array]:
     Returns:
         Tuple[np.array, np.array]: vectors and labels
     """
-    predictor = TRDPredictor()
+    predictor = TRDPredictor(exclude_ids=set()) # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
     all_vector_paths = Path(os.environ['DETERMINISTIC_VECTORS_DIR']).glob("*.npy")
     patient_vector_paths = [p for p in all_vector_paths if p.stem in patient_ids]
     # Sort for the purposes of keeping X and y consistent with each other
@@ -36,19 +47,24 @@ def make_classifier(model):
                     ("model", model)\
                 ])
     
-def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array, y_test: np.array):
+def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array) -> dict[str, np.array]:
     """Obtain classification results from varioius ML models on the input data
 
     Args:
         X_train (np.array): Train observations
         y_train (np.array): Train labels
         X_test (np.array): Test observations
-        y_test (np.array): Test labels
+
+    Returns:
+        dict[str, np.array]: Probability scores for each model
     """
     classifiers = {
-        "Logistic Regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
-        "Naive Bayes": make_classifier(GaussianNB()),
-        "SVM": make_classifier(SVC(probability=True, random_state=int(os.environ['SEED'])))
+        "logistic_regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
+        "naive_bayes": make_classifier(GaussianNB()),
+        "svm": make_classifier(SVC(probability=True, random_state=int(os.environ['SEED']))),
+        "random_forest": make_classifier(RandomForestClassifier(random_state=int(os.environ['SEED']))),
+        "gradient_boosting": make_classifier(GradientBoostingClassifier(random_state=int(os.environ['SEED']))),
+        "xgboost": make_classifier(XGBClassifier(random_state=int(os.environ['SEED']), eval_metric='logloss'))
     }
     # Fit each classifier on the training data
     classifier_predictions = {}
@@ -56,3 +72,19 @@ def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array, y_te
         classifier.fit(X=X_train, y=y_train)
         predictions = classifier.predict_proba(X=X_test)[:, 1]
         classifier_predictions[name] = predictions
+        
+    return classifier_predictions
+
+def main():
+    # Get training and test split
+    (train_ids, test_ids) = create_train_test_split()
+    (train_X, train_y) = load_data_set(train_ids)
+    (test_X, test_y) = load_data_set(test_ids)
+    model_predictions = evaluate_models(train_X, train_y, test_X)
+    for model_name, predictions in model_predictions.items():
+        plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=model_name)
+        plot_precision_recall(y_true=test_y, y_prob=predictions, mode=model_name)
+        plot_calibration(y_true=test_y, y_prob=predictions, mode=model_name)
+        
+if __name__=="__main__":
+    main()

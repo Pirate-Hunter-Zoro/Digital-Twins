@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from enum import Enum
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -11,8 +10,13 @@ from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 
 class TRDPredictor:
     
-    def __init__(self):
-        self.retriever = Retriever()
+    def __init__(self, exclude_ids: set[str]):
+        """Create necessary retrievers and scorers and TRD-positive set
+
+        Args:
+            exclude_ids (set[str]): Set of anchor patients which are not allowed to be considered neighbors
+        """
+        self.retriever = Retriever(exclude_ids=exclude_ids)
         self.scorer = Scorer()
         self.trd_set = set()
         trd_file = Path(os.environ['TRD_LIST_PATH'])
@@ -43,7 +47,7 @@ class TRDPredictor:
             self.retriever.get_narrative(id=index_id),\
                 self.retriever.get_vector(id=index_id),\
                         self.retriever.get_chronological_length(id=index_id)
-        neighbors = self.retriever.search(query_vector=index_vector, exclude_id=index_id, scheme=scheme)
+        neighbors = self.retriever.search(query_vector=index_vector, scheme=scheme)
         for neighbor_id, _ in neighbors:
             # Quick check to ensure this patient is not included in the neighbors
             if neighbor_id == index_id:
