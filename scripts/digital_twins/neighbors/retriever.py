@@ -9,12 +9,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
+from scripts.shared.utils import VectorSource
 
 EMBEDDINGS_DIR = Path(os.environ['EMBEDDINGS_DIR'])
 
 class Retriever:
     
-    def __init__(self, exclude_ids: set[str]):
+    def __init__(self, exclude_ids: set[str], source: VectorSource):
         """
         Loads all patient vectors and their corresponding narrative string IDs, excluding the specified anchor patients
         """
@@ -23,21 +24,27 @@ class Retriever:
         self.cursor = self.connection.cursor()
         
         # Load all patient vectors
-        self.cursor.execute(
-            """
-SELECT patient_id, vector, chronological_length FROM vectors
-            """
-        )
-        # List of tuples - (id string of narrative, vector in bytes)
-        self.patient_vectors = self.cursor.fetchall()
+        if source == VectorSource.DETERMINISTIC:
+            vectors_dir = Path(os.environ['DETERMINISTIC_VECTORS_DIR'])
+            all_deterministic_vecs = vectors_dir.glob("*.npy")
+            # TODO - still need chronological length - split up into two different sql queries perhaps...?
+        else:
+            self.cursor.execute(
+                """
+    SELECT patient_id, embedding, chronological_length FROM embeddings
+                """
+            )
+            # List of tuples - (id string of narrative, vector in bytes)
+            self.patient_tuples = self.cursor.fetchall()
         
         self.ids = []
         vectors = []
         self.chronological_lengths = []
-        for row in self.patient_vectors:
+        for row in self.patient_tuples:
             if row[0] not in exclude_ids:
                 self.ids.append(row[0])
-                vectors.append(np.frombuffer(row[1], dtype=np.float32))
+                # Load the vector which may mean creating a numpy array out of a buffer or leaving the numpy array as is in the deterministic case
+                vectors.append(np.frombuffer(row[1], dtype=np.float32) if not isinstance(row[1], np.array) else row[1])
             # Regardless, we'd still like to see all of our chronological lengths for our histogram of such things
             self.chronological_lengths.append(row[2])
         self.ids_to_index = {id: i for i, id in enumerate(self.ids)}

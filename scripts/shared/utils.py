@@ -1,9 +1,14 @@
 import pandas as pd
 import os
 from pathlib import Path
+from enum import Enum
 
 from dotenv import load_dotenv
 load_dotenv()
+
+class VectorSource(Enum):
+    EMBEDDING = 0
+    DETERMINISTIC = 1
 
 def load_neighborhood_data() -> pd.DataFrame:
     """Helper method to load all of the TRD risk prediction neighborhood data

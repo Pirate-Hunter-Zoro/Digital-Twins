@@ -22,11 +22,9 @@ from scripts.shared.plots import (
     plot_receiving_operator_characteristic,
     plot_precision_recall,
     plot_calibration
-)
 
-class VectorSource(Enum):
-    EMBEDDING = 0
-    DETERMINISTIC = 1
+)
+from scripts.shared.utils import VectorSource
 
 def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.DETERMINISTIC) -> Tuple[np.array, np.array]:
     """Load all the patient vectors and find their labels
