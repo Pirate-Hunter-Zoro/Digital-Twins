@@ -99,13 +99,15 @@ def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array) -> d
 def main():
     # Get training and test split
     (train_ids, test_ids) = create_train_test_split()
-    (train_X, train_y) = load_data_set(train_ids)
-    (test_X, test_y) = load_data_set(test_ids)
-    model_predictions = evaluate_models(train_X, train_y, test_X)
-    for model_name, predictions in model_predictions.items():
-        plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=model_name)
-        plot_precision_recall(y_true=test_y, y_prob=predictions, mode=model_name)
-        plot_calibration(y_true=test_y, y_prob=predictions, mode=model_name)
+    
+    for source in VectorSource:
+        (train_X, train_y) = load_data_set(train_ids, source=source)
+        (test_X, test_y) = load_data_set(test_ids, source=source)
+        model_predictions = evaluate_models(train_X, train_y, test_X)
+        for model_name, predictions in model_predictions.items():
+            plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
+            plot_precision_recall(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
+            plot_calibration(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
         
 if __name__=="__main__":
     main()
