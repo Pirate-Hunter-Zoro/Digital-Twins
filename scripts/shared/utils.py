@@ -10,10 +10,10 @@ class VectorSource(Enum):
     EMBEDDING = 0
     DETERMINISTIC = 1
 
-def load_neighborhood_data() -> pd.DataFrame:
+def load_neighborhood_data(source: VectorSource=VectorSource.EMBEDDING) -> pd.DataFrame:
     """Helper method to load all of the TRD risk prediction neighborhood data
 
     Returns:
         pd.DataFrame: Resulting neighborhood information
     """
-    return pd.concat([pd.read_csv(f) for f in Path(os.environ['RESULTS_DIR']).glob("neighbor_results_*.csv")], ignore_index=True)
+    return pd.concat([pd.read_csv(f) for f in Path(os.environ['RESULTS_DIR']).glob(f"neighbor_results_{source.name}_*.csv")], ignore_index=True)

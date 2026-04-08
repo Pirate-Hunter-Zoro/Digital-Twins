@@ -7,6 +7,7 @@ import numpy as np
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
+from scripts.shared.utils import VectorSource
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -14,21 +15,20 @@ load_dotenv()
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 os.makedirs(RESULTS_DIR, exist_ok=True)
 predictor = None
+source = None
 test_ids = create_train_test_split()[1]
 
 def init_worker():
-    global predictor
+    global predictor # This will be created for each worker
+    # We are only reading 'source', so no need to declare 'global source' - it is not something created for each worker
     np.random.seed(int(os.environ['SEED']))
-    predictor = TRDPredictor(exclude_ids=test_ids)
+    predictor = TRDPredictor(exclude_ids=test_ids, source=source)
 
-def evaluate_patient(patient_id: str) -> list[dict]:
-    """
-    Obtain all of the patient's neighborhood prediction information
-    
-    :param patient_id:ID of patient
-    :type patient_info: str
-    :return: patient neighborhood results
-    :rtype: list[dict]
+def evaluate_patient(patient_id: str):
+    """Obtain all the patient's neighborhood prediction information and save it
+
+    Args:
+        patient_id (str): Id of the patient of interest
     """
     global predictor
     results = []
@@ -36,10 +36,14 @@ def evaluate_patient(patient_id: str) -> list[dict]:
         results.extend(predictor.construct_neighborhood_data(index_id=patient_id, scheme=scheme))
     return results
 
-def run():
+def run(vector_source: VectorSource):
     """
     Single worker process to run TRD prediction on a sub-sample of patients
     """
+    # Establish global variable of source
+    global source
+    source = vector_source
+    
     # Establish deterministic order over the different Slurm workers
     sorted_test_ids = sorted(list(test_ids))
     
@@ -64,7 +68,8 @@ def run():
         for res in pool.imap_unordered(evaluate_patient, chunk_ids):
             results.extend(res)
     # Save dataframe of results
-    pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results_{slurm_task_id}.csv")
+    pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results_{source.name}_{slurm_task_id}.csv")
     
 if __name__=="__main__":
-    run()
+    run(VectorSource.EMBEDDING)
+    run(VectorSource.DETERMINISTIC)

@@ -13,8 +13,6 @@ import random
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-from scripts.shared.utils import load_neighborhood_data
-
 def vector_analysis(vectors: np.array) -> np.array:
     """Analyzes shape and norm of all the given vectors
 
