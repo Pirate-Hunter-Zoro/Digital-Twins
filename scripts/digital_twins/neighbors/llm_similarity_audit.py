@@ -13,7 +13,7 @@ def main():
     scorer = Scorer(require_client=False)
     
     # Create a connection to the vectors database
-    vector_cursor = sqlite3.connect(Path(os.environ['VECTORS_DIR']) / "vectors.db").cursor()
+    vector_cursor = sqlite3.connect(Path(os.environ['EMBEDDINGS_DIR']) / "embeddings.db").cursor()
     results_dir = Path(os.environ['RESULTS_DIR']) / 'llm_audit/'
     os.makedirs(results_dir, exist_ok=True)
     

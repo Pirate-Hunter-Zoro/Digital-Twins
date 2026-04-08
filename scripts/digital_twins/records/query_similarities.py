@@ -7,7 +7,7 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 
-VECTORS_DB = Path(os.environ['VECTORS_DIR']) / "vectors.db"
+VECTORS_DB = Path(os.environ['EMBEDDINGS_DIR']) / "embeddings.db"
 JUDGEMENTS_DB = Path(os.environ['JUDGEMENTS_DIR']) / "judgements.db"
 OUTPUT_DIR = Path("test_data/judgements")
 SAMPLE_SIZE = 10

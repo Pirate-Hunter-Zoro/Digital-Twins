@@ -10,7 +10,7 @@ load_dotenv()
 
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 
-VECTORS_DIR = Path(os.environ['VECTORS_DIR'])
+EMBEDDINGS_DIR = Path(os.environ['EMBEDDINGS_DIR'])
 
 class Retriever:
     
@@ -18,7 +18,7 @@ class Retriever:
         """
         Loads all patient vectors and their corresponding narrative string IDs, excluding the specified anchor patients
         """
-        vectors_db_path = VECTORS_DIR / "vectors.db"
+        vectors_db_path = EMBEDDINGS_DIR / "embeddings.db"
         self.connection = sqlite3.connect(vectors_db_path)
         self.cursor = self.connection.cursor()
         
@@ -82,7 +82,7 @@ SELECT text FROM vectors WHERE patient_id=?
         """
         self.cursor.execute(
             """
-SELECT vector FROM vectors WHERE patient_id=?
+SELECT embedding FROM embeddings WHERE patient_id=?
             """,
             (id,))
         return np.frombuffer(self.cursor.fetchone()[0], dtype=np.float32)

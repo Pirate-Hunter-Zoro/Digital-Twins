@@ -97,12 +97,12 @@ def monotonicity_analysis(vectors: np.array, random_pairs: list[tuple[int,int]],
     plt.close()
 
 def main():
-    vectors_db_path = Path(os.environ['VECTORS_DIR']) / 'vectors.db'
+    vectors_db_path = Path(os.environ['EMBEDDINGS_DIR']) / 'embeddings.db'
     connection = sqlite3.connect(vectors_db_path)
     cursor = connection.cursor()
     # Grab all the vectors and perform some analysis
     cursor.execute('''
-SELECT vector FROM vectors
+SELECT embedding FROM embeddings
 ''')
     vectors = np.array([np.frombuffer(vec[0], dtype=np.float32) for vec in cursor.fetchall()])
     

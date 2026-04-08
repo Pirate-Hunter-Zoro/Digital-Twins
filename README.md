@@ -13,7 +13,7 @@ graph LR
     C --> E[Stage 1b: Deterministic Vector Gen]
     D --> F[Markdown Narratives]
     F --> G[Stage 2: Embedding]
-    G --> H[(Vectors.db)]
+    G --> H[(embeddings.db)]
     E --> I[Deterministic Vectors .npy]
     H --> J[Stage 3: Retrieval & Scoring]
     J --> K[(Judgements.db)]
@@ -63,7 +63,7 @@ Constructs fixed-length numeric feature vectors directly from the structured pat
 2. Batches them.
 3. Feeds them to the `PatientEmbedder` to generate embeddings.
 
-* **Artifacts**: This stage populates the SQLite database `vectors.db`.
+* **Artifacts**: This stage populates the SQLite database `embeddings.db`.
 
 * **`embedding_audit.py`**:
   * **The Auditor.** Validates the geometry of the embedding space before expensive scoring.
@@ -77,7 +77,7 @@ Constructs fixed-length numeric feature vectors directly from the structured pat
 **The Judge.** Finds and scores patient similarity.
 
 * **`retriever.py`**:
-  * Loads the entire `vectors.db` into memory.
+  * Loads the entire `embeddings.db` into memory.
   * Performs fast cosine similarity search (Pre-filter) to find candidates using four distinct retrieval modes:
     * **Nearest (`global`)**: Finds the top-K closest vectors by cosine similarity.
     * **Farthest (`farthest`)**: Finds the top-K most distant vectors by cosine similarity to establish a negative baseline.
@@ -93,7 +93,7 @@ Constructs fixed-length numeric feature vectors directly from the structured pat
 
 * **`llm_similarity_audit.py`**:
   * The Auditor. Extracts concrete examples of the LLM's scoring logic for manual review.
-  * **Cross-Database Extraction**: Bridges the `judgements.db` (for scores and raw JSON responses) and `vectors.db` (for the original patient narratives).
+  * **Cross-Database Extraction**: Bridges the `judgements.db` (for scores and raw JSON responses) and `embeddings.db` (for the original patient narratives).
   * **Extremes Sampling**: Queries the top 5 highest and bottom 5 lowest similarity scores to isolate and demonstrate the model's behavior at the margins.
   * **Reporting**: Generates isolated `.txt` files containing both compared narratives alongside the formatted JSON output for readable human analysis.
 
@@ -160,7 +160,7 @@ Interfaces for the neural networks.
 
 * **`patient_embedder.py`**:
 * Wraps `SentenceTransformer` (e.g., Qwen).
-* **Storage**: Manages a SQLite connection to `vectors.db`.
+* **Storage**: Manages a SQLite connection to `embeddings.db`.
 * **Logic**: Checks the DB for existing IDs. If missing, computes the embedding and inserts it as a binary BLOB.
 * **Scrubbing**: Respects `SCRUB_VECTORS` env var to force re-computation.
 * **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation or scoring).
@@ -179,9 +179,9 @@ Interfaces for the neural networks.
 
 ## The Vault: Databases
 
-### Vector Storage (`vectors.db`)
+### Vector Storage (`embeddings.db`)
 
-Located at `ARTIFACTS_DIR/vectors.db`.
+Located at `ARTIFACTS_DIR/embeddings.db`.
 
 **Table: `vectors**`
 Stores the raw embeddings.
@@ -258,7 +258,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `ARTIFACTS_DIR`: Root directory for computed artifacts.
 * `DETERMINISTIC_NARRATIVES_DIR`: Storage for generated Markdown narratives.
 * `DETERMINISTIC_VECTORS_DIR`: Storage for deterministic feature vectors (`.npy` files).
-* `VECTORS_DIR`: Storage for embedding vectors.
+* `EMBEDDINGS_DIR`: Storage for embedding vectors.
 * `JUDGEMENTS_DIR`: Storage for LLM judgements.
 * `RESULTS_DIR`: Storage for analysis results and logs.
 

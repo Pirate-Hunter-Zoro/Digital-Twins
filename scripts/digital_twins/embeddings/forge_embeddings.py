@@ -28,7 +28,7 @@ def forge():
                     current_narrative_batch.append(f.read())
                     current_patient_id_batch.append(narrative_file.stem)
             else:
-                embedder.vectorize((current_patient_id_batch, current_narrative_batch))
+                embedder.embed((current_patient_id_batch, current_narrative_batch))
                 batches_embedded += 1
                 if batches_embedded % RECORD_EVERY == 0:
                     print(f"Finished embedding {batches_embedded} batches of size {batch_size}...", flush=True)
@@ -36,7 +36,7 @@ def forge():
                 current_patient_id_batch = []
         if len(current_narrative_batch) > 0:
             # One last leftover batch
-            embedder.vectorize((current_patient_id_batch, current_narrative_batch))
+            embedder.embed((current_patient_id_batch, current_narrative_batch))
             
 if __name__=="__main__":
     forge()
