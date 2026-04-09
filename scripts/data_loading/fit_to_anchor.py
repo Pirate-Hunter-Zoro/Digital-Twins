@@ -10,6 +10,7 @@ from scripts.data_loading.diagnoses_definitions import get_mdd_components
 
 MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
 YEARS_BACK = int(os.environ['YEARS_BACK'])
+YEARS_AHEAD = int(os.environ['YEARS_AHEAD'])
 
 def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict):
     """
@@ -56,6 +57,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     # First loop through every encounter and look for an MDD diagnosis which precedes or occurs at the same time as the anchor date
     mdd_prereq = False
     earliest_sliced_encounter_date = anchor_date
+    latest_encounter_date = anchor_date
     latest_mdd_date = None
     latest_mdd_recurrence = None
     latest_mdd_severity = None
@@ -65,6 +67,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
         if not isinstance(enc_start_str, str):
             continue # Skip bad encounters
         encounter_start_date = datetime.strptime(enc_start_str, '%Y-%m-%d')
+        latest_encounter_date = max(latest_encounter_date, encounter_start_date)
         if encounter_start_date <= anchor_date:
             # Potential MDD preceding anchor date
             if encounter_start_date < earliest_sliced_encounter_date:
@@ -87,9 +90,15 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     mdd_to_anchor_days = (anchor_date - latest_mdd_date).days
     
     # Define cutoff date
-    cutoff_date = anchor_date - timedelta(int(os.environ['YEARS_BACK'])*365)
+    cutoff_date = anchor_date - timedelta(YEARS_BACK*365)
     if earliest_sliced_encounter_date > cutoff_date:
         # Not enough patient history
+        return None
+    
+    # See if enough post-anchor history exists
+    must_exceed_date = anchor_date + timedelta(YEARS_AHEAD*365)
+    if latest_encounter_date < must_exceed_date:
+        # Not enough post-anchor history
         return None
     
     # Now process the patient json
