@@ -226,6 +226,34 @@ Interfaces for the neural networks.
 * **`plots.py`**: Wraps `matplotlib` and `sklearn` to generate diagnostic visualizations. Computes and saves ROC curves (with bootstrapped error bands), Precision-Recall curves, Calibration curves, Decision Curve Analyses (DCA), Effective Sample Size distributions, and Optimal Confusion Matrices.
 * **`prompts.py`**: Strict loader for the LLM system and user prompt templates located in the `./prompts` directory. Formats and injects patient narratives into the structured evaluation prompts for the vLLM server.
 
+### 8. Tests (`tests/`)
+
+Unit tests for the data loading layer, run via `pytest`.
+
+* **`conftest.py`**: Provides a `MockPatientBuilder` fixture---a fluent builder that constructs synthetic patient JSON dicts with chainable methods (`add_active_med`, `add_diagnosis`, `add_procedure`, `add_explicit_encounter`). Encounters are auto-created when a diagnosis or procedure is added at a date with no existing encounter.
+
+* **`test_features.py`**: Validates clinical feature extractors from `scripts/data_loading/features.py`:
+  * **Adequate Trials**: Boundary tests for the 42-day (6-week) minimum medication duration threshold, including ongoing prescriptions.
+  * **Benzodiazepine Days**: Overlap merging logic (no double-counting of concurrent prescriptions).
+  * **Augmentation Flag**: 14-day minimum overlap between antidepressants and lithium/antipsychotics.
+  * **Polypharmacy**: Distinct ingredient counting (same drug at different strengths counts once).
+  * **Suicidality Flag**: One-year recency window enforcement.
+  * **Psychiatric Utilization**: Inpatient day summation and emergency encounter counting.
+  * **Somatic Treatment**: Case-insensitive detection of electroconvulsive therapy.
+  * **Psychotherapy Count**: Case-insensitive procedure matching.
+  * **NSAID Burden**: Duration-based filtering across multiple NSAIDs.
+  * **Psychiatric Comorbidity**: ICD code to comorbidity category mapping (PTSD, Anxiety, MDD).
+
+* **`test_diagnoses.py`**: Validates diagnosis code parsing from `scripts/data_loading/diagnoses_definitions.py`:
+  * **Diagnosis Arm Classification**: Regex matching for MDD, SUD, Dysthymia, Suicide Attempt, and Suicide Ideation across both ICD-10-CM and ICD-9 code formats.
+  * **SUD Substance Extraction**: Correct substance identification (Alcohol, Cannabis) from SUD codes.
+  * **MDD Component Parsing**: Recurrence (Single Episode vs. Recurrent) and severity (Mild, Moderate, Severe, Psychotic, Remission, Unspecified) extraction from MDD codes across both ICD versions.
+
+```bash
+# Run tests
+pytest tests/
+```
+
 ---
 
 ## The Vault: Databases
