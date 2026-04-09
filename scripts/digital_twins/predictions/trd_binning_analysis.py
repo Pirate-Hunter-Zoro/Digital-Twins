@@ -12,18 +12,21 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.shared.utils import load_neighborhood_data
+from scripts.shared.utils import load_neighborhood_data, VectorSource
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 from scripts.digital_twins.predictions.weighting_strategy import WeightingStrategy
 
-def load_and_merge_data() -> pd.DataFrame:
+def load_and_merge_data(source: VectorSource) -> pd.DataFrame:
     """Loads the neighbor data for each anchor patient, as well as the evaluation results for each anchor patient and merges them into a single array
+
+    Args:
+        source (VectorSource): Whether vectors are to be deterministic or embedding model results
 
     Returns:
         pd.DataFrame: Resulting array that for each anchor patient describes neighborhood similarity and the TRD flag and risk score information
     """
-    predictions_results_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / "predictions.csv")
-    neighbor_df = load_neighborhood_data()
+    predictions_results_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / f"summary_predictions_{source.name}.csv")
+    neighbor_df = load_neighborhood_data(source=source)
     # Group by anchor id and prediction scheme but then turn back into regular column
     neighbor_df = neighbor_df.groupby(['anchor_patient_id', 'neighbor_scheme']).agg({\
                                         'cosine_sim': list,
@@ -134,7 +137,8 @@ def compute_chronological_bin_scores(
 
 def plot_bin_impact(
     performance_summary: pd.DataFrame, 
-    bin_type: str
+    bin_type: str,
+    source: VectorSource
 ) -> None:
     """
     Generates a dual-axis line plot:
@@ -175,24 +179,24 @@ def plot_bin_impact(
             ax2.set_ylabel('Brier Score')
             ax2.legend(loc='upper right')
             fig.suptitle(metrics)
-            save_path = Path(os.environ['RESULTS_DIR']) / f"{bin_type}_binning" / f"scores_by_{bin_type}_{scheme.name}_{strat.name}.png"
+            save_path = Path(os.environ['RESULTS_DIR']) / f"{bin_type}_binning" / f"scores_by_{bin_type}_{scheme.name}_{strat.name}_{source.name}.png"
             os.makedirs(save_path.parent, exist_ok=True)
             fig.tight_layout()
             fig.savefig(str(save_path))
             plt.close(fig)
 
-def run_trd_bin_analysis():
-    df = load_and_merge_data()
+def run_trd_bin_analysis(source: VectorSource):
+    df = load_and_merge_data(source=source)
     
     density_metrics_df=compute_density_metrics(df) 
     density_stratified = stratify_by_density(density_metrics_df)
     density_scores_by_bin = compute_density_bin_scores(density_stratified)
     # Save the .csv so we can see the bin counts
-    density_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / "density_performance_summary.csv")
-    plot_bin_impact(density_scores_by_bin, bin_type='density')
+    density_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / f"density_performance_summary_{source.name}.csv")
+    plot_bin_impact(density_scores_by_bin, bin_type='density', source=source)
     
     chronological_stratified = stratify_by_chronology(df)
     chronological_scores_by_bin = compute_chronological_bin_scores(chronological_stratified)
     # Again save the .csv so we can see the bin counts
-    chronological_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / "chronology_performance_summary.csv")
-    plot_bin_impact(chronological_scores_by_bin, bin_type='chronological')
+    chronological_scores_by_bin.to_csv(Path(os.environ['RESULTS_DIR']) / f"chronology_performance_summary_{source.name}.csv")
+    plot_bin_impact(chronological_scores_by_bin, bin_type='chronological', source=source)

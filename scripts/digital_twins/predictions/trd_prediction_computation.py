@@ -26,7 +26,7 @@ from scripts.shared.plots import (
     plot_effective_sample_size_distribution,
     plot_optimal_confusion_matrix
 )
-from scripts.shared.utils import load_neighborhood_data
+from scripts.shared.utils import VectorSource, load_neighborhood_data
 
 def calculated_weighted_risk(group: pd.DataFrame, strategy: WeightingStrategy) -> tuple[float, float]:
     """Method to calculate the weighted risk of TRD of a patient along with their essential sample size
@@ -142,20 +142,12 @@ def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
         'proportion_risk_score_>0.9': high_proportion,
     }
     
-def run_trd_prediction_computation():
+def run_trd_prediction_computation(source: VectorSource):
     # Merge all evaluation results from different .csv files into one dataframe
-    df = load_neighborhood_data()
-    
-    subdirs = ["roc_curves", "pr_curves",
-    "calibration_curves", "decision_curves",      
-    "ess_distributions", "confusion_matrices"]
-    for subdir in subdirs:                        
-        target = Path(os.environ['RESULTS_DIR']) / subdir                                       
-        if target.exists():
-            shutil.rmtree(target)
+    df = load_neighborhood_data(source=source)
             
     anchor_ids = set(df['anchor_patient_id'])
-    predictor = TRDPredictor()
+    predictor = TRDPredictor(exclude_ids=set(), source=source)
     anchor_trd_labels = {
         patient_id: predictor.get_trd_status(candidate_patient_id=patient_id)
         for patient_id in anchor_ids
@@ -189,12 +181,12 @@ def run_trd_prediction_computation():
                     'neighbor_scheme': scheme.name,
                 })
             metrics = compute_metrics(y_true=np.array(labels), y_prob=np.array(risks))
-            plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
-            plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
-            plot_calibration(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
-            plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
-            plot_effective_sample_size_distribution(ess_values=np.array(ess_values), mode=f'{scheme.name}_{strat.name}')
-            plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
+            plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}_{source.name}')
+            plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}_{source.name}')
+            plot_calibration(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}_{source.name}')
+            plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}_{source.name}')
+            plot_effective_sample_size_distribution(ess_values=np.array(ess_values), mode=f'{scheme.name}_{strat.name}_{source.name}')
+            plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}_{source.name}')
             # Add to text report
             text_report += f"{scheme.name}_{strat.name} Metrics:\n\
     'roc_score': {metrics['roc_score']}\n\
@@ -210,12 +202,12 @@ def run_trd_prediction_computation():
                 'Mean_ESS': np.mean(np.array(ess_values))
             }
     
-    results_txt_file = Path(os.environ['RESULTS_DIR']) / 'results.txt'
+    results_txt_file = Path(os.environ['RESULTS_DIR']) / f'results_{source.name}.txt'
     with open(results_txt_file, 'w') as f:
         f.write(text_report)
     
     # Turn results into a pandas data frame and save the .csv
     results_df = pd.DataFrame(results)
-    results_df.to_csv(Path(os.environ['RESULTS_DIR']) / 'summary.csv')
-    pd.DataFrame(raw_predictions).to_csv(Path(os.environ['RESULTS_DIR']) / 'predictions.csv')
-    print("Prediction analysis complete!", flush=True)
+    results_df.to_csv(Path(os.environ['RESULTS_DIR']) / f'summary_{source.name}.csv')
+    pd.DataFrame(raw_predictions).to_csv(Path(os.environ['RESULTS_DIR']) / f'summary_predictions_{source.name}.csv')
+    print(f"Prediction analysis for {source.name} complete!", flush=True)
