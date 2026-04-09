@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS embeddings (
 ''')
         
         # Whether vectors are to be scrubbed and recomputing
-        self.scrub_vectors = int(os.environ['SCRUB_VECTORS']) == 1
+        self.scrub_embeddings = int(os.environ['SCRUB_EMBEDDINGS']) == 1
 
     def embed(self, patients: tuple[list[str], list[str]]) -> List[np.array]:
         """
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS embeddings (
             cursor.execute("SELECT embedding FROM embeddings WHERE patient_id=?", (patient_id,))
             # See if we already have this string vectorized (and we're not scrubbing)
             row = cursor.fetchone()
-            if row == None or self.scrub_vectors:
+            if row == None or self.scrub_embeddings:
                 # Need to recompute vector
                 to_compute_indices.append(i)
                 to_compute.append(narrative)

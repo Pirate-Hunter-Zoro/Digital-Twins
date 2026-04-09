@@ -217,7 +217,7 @@ Interfaces for the neural networks.
 * Wraps `SentenceTransformer` (e.g., Qwen).
 * **Storage**: Manages a SQLite connection to `embeddings.db`.
 * **Logic**: Checks the DB for existing IDs. If missing, computes the embedding and inserts it as a binary BLOB.
-* **Scrubbing**: Respects `SCRUB_VECTORS` env var to force re-computation.
+* **Scrubbing**: Respects `SCRUB_EMBEDDINGS` env var to force re-computation.
 * **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation or scoring).
 
 ### 7. Shared Utilities (`scripts/shared`)
@@ -300,7 +300,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `SCRUB_PATIENT_JSON`: 0 (Flag to force recreation of patient JSONs).
 * `SCRUB_NARRATIVES`: 0 (Flag to force recreation of narratives).
 * `SCRUB_DETERMINISTIC_VECTORS`: 0 (Flag to force recreation of deterministic feature vectors and the attribute index cache).
-* `SCRUB_VECTORS`: 0 (Flag to force re-computation of embedding vectors).
+* `SCRUB_EMBEDDINGS`: 0 (Flag to force re-computation of embedding vectors).
 
 ### Data Paths
 
