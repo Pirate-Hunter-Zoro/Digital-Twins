@@ -14,7 +14,7 @@ def create_train_test_split() -> tuple[set[str], set[str]]:
     """
     all_vector_paths = Path(os.environ['DETERMINISTIC_VECTORS_DIR']).glob("*.npy")
     all_patient_ids = [p.stem for p in all_vector_paths]
-    predictor = TRDPredictor()
+    predictor = TRDPredictor(exclude_ids=set())
     if (not test_ids_path.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
         # Need to create stratified train/test split
         train_ids, test_ids = train_test_split(all_patient_ids, test_size=0.2, stratify=[predictor.get_trd_status(id) for id in all_patient_ids], random_state=int(os.environ['SEED']))
