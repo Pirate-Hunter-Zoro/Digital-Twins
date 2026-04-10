@@ -11,7 +11,7 @@ from scripts.shared.utils import VectorSource
 
 class TRDPredictor:
     
-    def __init__(self, exclude_ids: set[str], source: VectorSource=VectorSource.EMBEDDING):
+    def __init__(self, exclude_ids: set[str]=set(), source: VectorSource=VectorSource.EMBEDDING):
         """Create necessary retrievers and scorers and TRD-positive set
 
         Args:

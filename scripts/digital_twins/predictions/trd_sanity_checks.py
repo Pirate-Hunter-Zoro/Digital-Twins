@@ -20,7 +20,7 @@ def run_chonology_check(source: VectorSource):
     risk_scores_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / f'summary_predictions_{source.name}.csv')
     
     # Load patient chronological lengths
-    retriever = Retriever(exclude_ids=set(), source=source)
+    retriever = Retriever(source=source)
     lengths_df = pd.DataFrame({
         'id': retriever.ids,
         'chronological_length': retriever.chronological_lengths
@@ -61,7 +61,7 @@ def run_cosine_check(source: VectorSource):
     df = df[df['neighbor_scheme'] == NeighborScheme.NEAREST.name]
     
     # Compute anchor to anchor similarities
-    retriever = Retriever(exclude_ids=set(), source=source)
+    retriever = Retriever(source=source)
     unique_anchor_ids = df['anchor_patient_id'].unique()
     anchor_indices = np.array([retriever.ids_to_index[id] for id in unique_anchor_ids])
     anchor_vectors = retriever.vectors[anchor_indices]

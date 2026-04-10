@@ -119,7 +119,7 @@ def plot_agreement_curves(agreement_df: pd.DataFrame, neighbor_scheme: str, sour
     plt.close()
 
 def run_trd_ranking_analysis(source: VectorSource):
-    predictor = TRDPredictor(exclude_ids=set(), source=source) 
+    predictor = TRDPredictor(source=source) 
     results_df = load_neighborhood_data(source=source)
     results_df['anchor_trd_label'] = results_df['anchor_patient_id'].apply(predictor.get_trd_status)
     # Remove self from neighbors

@@ -15,7 +15,7 @@ EMBEDDINGS_DIR = Path(os.environ['EMBEDDINGS_DIR'])
 
 class Retriever:
     
-    def __init__(self, exclude_ids: set[str], source: VectorSource):
+    def __init__(self, exclude_ids: set[str]=set(), source: VectorSource=VectorSource.EMBEDDING):
         """
         Loads all patient vectors and their corresponding narrative string IDs, excluding the specified anchor patients
         """

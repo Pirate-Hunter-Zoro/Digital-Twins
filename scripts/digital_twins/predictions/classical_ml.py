@@ -32,7 +32,7 @@ def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.DETER
     Returns:
         Tuple[np.array, np.array]: vectors and labels
     """
-    predictor = TRDPredictor(exclude_ids=set()) # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
+    predictor = TRDPredictor() # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
     if source == VectorSource.DETERMINISTIC:
         all_vector_paths = Path(os.environ['DETERMINISTIC_VECTORS_DIR']).glob("*.npy")
         patient_vector_paths = [p for p in all_vector_paths if p.stem in patient_ids]

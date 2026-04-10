@@ -2,7 +2,6 @@ import os
 import numpy as np
 import pandas as pd
 from pathlib import Path
-import shutil
 
 from sklearn.metrics import (
     roc_auc_score, 
@@ -147,7 +146,7 @@ def run_trd_prediction_computation(source: VectorSource):
     df = load_neighborhood_data(source=source)
             
     anchor_ids = set(df['anchor_patient_id'])
-    predictor = TRDPredictor(exclude_ids=set(), source=source)
+    predictor = TRDPredictor(source=source)
     anchor_trd_labels = {
         patient_id: predictor.get_trd_status(candidate_patient_id=patient_id)
         for patient_id in anchor_ids
