@@ -23,7 +23,8 @@ def create_train_test_split() -> tuple[set[str], set[str]]:
         
     # Load in the test IDs to implicitly find the train ones
     with open(test_ids_path, 'r') as f:
-        test_ids = set(f.read().splitlines())
+        # Intersect with all valid patients just in case an old invalid patient from a stale file shows up in the test_ids
+        test_ids = set(f.read().splitlines()) & set(all_patient_ids)
         train_ids = set([id for id in all_patient_ids if id not in test_ids])
         
     train_trd_count = len([id for id in train_ids if predictor.get_trd_status(id)==1])

@@ -72,6 +72,9 @@ def load_patient_data() -> Iterator[Dict]:
     # Find the intersection of the medication dates
     cohort_ids = COHORT_DF['PatientEpicId_SH']
     patients_with_anchor = MED_DATE_DF.loc[MED_DATE_DF.index.isin(cohort_ids)]
+    patients_with_anchor = patients_with_anchor.sort_values(by='MedStartInstant', ascending=True)
+    earliest_mask = ~patients_with_anchor.index.duplicated(keep='first')
+    patients_with_anchor = patients_with_anchor[earliest_mask]
     print(f"Found {len(patients_with_anchor)} patients with anchor dates in the cohort of {len(cohort_ids)} patients.", flush=True)
     
     # In multiprocessing, each worker will need arguments to do its job
