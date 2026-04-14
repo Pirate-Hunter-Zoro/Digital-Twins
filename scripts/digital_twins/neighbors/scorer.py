@@ -116,36 +116,43 @@ INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response)
         ]
         
         # Try to get a judgement
-        try:
-            response = self.client.chat(messages=messages)
-            cleaned_response = response.strip()
-            if "```json" in cleaned_response:
-                cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
-            elif "```" in cleaned_response:
-                cleaned_response = cleaned_response.split("```")[1].split("```")[0]
-            
-            response_json = json.loads(cleaned_response)
-            self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
-            return response_json
-        except json.JSONDecodeError as e:
+        temperatures = [0.0, 0.4, 0.8]
+        for temperature in temperatures: # Multiple attempts at valid response allowed with varying temperatures
             try:
-                bracket_idx = cleaned_response.rfind(']')
-                if bracket_idx == -1:
-                    raise e
-                else:
-                    # Add curly brackets to close the json, and 
-                    sliced_response = cleaned_response[:bracket_idx+1] + "}"
-                    response_json = json.loads(sliced_response)
-                    sys.stderr.write(f"Model Struggled and Json had to be truncated when judging patient IDs: {self.retriever.get_patient_id(id=index_id)} vs {self.retriever.get_patient_id(id=candidate_id)}\n")
-                    sys.stderr.write(f"Continuing...\n")
+                response = self.client.chat(messages=messages, temperature=temperature)
+                cleaned_response = response.strip()
+                if "```json" in cleaned_response:
+                    cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
+                elif "```" in cleaned_response:
+                    cleaned_response = cleaned_response.split("```")[1].split("```")[0]
+                
+                response_json = json.loads(cleaned_response)
+                self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
+                return response_json
+            except json.JSONDecodeError as e:
+                try:
+                    bracket_idx = cleaned_response.rfind(']')
+                    if bracket_idx == -1:
+                        continue # Try again
+                    else:
+                        # Add curly brackets to close the json, and 
+                        sliced_response = cleaned_response[:bracket_idx+1] + "}"
+                        response_json = json.loads(sliced_response)
+                        sys.stderr.write(f"Model Struggled and Json had to be truncated when judging patient IDs: {index_id} vs {candidate_id}\n")
+                        sys.stderr.write(f"Continuing...\n")
+                        sys.stderr.write(f"===============================\n")
+                        sys.stderr.flush() # Force the output
+                        return response_json
+                except:
+                    sys.stderr.write(f"IDs: {index_id} vs {candidate_id}\n")
+                    sys.stderr.write(f"Response Tail: {cleaned_response[-500:]}\n")
                     sys.stderr.write(f"===============================\n")
                     sys.stderr.flush() # Force the output
-                    return response_json
-            except:
-                sys.stderr.write(f"IDs: {self.retriever.get_patient_id(id=index_id)} vs {self.retriever.get_patient_id(id=candidate_id)}\n")
-                sys.stderr.write(f"Response Tail: {cleaned_response[-500:]}\n")
-                sys.stderr.write(f"===============================\n")
-                sys.stderr.flush() # Force the output
-                raise e
-        except Exception as e:
-            raise e
+                    continue # Try again
+            except Exception:
+                continue # Try again
+        sys.stderr.write(f"COMPLETE REPEATED FAILURE when judging patient IDs: {index_id} vs {candidate_id}\n")
+        sys.stderr.write(f"Removing {candidate_id} from {index_id} neighbors...\n")
+        sys.stderr.write(f"===============================\n")
+        sys.stderr.flush() # Force the output
+        return {}

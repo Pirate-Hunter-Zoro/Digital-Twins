@@ -77,7 +77,45 @@ def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array) -> d
     Returns:
         dict[str, np.array]: Probability scores for each model
     """
+    """
+    Logistic Regression: model__C, model__penalty, model__solver
+    Naive Bayes: model__var_smoothing
+    SVM: model__C, model__kernel, model__gamma
+    Random Forest: model__n_estimators, model__max_depth, model__min_samples_split
+    Gradient Boosting: model__n_estimators, model__learning_rate, model__max_depth
+    XGBoost: model__n_estimators, model__learning_rate, model__max_depth, model__subsample
+    """
     hyperparameters = {
+        'logistic_regression': {
+            'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
+            'model__penalty': ['l1', 'l2', 'elasticnet', None],
+            'model__solver': ['lbfgs', 'liblinear', 'saga', 'newton-cg', 'sag'],
+        },
+        'naive_bayes': {
+            'model__var_smoothing': np.logspace(0, -9, num=100).tolist(),
+        },
+        'svm': {
+            'model__C': [0.1, 1, 10, 100, 1000],
+            'model__kernel': ['linear', 'poly', 'rbf'],
+            'model__gamma': [1, 0.1, 0.01, 0.001],
+        },
+        'random_forest': {
+            'model__n_estimators': np.arange(100, 500, 100).tolist(),
+            'model__max_depth': np.arange(10, 100, 10).tolist(),
+            'model__min_samples_split': np.arange(2, 20, 2).tolist(),
+            'model__min_samples_leaf': np.arange(1, 10).tolist()
+        },
+        'gradient_boosting': {
+            'model__n_estimators': np.arange(100, 500, 100).tolist(),
+            'model__learning_rate': [0.001, 0.01, 0.1, 1, 10, 100],
+            'model__max_depth': np.arange(10, 100, 10).tolist(),
+        },
+        'xgboost': {
+            'model__n_estimators': np.arange(100, 1000, 100).tolist(),
+            'model__learning_rate': [0.001, 0.01, 0.1, 1, 10, 100],
+            'model__max_depth': np.arange(1, 10, 1).tolist(),
+            'model__subsample': np.arange(0,1,0.1).tolist(),
+        }
     }
     classifiers = {
         "logistic_regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
@@ -90,6 +128,8 @@ def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array) -> d
     # Fit each classifier on the training data
     classifier_predictions = {}
     for name, classifier in classifiers.items():
+        param_grid = hyperparameters[name]
+        # GridSearchCV(classifier, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)
         classifier.fit(X=X_train, y=y_train)
         predictions = classifier.predict_proba(X=X_test)[:, 1]
         classifier_predictions[name] = predictions

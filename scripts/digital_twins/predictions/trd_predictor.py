@@ -61,7 +61,11 @@ class TRDPredictor:
             llm_sim = self.scorer.judge(index_narrative=index_narrative, 
                                         candidate_narrative=neighbor_narrative, 
                                         index_id=index_id, 
-                                        candidate_id=neighbor_id)['overall_similarity']
+                                        candidate_id=neighbor_id)
+            if llm_sim == {}:
+                continue # This neighbor won't count
+            else:
+                llm_sim = llm_sim['overall_similarity']
             # Flag for if this neighbor is trd
             neighbor_trd_flag = self.get_trd_status(candidate_patient_id=neighbor_id)
             neighborhood_data.append({
