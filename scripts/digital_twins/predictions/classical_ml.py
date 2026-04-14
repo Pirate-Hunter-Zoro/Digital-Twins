@@ -2,7 +2,6 @@ import numpy as np
 from typing import Tuple
 from pathlib import Path
 import os
-from enum import Enum
 import sqlite3
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
@@ -14,6 +13,7 @@ from sklearn.ensemble import (
     RandomForestClassifier,
     GradientBoostingClassifier
 )
+from sklearn.model_selection import GridSearchCV
 from xgboost import XGBClassifier
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
@@ -77,6 +77,8 @@ def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array) -> d
     Returns:
         dict[str, np.array]: Probability scores for each model
     """
+    hyperparameters = {
+    }
     classifiers = {
         "logistic_regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
         "naive_bayes": make_classifier(GaussianNB()),
