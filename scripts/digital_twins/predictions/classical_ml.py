@@ -2,6 +2,7 @@ import numpy as np
 from typing import Tuple
 from pathlib import Path
 import os
+import json
 import sqlite3
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
@@ -65,58 +66,51 @@ def make_classifier(model):
                     ("scale", StandardScaler()),\
                     ("model", model)\
                 ])
-    
-def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array) -> dict[str, np.array]:
-    """Obtain classification results from varioius ML models on the input data
+
+HYPERPARAMETERS = {
+    'logistic_regression': {
+        'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
+        'model__penalty': ['l1', 'l2', 'elasticnet', None],
+        'model__solver': ['lbfgs', 'liblinear', 'saga', 'newton-cg', 'sag'],
+    },
+    'naive_bayes': {
+        'model__var_smoothing': np.logspace(0, -9, num=100).tolist(),
+    },
+    'svm': {
+        'model__C': [0.1, 1, 10, 100, 1000],
+        'model__kernel': ['linear', 'poly', 'rbf'],
+        'model__gamma': [1, 0.1, 0.01, 0.001],
+    },
+    'random_forest': {
+        'model__n_estimators': np.arange(100, 500, 100).tolist(),
+        'model__max_depth': np.arange(10, 100, 10).tolist(),
+        'model__min_samples_split': np.arange(2, 20, 2).tolist(),
+        'model__min_samples_leaf': np.arange(1, 10).tolist()
+    },
+    'gradient_boosting': {
+        'model__n_estimators': np.arange(100, 500, 100).tolist(),
+        'model__learning_rate': [0.001, 0.01, 0.1, 1, 10],
+        'model__max_depth': np.arange(10, 50, 10).tolist(),
+    },
+    'xgboost': {
+        'model__n_estimators': np.arange(100, 1000, 100).tolist(),
+        'model__learning_rate': [0.001, 0.01, 0.1, 1, 10, 100],
+        'model__max_depth': np.arange(1, 10, 1).tolist(),
+        'model__subsample': np.arange(0.1,1,0.1).tolist(),
+    }
+}
+
+def evaluate_models(X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray) -> tuple[dict[str, np.array], dict[str, dict]]:
+    """Obtain classification results from various ML models on the input data
 
     Args:
-        X_train (np.array): Train observations
-        y_train (np.array): Train labels
-        X_test (np.array): Test observations
+        X_train (np.ndarray): Train observations
+        y_train (np.ndarray): Train labels
+        X_test (np.ndarray): Test observations
 
     Returns:
-        dict[str, np.array]: Probability scores for each model
+        tuple[dict[str, np.array], dict[str, dict]]: Probability scores for each model as well as grid search results
     """
-    """
-    Logistic Regression: model__C, model__penalty, model__solver
-    Naive Bayes: model__var_smoothing
-    SVM: model__C, model__kernel, model__gamma
-    Random Forest: model__n_estimators, model__max_depth, model__min_samples_split
-    Gradient Boosting: model__n_estimators, model__learning_rate, model__max_depth
-    XGBoost: model__n_estimators, model__learning_rate, model__max_depth, model__subsample
-    """
-    hyperparameters = {
-        'logistic_regression': {
-            'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
-            'model__penalty': ['l1', 'l2', 'elasticnet', None],
-            'model__solver': ['lbfgs', 'liblinear', 'saga', 'newton-cg', 'sag'],
-        },
-        'naive_bayes': {
-            'model__var_smoothing': np.logspace(0, -9, num=100).tolist(),
-        },
-        'svm': {
-            'model__C': [0.1, 1, 10, 100, 1000],
-            'model__kernel': ['linear', 'poly', 'rbf'],
-            'model__gamma': [1, 0.1, 0.01, 0.001],
-        },
-        'random_forest': {
-            'model__n_estimators': np.arange(100, 500, 100).tolist(),
-            'model__max_depth': np.arange(10, 100, 10).tolist(),
-            'model__min_samples_split': np.arange(2, 20, 2).tolist(),
-            'model__min_samples_leaf': np.arange(1, 10).tolist()
-        },
-        'gradient_boosting': {
-            'model__n_estimators': np.arange(100, 500, 100).tolist(),
-            'model__learning_rate': [0.001, 0.01, 0.1, 1, 10, 100],
-            'model__max_depth': np.arange(10, 100, 10).tolist(),
-        },
-        'xgboost': {
-            'model__n_estimators': np.arange(100, 1000, 100).tolist(),
-            'model__learning_rate': [0.001, 0.01, 0.1, 1, 10, 100],
-            'model__max_depth': np.arange(1, 10, 1).tolist(),
-            'model__subsample': np.arange(0,1,0.1).tolist(),
-        }
-    }
     classifiers = {
         "logistic_regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
         "naive_bayes": make_classifier(GaussianNB()),
@@ -127,14 +121,19 @@ def evaluate_models(X_train: np.array, y_train: np.array, X_test: np.array) -> d
     }
     # Fit each classifier on the training data
     classifier_predictions = {}
+    model_grid_search_results = {}
     for name, classifier in classifiers.items():
-        param_grid = hyperparameters[name]
-        # GridSearchCV(classifier, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)
-        classifier.fit(X=X_train, y=y_train)
-        predictions = classifier.predict_proba(X=X_test)[:, 1]
+        param_grid = HYPERPARAMETERS[name]
+        # Hyperparameter grid search to enable the model to perform as best it can
+        searcher = GridSearchCV(classifier, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)
+        searcher.fit(X=X_train, y=y_train)
+        predictions = searcher.predict_proba(X=X_test)[:, 1]
         classifier_predictions[name] = predictions
-        
-    return classifier_predictions
+        model_grid_search_results[name] = {
+            'Best Parameters': searcher.best_params_,
+            'Best Score' : float(searcher.best_score_)
+        }
+    return classifier_predictions, model_grid_search_results
 
 def main():
     # Get training and test split
@@ -143,7 +142,9 @@ def main():
     for source in VectorSource:
         (train_X, train_y) = load_data_set(train_ids, source=source)
         (test_X, test_y) = load_data_set(test_ids, source=source)
-        model_predictions = evaluate_models(train_X, train_y, test_X)
+        model_predictions, grid_search_results = evaluate_models(train_X, train_y, test_X)
+        with open(Path(os.environ['RESULTS_DIR']) / f"grid_search_ml_results_{source.name}.json", 'w') as f:
+            json.dump(grid_search_results, f, indent=4)
         for model_name, predictions in model_predictions.items():
             plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
             plot_precision_recall(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
