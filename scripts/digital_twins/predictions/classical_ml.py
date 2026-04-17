@@ -105,21 +105,21 @@ HYPERPARAMETERS = {
         },
     ],
     'random_forest': {
-        'model__n_estimators': np.arange(100, 500, 100).tolist(),
-        'model__max_depth': np.arange(10, 100, 10).tolist(),
-        'model__min_samples_split': np.arange(2, 20, 2).tolist(),
-        'model__min_samples_leaf': np.arange(1, 10).tolist()
+        'model__n_estimators': [200],
+        'model__max_depth': [10, 50, 100],
+        'model__min_samples_split': [2, 10],
+        'model__min_samples_leaf': [2, 10]
     },
     'gradient_boosting': {
-        'model__n_estimators': np.arange(100, 500, 100).tolist(),
-        'model__learning_rate': [0.001, 0.01, 0.1, 1, 10],
-        'model__max_depth': np.arange(10, 50, 10).tolist(),
+        'model__n_estimators': [300],
+        'model__learning_rate': [0.01, 0.1, 0.3],
+        'model__max_depth': [3, 5, 8],
     },
     'xgboost': {
-        'model__n_estimators': np.arange(100, 1000, 100).tolist(),
-        'model__learning_rate': [0.001, 0.01, 0.1, 1, 10, 100],
-        'model__max_depth': np.arange(1, 10, 1).tolist(),
-        'model__subsample': np.arange(0.1,1,0.1).tolist(),
+        'model__n_estimators': [300],
+        'model__learning_rate': [0.01, 0.1, 0.3],
+        'model__max_depth': [3, 5, 8],
+        'model__subsample': [0.5, 1.0],
     }
 }
 
