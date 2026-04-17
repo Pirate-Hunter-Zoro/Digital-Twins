@@ -206,7 +206,12 @@ graph TD
     * Random Forest
     * Gradient Boosting
     * XGBoost (`eval_metric='logloss'`)
-  * **Dual-Source Evaluation**: `main()` loops over both `VectorSource` values. For each source, it loads training and test data, fits all classifiers, and generates ROC, Precision-Recall, and Calibration plots with source-prefixed filenames.
+  * **Hyperparameter Tuning**: Every classifier is wrapped in `GridSearchCV(pipeline, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)` before fitting; `predict_proba` delegates to the refit best estimator. Parameter grids are declared at module level in `HYPERPARAMETERS`.
+    * **Logistic Regression** uses a list-of-dicts `param_grid` partitioned by `penalty` to respect solver compatibility: a pure `l2` sub-grid spanning all five solvers, an `l1` sub-grid restricted to `liblinear` and `saga`, an `elasticnet` sub-grid pinned to `saga` with a `model__l1_ratio` sweep, and a `None` sub-grid spanning `lbfgs`/`newton-cg`/`sag`/`saga` (with `C` omitted since regularization is disabled).
+    * **SVM** uses a list-of-dicts partitioned by `kernel`: a `linear` sub-grid tuning only `C` (gamma is meaningless for the linear kernel), and a nonlinear sub-grid covering `rbf` and `poly` with a joint `C` and `gamma` sweep.
+    * **Naive Bayes, Random Forest, Gradient Boosting, XGBoost** use flat single-dict grids over their standard hyperparameters.
+    * Per-classifier `best_params_` and `best_score_` are persisted to `grid_search_ml_results_{source}.json` in `RESULTS_DIR` (one file per `VectorSource`).
+  * **Dual-Source Evaluation**: `main()` loops over both `VectorSource` values. For each source, it loads training and test data, fits all classifiers under grid search, and generates ROC, Precision-Recall, and Calibration plots with source-prefixed filenames.
   * **Data Loading**: `load_data_set()` accepts a `VectorSource` parameter. Deterministic mode loads `.npy` files from `DETERMINISTIC_VECTORS_DIR`. Embedding mode queries `embeddings.db` with a batched `SELECT ... WHERE patient_id IN (...)` query, ordered by patient ID to maintain alignment with labels.
 
 ### 6. Models (`scripts/models`)

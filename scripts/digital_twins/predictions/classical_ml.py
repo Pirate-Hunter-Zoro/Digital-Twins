@@ -68,19 +68,42 @@ def make_classifier(model):
                 ])
 
 HYPERPARAMETERS = {
-    'logistic_regression': {
-        'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
-        'model__penalty': ['l1', 'l2', 'elasticnet', None],
-        'model__solver': ['lbfgs', 'liblinear', 'saga', 'newton-cg', 'sag'],
-    },
+    'logistic_regression': [
+        {
+            'model__penalty': ['l2'],
+            'model__solver': ['lbfgs', 'liblinear', 'newton-cg', 'sag', 'saga'],
+            'model__C': [0.001, 0.01, 0.1, 1, 10, 100]
+        },
+        {
+            'model__penalty': ['l1'],
+            'model__solver': ['liblinear', 'saga'],
+            'model__C': [0.001, 0.01, 0.1, 1, 10, 100]
+        },
+        {
+            'model__penalty': ['elasticnet'],
+            'model__solver': ['saga'],
+            'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
+            'model__l1_ratio': [0.15, 0.3, 0.45, 0.6, 0.75, 0.9]   
+        },
+        {
+            'model__penalty': [None],
+            'model__solver': ['lbfgs', 'newton-cg', 'sag', 'saga']
+        }
+    ],
     'naive_bayes': {
         'model__var_smoothing': np.logspace(0, -9, num=100).tolist(),
     },
-    'svm': {
-        'model__C': [0.1, 1, 10, 100, 1000],
-        'model__kernel': ['linear', 'poly', 'rbf'],
-        'model__gamma': [1, 0.1, 0.01, 0.001],
-    },
+    'svm': [
+        {
+            'model__kernel': ['linear'],
+            'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
+        },
+        {
+            'model__kernel': ['rbf', 'poly'],
+            'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
+            'model__gamma': [1, 0.1, 0.01, 0.001]
+        },
+    ],
     'random_forest': {
         'model__n_estimators': np.arange(100, 500, 100).tolist(),
         'model__max_depth': np.arange(10, 100, 10).tolist(),
