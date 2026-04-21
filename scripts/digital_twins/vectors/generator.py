@@ -15,7 +15,7 @@ load_dotenv()
 from scripts.data_loading.deterministic_vector import (
     generate_deterministic_vector, 
     initialize_attribute_indices,
-    PATIENT_ATTRIBUTES_PATH
+    CATEGORICAL_LEVELS_PATH
 )
 from scripts.data_loading.load_patient_data import load_patient_data
 RECORD_EVERY = 1000
@@ -35,7 +35,7 @@ def generate_deterministic_vectors():
                 
     # Sample the vectors, respective narratives, and the vector index dictionary to state what each entry is for our sanity check
     print("Reporting vector sanity check...", flush=True)
-    with open(PATIENT_ATTRIBUTES_PATH, 'r') as f:
+    with open(CATEGORICAL_LEVELS_PATH, 'r') as f:
         attributes = json.load(f)
         n_samples = 10
         all_vectors = Path(os.environ['DETERMINISTIC_VECTORS_DIR']).glob("*.npy")

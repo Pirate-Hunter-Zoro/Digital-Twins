@@ -3,12 +3,12 @@ import os
 from pathlib import Path
 import json
 import numpy as np
+import pandas as pd
 
 from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, SAFETY_ARMS, SDOH_MAP
-from scripts.data_loading.med_definitions import ALL_ARMS
 from scripts.data_loading.features import (
     psych_comorbidity, 
     medical_comorbidity, 
@@ -31,9 +31,8 @@ from scripts.data_loading.features import (
 YEARS_BACK = int(os.environ['YEARS_BACK'])
 
 ANALYSIS_DIR = Path(os.environ['ANALYSIS_DIR'])
-PATIENT_ATTRIBUTES_PATH = ANALYSIS_DIR / "patient_attributes.json"
+CATEGORICAL_LEVELS_PATH = ANALYSIS_DIR / "categorical_levels.json"
 
-ATTRIBUTE_INDICES = {}
 CATEGORICAL_FIELDS = ["Sex", "PreferredLanguage", "MaritalStatus", "Religion", "SmokingStatus", "Race_Ethnicity"]
 SUD_SUBSTANCES = sorted(["Alcohol", "Opioid", "Cannabis", "Sedative/Hypnotic", "Cocaine", "Other Stimulant", "Hallucinogen", "Nicotine", "Inhalant", "Other Substance"])
 MDD_RECURRENCES = sorted(["Single Episode", "Recurrent", "Dysthymia"])                                                                 
@@ -125,41 +124,10 @@ CATEGORICAL_MAPS = {
     "Religion":          RELIGION_MAP,
 }
 
-def initialize_attribute_indices():
-    global ATTRIBUTE_INDICES
+def initialize_categorical_levels():
     global KNOWN_CATEGORIES
     # We need a function to write to a json recording what components are in each deterministic patient vector component
-    if (not PATIENT_ATTRIBUTES_PATH.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1 and ATTRIBUTE_INDICES == {}):
-        # Not already done
-        ATTRIBUTE_INDICES = {
-            'mdd_to_anchor_days' : 0,
-            'mdd_within_window': 1,
-            'num_encounters': 2,
-            'days_of_history': 3,
-            'AgeInYears': 4,
-            'bmi': 5,
-            'bps': 6,
-            'bp_dias': 7,
-            'suicide_flag': 8,
-            'somatic_flag': 9,
-            'augmentation_occured': 10,
-            'benzo_days_coverage': 11,
-            'psychotherapy_count': 12,
-            'polypharmacy_count': 13,
-            'nsaid_count': 14,
-            'hypnotics_burden': 15,
-            'in_patient_days': 16,
-            'num_emergency': 17,
-        }
-        for key in sorted(PSYCH_ARMS):
-            ATTRIBUTE_INDICES[f"psych_{key}"] = len(ATTRIBUTE_INDICES)
-        for key in sorted(MEDICAL_ARMS):
-            ATTRIBUTE_INDICES[f"medical_{key}"] = len(ATTRIBUTE_INDICES)
-        for key in sorted(SAFETY_ARMS):
-            ATTRIBUTE_INDICES[f"safety_{key}"] = len(ATTRIBUTE_INDICES)
-        for key in sorted(ALL_ARMS):
-            ATTRIBUTE_INDICES[f"trials_{key}"] = len(ATTRIBUTE_INDICES)
-
+    if (not CATEGORICAL_LEVELS_PATH.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
         # One hot encodings for categorical fields
         sliced_json_dir = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
         for sliced_json_file in sliced_json_dir.glob("*.json"):
@@ -178,54 +146,31 @@ def initialize_attribute_indices():
                                 KNOWN_CATEGORIES[key].add(value)
                         elif raw_val not in KNOWN_CATEGORIES[key]:
                             KNOWN_CATEGORIES[key].add(raw_val)
-        # Indices of each category value
-        for key in CATEGORICAL_FIELDS:
-            for raw_val in sorted(KNOWN_CATEGORIES[key]):
-                ATTRIBUTE_INDICES[f"{key}_{raw_val}"] = len(ATTRIBUTE_INDICES) 
-               
-        for substance in SUD_SUBSTANCES:
-            ATTRIBUTE_INDICES[f"sud_{substance}"] = len(ATTRIBUTE_INDICES)
-        
-        for category in SDOH_CATEGORIES:
-            ATTRIBUTE_INDICES[f"sdoh_{category}"] = len(ATTRIBUTE_INDICES)
-        
-        for recurrence in MDD_RECURRENCES:
-            ATTRIBUTE_INDICES[f"mdd_rec_{recurrence}"] = len(ATTRIBUTE_INDICES)
-            
-        for severity in MDD_SEVERITIES:
-            ATTRIBUTE_INDICES[f"mdd_sev_{severity}"] = len(ATTRIBUTE_INDICES)
+        # Now that KNOWN_CATEGORIES is done
+        res = {
+            field: sorted(list(KNOWN_CATEGORIES[field]))
+            for field in KNOWN_CATEGORIES
+        }
+        with open(CATEGORICAL_LEVELS_PATH, 'w') as f:
+            json.dump(res, f, indent=4)
+    else:
+        with open(CATEGORICAL_LEVELS_PATH, 'r') as f:
+            res = json.load(f)
+            for field in CATEGORICAL_FIELDS:
+                KNOWN_CATEGORIES[field] = set(res[field])
                 
-        # Cache this record
-        with open(PATIENT_ATTRIBUTES_PATH, 'w') as f:
-            json.dump(ATTRIBUTE_INDICES, f, indent=4)
-    elif ATTRIBUTE_INDICES == {}:
-        with open(PATIENT_ATTRIBUTES_PATH, 'r') as f:
-            ATTRIBUTE_INDICES = json.load(f)
-            # Still need to grab the categorical fields
-            for key in CATEGORICAL_FIELDS:
-                # Grab everything preceding the '{key}_'
-                attribute_val_keys = [label[len(key)+1:] for label in ATTRIBUTE_INDICES if label.startswith(f"{key}_")]
-                KNOWN_CATEGORIES[key] = set(attribute_val_keys)
-
-def get_bool_int(val: bool) -> int:
-    if val:
-        return 1
-    return 0
-
-def generate_deterministic_vector(sliced_json: Dict):
+def generate_deterministic_vector(sliced_json: Dict) -> pd.Series:
     """Parse the sliced patient json to generate a deterministic vector to represent the patient
 
     Args:
         sliced_json (Dict): Anchor date going back a certain number of years
+
     Returns:
-        np.array: Resulting vector for patient
+        pd.Series: Resulting deterministic vector
     """
     # First check for pre-existence
-    initialize_attribute_indices()
-    vector_save_path = Path(os.environ['DETERMINISTIC_VECTORS_DIR']) / f"{sliced_json['patient_id']}.npy"
-    if vector_save_path.exists() and int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 0:
-        return np.load(vector_save_path, allow_pickle=True)
-    
+    initialize_categorical_levels()
+     
     psych_comorbidity_dict = psych_comorbidity(sliced_json)
     
     medical_comorbidity_dict = medical_comorbidity(sliced_json)
@@ -265,65 +210,62 @@ def generate_deterministic_vector(sliced_json: Dict):
     bp_dias = vitals['bp_dias'] if vitals['bp_dias'] != "Missing" else np.nan
     
     # Form the vector
-    patient_vector = [
-        sliced_json['mdd_to_anchor_days'],
-        get_bool_int(sliced_json['mdd_to_anchor_days'] <= 365*YEARS_BACK),
-        sliced_json['num_encounters'],
-        sliced_json['days_of_history'],
-        float(sliced_json['demographics']['AgeInYears']),
-        bmi,
-        bps,
-        bp_dias,
-        get_bool_int(suicide_flag),
-        get_bool_int(somatic_flag),
-        get_bool_int(augmentation_occured),
-        benzo_days_coverage,
-        psychotherapy_treament_count,
-        len(distinct_ingredients),
-        len(distinct_nsaid_ingredients),
-        len(hypnotics_burden_set),
-        in_patient_days,
-        num_emergency
-    ]
+    row = {
+        "mdd_to_anchor_days": float(sliced_json['mdd_to_anchor_days']),
+        "num_encounters": float(sliced_json["num_encounters"]),
+        "days_of_history": float(sliced_json["days_of_history"]),
+        "AgeInYears": float(sliced_json["demographics"]["AgeInYears"]),
+        "bmi": bmi,
+        "bp_sys": bps,
+        "bp_dias": bp_dias,
+        "benzo_days_coverage": float(benzo_days_coverage),
+        "psychotherapy_count": float(psychotherapy_treament_count),
+        "polypharmacy_count": float(len(distinct_ingredients)),
+        "nsaid_count": float(len(distinct_nsaid_ingredients)),
+        "hypnotics_burden": float(len(hypnotics_burden_set)),
+        "in_patient_days": float(in_patient_days),
+        "num_emergency": float(num_emergency)
+    }
+    
+    for arm in sorted(adequate_trials_count.keys()):
+        row[f"trials_{arm}"] = float(adequate_trials_count[arm])
 
-    # Now handle the comorbidities
-    for key in sorted(psych_comorbidity_dict.keys()):
-        patient_vector.append(int(psych_comorbidity_dict[key]))
-    for key in sorted(medical_comorbidity_dict.keys()):
-        patient_vector.append(int(medical_comorbidity_dict[key]))
-    for key in sorted(safety_comorbidity_dict.keys()):
-        patient_vector.append(int(safety_comorbidity_dict[key]))
-    for key in sorted(adequate_trials_count.keys()):
-        patient_vector.append(adequate_trials_count[key])
-        
-    # One-hot encoding demographics
-    for field in CATEGORICAL_FIELDS:
-        patient_val = sliced_json['demographics'].get(field, None)
-        if field in CATEGORICAL_MAPS.keys():
-            # Mapped value one hot encoding - change the patient's value to whatever value it maps to
-            mapped_vals = CATEGORICAL_MAPS[field]
-            patient_val = mapped_vals.get(patient_val, None)
-        for val in sorted(KNOWN_CATEGORIES[field]):
-            patient_vector.append(get_bool_int(patient_val == val))
-            
-    # One-hot encoding for SUD substances
+    row["mdd_within_window"] = bool(sliced_json["mdd_to_anchor_days"] <= 365 * YEARS_BACK)
+    row["suicide_flag"] = bool(suicide_flag)
+    row["augmentation_occured"] = bool(augmentation_occured)
+    row["somatic_flag"] = bool(somatic_flag)
+
+    # Various comorbidities
+    for arm in sorted(PSYCH_ARMS):
+        row[f"psych_{arm}"] = bool(psych_comorbidity_dict.get(arm, False))
+    for arm in sorted(MEDICAL_ARMS):
+        row[f"medical_{arm}"] = bool(medical_comorbidity_dict.get(arm, False))
+    for arm in sorted(SAFETY_ARMS):
+        row[f"safety_{arm}"] = bool(safety_comorbidity_dict.get(arm, False))
+
+    # Substance abuse
     for substance in SUD_SUBSTANCES:
-        if sud_names_dict.get(substance, False):
-            patient_vector.append(1)
+        row[f"sud_{substance}"] = bool(sud_names_dict.get(substance, False))
+    
+    # Social determinants of health
+    for category in SDOH_CATEGORIES:
+        row[f"sdoh_{category}"] = bool(category in patient_sdoh_flags)
+
+    for field in CATEGORICAL_FIELDS:
+        # Missing, mapped, unmapped
+        raw_val = sliced_json['demographics'].get(field)
+        if raw_val is None or (isinstance(raw_val, float) and np.isnan(raw_val)):
+            row[field] = np.nan
+        elif field in CATEGORICAL_MAPS:
+            # Whatever value this patient has corresponds to a broader category
+            compressed_val = CATEGORICAL_MAPS[field].get(raw_val, np.nan)
+            row[field] = compressed_val
         else:
-            patient_vector.append(0)
+            # Unmapped value like Sex
+            row[field] = raw_val
+
+    # MDD recurrence and severity
+    row['mdd_recurrence'] = sliced_json['mdd_recurrence']
+    row['mdd_severity'] = sliced_json['mdd_severity']
     
-    # One-hot encoding for SDOH_CATEGORIES
-    for sdoh_flag in SDOH_CATEGORIES:
-        patient_vector.append(get_bool_int(sdoh_flag in patient_sdoh_flags))
-    
-    # One-hot encoding for MDD recurrence and severity 
-    for rec in MDD_RECURRENCES:
-        patient_vector.append(get_bool_int(rec == patient_mdd_rec))
-    for sev in MDD_SEVERITIES:
-        patient_vector.append(get_bool_int(sev == patient_mdd_sev))
-    
-    # Convert to numpy, save, and return
-    patient_vector = np.array(patient_vector, dtype=np.float32)
-    os.makedirs(vector_save_path.parent, exist_ok=True)
-    np.save(vector_save_path, patient_vector)
+    return pd.Series(row)

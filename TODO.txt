@@ -62,7 +62,21 @@ DECISIONS MADE THIS SESSION (2026-04-20):
 
 NEXT UP (IMPLEMENTATION ORDER):
 -------------------------------
-- [ ] Refactor deterministic_vector.py to emit a typed pandas Series
+- [x] Refactor deterministic_vector.py to emit a typed pandas Series
+        * initialize_categorical_levels: now caches {field: sorted_levels}
+          to categorical_levels.json; flat ATTRIBUTE_INDICES plan deleted.
+          Two mutually-exclusive paths (scan+write vs. load), both safe in
+          multiprocessing worker processes that import the module fresh.
+        * generate_deterministic_vector: returns a pd.Series keyed by
+          column name. float64 for numerics (counts, days, vitals, ages,
+          trials_*). Real Python bool for single-value flags
+          (mdd_within_window, suicide_flag, somatic_flag,
+          augmentation_occured) and for the five multi-label families
+          (psych_/medical_/safety_/sud_/sdoh_). Raw strings or np.nan for
+          the eight category-destined fields (six demographics plus
+          mdd_recurrence, mdd_severity). No .npy write, no flat one-hot.
+        * Dead code swept: get_bool_int helper and the med_definitions
+          ALL_ARMS import.
 - [ ] Refactor vectors/generator.py to discover category levels, assemble
       the cohort DataFrame, and persist to parquet
 - [ ] Update classical_ml.py: DataFrame loader, dtype-routed ColumnTransformer,
