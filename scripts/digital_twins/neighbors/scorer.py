@@ -129,7 +129,7 @@ INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response)
                 response_json = json.loads(cleaned_response)
                 self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
                 return response_json
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 try:
                     bracket_idx = cleaned_response.rfind(']')
                     if bracket_idx == -1:

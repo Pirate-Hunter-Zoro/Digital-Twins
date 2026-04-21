@@ -3,12 +3,12 @@
 
 This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"---vectorized representations of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
 
-The pipeline produces two independent patient vector representations (deterministic feature vectors and neural embeddings) and evaluates TRD risk prediction across a 2x2 evaluation matrix:
+The pipeline produces two independent patient vector representations (deterministic feature vectors and neural embeddings) and evaluates TRD risk prediction across an asymmetric evaluation matrix:
 
 | Method | Deterministic Vectors | Embedding Vectors |
 | --- | --- | --- |
-| **Classical ML** | Logistic Regression, Naive Bayes, SVM, Random Forest, Gradient Boosting, XGBoost | Same classifiers on high-dimensional embeddings |
-| **Neighbor-Weighted KNN** | KNN retrieval + LLM scoring on deterministic vectors | KNN retrieval + LLM scoring on embedding vectors |
+| **Classical ML** | LR, GaussianNB (numerics-only), BernoulliNB (bools+one-hot), SVM, RF, GB, XGBoost | Same classifiers on high-dimensional embeddings |
+| **Neighbor-Weighted KNN** | *Not applicable — cosine distance is ill-defined on mixed categorical/numeric features* | KNN retrieval + LLM scoring on embedding vectors |
 
 The pipeline is divided into **Data Loading**, **Stage 1 (Narrative & Vector Generation)**, **Stage 2 (Vector Embedding)**, **Stage 3 (Neighbor Retrieval)**, and **Stage 4 (Prediction & Classical ML)**.
 
@@ -21,9 +21,8 @@ graph LR
     D --> F[Markdown Narratives]
     F --> G[Stage 2: Embedding]
     G --> H[(embeddings.db)]
-    E --> I[Deterministic Vectors .npy]
+    E --> I[Deterministic DataFrame .parquet]
     H --> J[Stage 3: Retrieval & Scoring]
-    I --> J
     J --> K[(Judgements.db)]
     K --> L[Stage 4a: Neighbor-Weighted Prediction]
     I --> M[Stage 4b: Classical ML]
@@ -40,7 +39,7 @@ All evaluation pipelines share a single stratified 80/20 train/test split (`crea
 
 **Test Set Isolation**: In the neighbor-weighted pipeline, test patients are excluded from each other's neighbor pools at retrieval time. The `Retriever` filters out all test patient IDs from its in-memory search arrays during initialization, preventing data leakage while still allowing test patients to serve as query anchors. Narrative and chronological length lookups remain available for all patients via direct SQLite queries.
 
-**Dual Vector Source**: The `VectorSource` enum (`EMBEDDING`, `DETERMINISTIC`) parameterizes the entire pipeline. The `Retriever`, `TRDPredictor`, neighborhood constructor, all four analysis scripts, and the classical ML pipeline all accept this parameter, enabling every analysis to run independently on both vector representations.
+**Dual Vector Source (classical ML only)**: The `VectorSource` enum (`EMBEDDING`, `DETERMINISTIC`) parameterizes the classical ML pipeline, which runs the full classifier lineup against both vector representations. The neighbor-weighted KNN pipeline runs on `EMBEDDING` only — cosine similarity is not defined over mixed quantitative/categorical features, so `Retriever`, `TRDPredictor`, the neighborhood constructor, and the four neighbor-based analysis scripts accept only embedding vectors.
 
 ---
 
@@ -55,7 +54,11 @@ The foundation. These scripts ingest raw EHR exports and structure them into usa
 * **`fit_to_anchor.py`**: Enforces both the `YEARS_BACK` pre-anchor chronological window and the `YEARS_AHEAD` post-anchor follow-up requirement. It truncates encounters, procedures, and medications that cross the backward boundary and purges ancient history entirely. Patients without sufficient post-anchor observation time (to reliably determine TRD outcome) are rejected.
 * **`load_patient_data.py`**: Orchestrates the timeline slicing and generates `.rejected` marker files for patients who fail the strict MDD, chronological, or follow-up prerequisites to prevent redundant processing.
 * **`deterministic_narrative.py`**: The logic that deterministically translates structured JSON features (labs, meds, diagnoses) into a human-readable Markdown narrative. Note that the generated narrative only summarizes the precise `YEARS_BACK` window, not the patient's entire lifetime.
-* **`deterministic_vector.py`**: Constructs a fixed-length numeric feature vector for each patient from the sliced JSON. Includes numeric features (vitals, counts, days), binary flags, one-hot encoded comorbidities (psych, medical, safety), adequate trial counts, categorical demographics (discovered from data and compressed via standardized maps: ACS language/marital, BRFSS smoking, GSS religion), SUD substances, SDOH categories, and MDD recurrence/severity. Vectors are saved as `.npy` files. Attribute indices are cached to `patient_attributes.json` via `initialize_attribute_indices()` to avoid rescanning all patient JSONs on every run.
+* **`deterministic_vector.py`**: Constructs a typed `pandas.Series` of features for each patient from the sliced JSON, with explicit dtypes that drive downstream preprocessing:
+  * `float64` — quantitative features (vitals, counts, days, age, adequate-trial counts). Missing vitals remain `NaN` and are imputed inside the sklearn pipeline (train-only, no leakage).
+  * `bool` — single-valued binary flags (`suicide_flag`, `somatic_flag`, `augmentation_occured`, `mdd_within_window`) and multi-label set indicators (`psych_*`, `medical_*`, `safety_*`, `sud_*`, `sdoh_*`) where a patient can carry several members simultaneously.
+  * `category` — single-valued nominal fields: `Sex`, `PreferredLanguage`, `MaritalStatus`, `Religion`, `SmokingStatus`, `Race_Ethnicity`, `mdd_recurrence`, `mdd_severity`. Each is a single column (not one-hot at the storage layer), compressed via standardized maps (ACS language/marital, BRFSS smoking, GSS religion) where applicable. `Sex` is a single binary category, not two redundant columns.
+  Category levels are discovered in a one-shot cohort-wide JSON scan and cached to `categorical_levels.json`. Per-patient Series are assembled into a single cohort-wide parquet file keyed by `patient_id`.
 * **`features.py`**: Extractors for specific clinical features.
 * **Definitions**: `diagnoses_definitions.py` (includes `get_mdd_components()` for extracting MDD recurrence and severity as separate fields), `med_definitions.py`, etc., map codes to clinical text.
 
@@ -68,9 +71,9 @@ Transforms the structured JSONs into textual narratives.
 
 ### 2b. Stage 1b: Deterministic Vector Generation (`scripts/digital_twins/vectors`)
 
-Constructs fixed-length numeric feature vectors directly from the structured patient JSONs, bypassing the narrative/embedding pipeline entirely. These vectors serve as a classical ML baseline to compare against the high-dimensional embedding vectors.
+Constructs a typed, cohort-wide pandas DataFrame of features directly from the structured patient JSONs, bypassing the narrative/embedding pipeline entirely. This DataFrame serves as a classical ML baseline to compare against the high-dimensional embedding vectors.
 
-* **`generator.py`**: Uses multiprocessing to iterate the cohort and call `generate_deterministic_vector` for each patient. Calls `initialize_attribute_indices()` before spawning workers to prevent race conditions on the attribute cache. Produces a sanity check report sampling 10 random vectors alongside their narratives and the attribute index mapping.
+* **`generator.py`**: First performs a single cohort-wide JSON scan to discover all categorical levels and cache them to `categorical_levels.json` (replaces the former `patient_attributes.json`). Then uses multiprocessing to iterate the cohort and call `generate_deterministic_vector` for each patient, collecting per-patient Series into a single DataFrame and persisting it to parquet. Produces a sanity check report sampling 10 random rows alongside their narratives and the column dtype schema.
 * **`runner.py`**: Thin orchestrator that invokes the generator.
 
 ### 3. Stage 2: Vector Embedding (`scripts/digital_twins/embeddings`)
@@ -94,19 +97,18 @@ Converts text narratives into high-dimensional vectors using the `PatientEmbedde
 
 ### 4. Stage 3: Retrieval & Scoring (`scripts/digital_twins/neighbors`)
 
-Finds and scores patient similarity across both vector sources.
+Finds and scores patient similarity on the embedding vectors.
 
 * **`retriever.py`**:
-  * Accepts a `VectorSource` parameter and an `exclude_ids` set at initialization.
-  * **Embedding mode**: Loads patient IDs, embeddings, and chronological lengths from `embeddings.db`.
-  * **Deterministic mode**: Queries `embeddings.db` for patient IDs and chronological lengths, then loads `.npy` vectors from `DETERMINISTIC_VECTORS_DIR`.
-  * In both modes, patients in `exclude_ids` are filtered out of the in-memory search arrays during initialization, ensuring test patients never appear as neighbors.
+  * Accepts an `exclude_ids` set at initialization. Embedding-only — cosine similarity is not defined over mixed categorical/numeric features, so the deterministic retrieval path has been removed.
+  * Loads patient IDs, embeddings, and chronological lengths from `embeddings.db`.
+  * Patients in `exclude_ids` are filtered out of the in-memory search arrays during initialization, ensuring test patients never appear as neighbors.
   * Performs fast cosine similarity search to find candidates using four distinct retrieval modes:
     * **Nearest**: Finds the top-K closest vectors by cosine similarity.
     * **Farthest**: Finds the top-K most distant vectors by cosine similarity to establish a negative baseline.
     * **Random**: Blindly samples K neighbors.
     * **Subsampled**: Two-stage retrieval that pulls a large random pool (`SUBSAMPLE_POOL_SIZE`) and filters it down to the top-K by cosine similarity to force diversity and bypass geometric hubs.
-  * Narrative lookups for LLM scoring always query `embeddings.db` regardless of vector source.
+  * Narrative lookups for LLM scoring query `embeddings.db`.
 
 * **`scorer.py`**:
   * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
@@ -147,17 +149,17 @@ graph TD
   * Both the classical ML pipeline and the neighbor-weighted pipeline use the same test set.
 
 * **`trd_predictor.py`**:
-  * Orchestrates neighborhood construction for a single patient. Accepts `exclude_ids` and `VectorSource`, forwarding both to the `Retriever`.
+  * Orchestrates neighborhood construction for a single patient. Accepts `exclude_ids`, forwarding it to the `Retriever`.
   * For each anchor patient: retrieves the query vector, finds top-K neighbors via `Retriever.search()`, scores each pair via the LLM `Scorer`, and returns structured neighborhood data including cosine similarity, LLM similarity, and neighbor TRD labels.
 
 * **`run_neighborhood_constructor.py`**:
-  * Slurm-parallelized driver that constructs neighborhoods for all test patients across both vector sources.
-  * Iterates over both `VectorSource` values, chunking the sorted test set across Slurm array tasks.
+  * Slurm-parallelized driver that constructs neighborhoods for all test patients on the embedding vectors.
+  * Chunks the sorted test set across Slurm array tasks.
   * Each worker process initializes its own `TRDPredictor` with the test set as `exclude_ids`.
-  * **Output**: Source-tagged CSV files (`neighbor_results_{source}_{task_id}.csv`).
+  * **Output**: CSV files (`neighbor_results_{task_id}.csv`).
 
 * **`trd_prediction_computation.py`**:
-  * Loads neighborhood CSV data for a given `VectorSource` and computes weighted TRD risk predictions.
+  * Loads neighborhood CSV data (embedding source only) and computes weighted TRD risk predictions.
   * **Digital Twin Matcher Logic**:
       1. Groups neighbors by anchor patient.
       2. Scores neighbors via weighting strategies (Uniform, Cosine, LLM, Combined (Harmonic Mean of Cosine and LLM)).
@@ -168,7 +170,7 @@ graph TD
     * **Calibration**: Brier Score, **Weighted ECE**, **Calibration Slope & Intercept**.
     * **Confidence**: Effective Sample Size (ESS) and **Risk Extremity Index** (fraction of predictions <0.1 or >0.9).
     * **Optimal Confusion Matrix**: Identifies peak threshold via Youden's J-statistic and calculates Sensitivity, Specificity, F-Score, PLR, and NLR.
-  * **Output**: Source-and-mode-prefixed output plots (e.g., `NEAREST_COSINE_EMBEDDING_roc_curve.png`), `summary_{source}.csv` (Metrics), and `summary_predictions_{source}.csv` (Row-level logs).
+  * **Output**: Mode-prefixed output plots (e.g., `NEAREST_COSINE_roc_curve.png`), `summary.csv` (Metrics), and `summary_predictions.csv` (Row-level logs).
 
 * **`trd_ranking_analysis.py`**:
   * **Ranking & Homophily Analysis.** Investigates whether the LLM retrieves neighbors that are clinically more congruent with the anchor than Cosine alone ("Label Homophily").
@@ -177,31 +179,36 @@ graph TD
     * **Spearman Correlation**: Quantifies the correlation between Cosine Similarity and LLM Similarity to check for signal redundancy.
     * **Separation AUC**: (Proxy) Evaluates the LLM's ability to distinguish between "Close" neighbors (Rank $\le 5$) and "Far" neighbors (Rank $\ge 45$).
   * **Density**: Computes **kNN Radius** and **LLM Effective Sample Size (ESS=$\frac{(\sum_{i=1}^kw_i)^2}{\sum_{i=1}^k(w_i^2)}$)** to profile the density of patient neighborhoods.
-  * **Output**: Source-tagged `agreement_curve_{scheme}_{source}.png`, `agreement_summary_{scheme}_{source}.csv`, and `correlation_results_cos_vs_llm_{scheme}_{source}.json`.
+  * **Output**: `agreement_curve_{scheme}.png`, `agreement_summary_{scheme}.csv`, and `correlation_results_cos_vs_llm_{scheme}.json`.
 
 * **`trd_sanity_checks.py`**:
   * **Deep Diagnostics & Validity.**
   * **Embedding Validity**: Validates that retrieved neighbors are statistically distinct from random noise. Computes the $N \times N$ similarity matrix of the anchor cohort to generate a "Random Pair" distribution and overlays it against the "Neighbor" distribution.
   * **Chronology Confounding**: Tests if the model is cheating by using "Data Richness" as a proxy for risk. Merges prediction errors with patient history lengths ($L_i$) and calculates the **Spearman Correlation** ($\rho$) for each weighting strategy.
-  * **Output**: Source-tagged `cosine_score_random_vs_neighbor_{source}.png`, `chronology_check_{source}.csv`, and per-strategy scatter plots.
+  * **Output**: `cosine_score_random_vs_neighbor.png`, `chronology_check.csv`, and per-strategy scatter plots.
 
 * **`trd_binning_analysis.py`**:
   * **Environmental Diagnostics (Density & Chronology).** Investigates how the structural environment of the vector space and data richness impact model reliability.
   * **Density Stratification**: Bins patients into quintiles based on their **kNN Radius** (mean distance of top-$k$ neighbors, i.e. $1 - \text{mean}(\text{cos\_sims})$) to evaluate if sparse neighborhoods degrade model discrimination (AUC) or calibration (Brier Score).
   * **Chronology Confounding**: Bins patients into quintiles based on their **Chronological Length** (days of patient history) to test if the model is inappropriately leveraging data volume as a proxy for clinical risk.
   * **Metrics**: Calculates AUC, Brier Score, and Patient Count per bin across all weighting strategies (Uniform, Cosine, LLM, Combined). Computes Spearman Rank Correlation ($\rho$) and p-values to evaluate the statistical significance of monotonic performance trends across bins.
-  * **Output**: Source-tagged dual-axis performance plots (`scores_by_{bin_type}_{scheme}_{strategy}_{source}.png`) with statistical correlation metrics embedded in the titles.
+  * **Output**: Dual-axis performance plots (`scores_by_{bin_type}_{scheme}_{strategy}.png`) with statistical correlation metrics embedded in the titles.
 
-* **`analyze_trd_prediction.py`**: Top-level orchestrator that loops over both `VectorSource` values and invokes `run_trd_prediction_computation`, `run_trd_ranking_analysis`, `run_trd_bin_analysis`, and `run_trd_sanity_checks` for each.
+* **`analyze_trd_prediction.py`**: Top-level orchestrator that invokes `run_trd_prediction_computation`, `run_trd_ranking_analysis`, `run_trd_bin_analysis`, and `run_trd_sanity_checks` on the embedding-source neighborhood data.
 
 #### 5b. Classical ML Prediction
 
 * **`classical_ml.py`**:
   * Trains and evaluates standard classifiers on both deterministic and embedding vector representations.
-  * **Pipeline**: Each classifier is wrapped in a `sklearn.pipeline.Pipeline` with `SimpleImputer(median)` and `StandardScaler` preprocessing.
-  * **Classifiers**:
+  * **Pipeline**: Each classifier is wrapped in a `sklearn.pipeline.Pipeline` with a dtype-routed `ColumnTransformer`:
+    * Numeric branch (`make_column_selector(dtype_include='number')`): `SimpleImputer(median)` → `StandardScaler`.
+    * Category branch (`make_column_selector(dtype_include='category')`): `OneHotEncoder(drop='if_binary', handle_unknown='ignore')`.
+    * Bool branch (`make_column_selector(dtype_include='bool')`): passthrough, cast to `int8`.
+  * Embedding vectors are a single all-numeric block and flow straight through the numeric branch; the categorical and bool branches are active only on the deterministic DataFrame.
+  * **Classifiers** (7 total):
     * Logistic Regression (`max_iter=1000`)
-    * Gaussian Naive Bayes
+    * GaussianNB — restricted to the **numeric subset only** via a dedicated `ColumnTransformer` with `dtype_include='number'`, respecting the Gaussian-likelihood assumption.
+    * BernoulliNB — restricted to the **bool + one-hot-category subset** via `dtype_include=['bool', 'category']`, respecting the Bernoulli-likelihood assumption.
     * SVM (`probability=True`)
     * Random Forest
     * Gradient Boosting
@@ -212,7 +219,7 @@ graph TD
     * **Naive Bayes, Random Forest, Gradient Boosting, XGBoost** use flat single-dict grids over their standard hyperparameters.
     * Per-classifier `best_params_` and `best_score_` are persisted to `grid_search_ml_results_{source}.json` in `RESULTS_DIR` (one file per `VectorSource`).
   * **Dual-Source Evaluation**: `main()` loops over both `VectorSource` values. For each source, it loads training and test data, fits all classifiers under grid search, and generates ROC, Precision-Recall, and Calibration plots with source-prefixed filenames.
-  * **Data Loading**: `load_data_set()` accepts a `VectorSource` parameter. Deterministic mode loads `.npy` files from `DETERMINISTIC_VECTORS_DIR`. Embedding mode queries `embeddings.db` with a batched `SELECT ... WHERE patient_id IN (...)` query, ordered by patient ID to maintain alignment with labels.
+  * **Data Loading**: `load_data_set()` accepts a `VectorSource` parameter. Deterministic mode loads the cohort parquet file at `DETERMINISTIC_DATAFRAME_PATH` and slices rows by train/test ID. Embedding mode queries `embeddings.db` with a batched `SELECT ... WHERE patient_id IN (...)` query, ordered by patient ID to maintain alignment with labels, returning a DataFrame whose columns are all `float64`.
 
 ### 6. Models (`scripts/models`)
 
@@ -227,7 +234,7 @@ Interfaces for the neural networks.
 
 ### 7. Shared Utilities (`scripts/shared`)
 
-* **`utils.py`**: Core helpers including `VectorSource` enum (`EMBEDDING`, `DETERMINISTIC`) and `load_neighborhood_data(source)` for loading source-filtered neighborhood CSVs.
+* **`utils.py`**: Core helpers including `VectorSource` enum (`EMBEDDING`, `DETERMINISTIC`) consumed by the classical ML pipeline, and `load_neighborhood_data()` for loading neighborhood CSVs (embedding source only).
 * **`plots.py`**: Wraps `matplotlib` and `sklearn` to generate diagnostic visualizations. Computes and saves ROC curves (with bootstrapped error bands), Precision-Recall curves, Calibration curves, Decision Curve Analyses (DCA), Effective Sample Size distributions, and Optimal Confusion Matrices.
 * **`prompts.py`**: Strict loader for the LLM system and user prompt templates located in the `./prompts` directory. Formats and injects patient narratives into the structured evaluation prompts for the vLLM server.
 
@@ -304,7 +311,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `YEARS_AHEAD`: 1 (Minimum post-anchor follow-up in years. Patients without sufficient observation time to determine TRD outcome are discarded).
 * `SCRUB_PATIENT_JSON`: 0 (Flag to force recreation of patient JSONs).
 * `SCRUB_NARRATIVES`: 0 (Flag to force recreation of narratives).
-* `SCRUB_DETERMINISTIC_VECTORS`: 0 (Flag to force recreation of deterministic feature vectors and the attribute index cache).
+* `SCRUB_DETERMINISTIC_VECTORS`: 0 (Flag to force recreation of the deterministic DataFrame and `categorical_levels.json`).
 * `SCRUB_EMBEDDINGS`: 0 (Flag to force re-computation of embedding vectors).
 
 ### Data Paths
@@ -342,7 +349,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 
 * `ARTIFACTS_DIR`: Root directory for computed artifacts.
 * `DETERMINISTIC_NARRATIVES_DIR`: Storage for generated Markdown narratives.
-* `DETERMINISTIC_VECTORS_DIR`: Storage for deterministic feature vectors (`.npy` files).
+* `DETERMINISTIC_DATAFRAME_PATH`: Path to the cohort-wide deterministic feature DataFrame (parquet).
 * `EMBEDDINGS_DIR`: Storage for embedding vectors and `embeddings.db`.
 * `JUDGEMENTS_DIR`: Storage for LLM judgements.
 * `RESULTS_DIR`: Storage for analysis results and logs.
@@ -366,7 +373,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 sbatch slurm_jobs/pipeline/trd_prediction_orchestrator.sbatch
 ```
 
-The orchestrator sequentially submits: JSON loading, embedding pipeline (narratives + deterministic vectors + embeddings), vLLM server startup, neighborhood construction (Slurm array across both vector sources), and analysis (neighbor-weighted evaluation + classical ML). All results are rsynced to `results/` upon completion.
+The orchestrator sequentially submits: JSON loading, embedding pipeline (narratives + deterministic DataFrame + embeddings), vLLM server startup, neighborhood construction (Slurm array on embedding vectors), and analysis (neighbor-weighted evaluation + classical ML on both sources). All results are rsynced to `results/` upon completion.
 
 ## Downloading Models
 

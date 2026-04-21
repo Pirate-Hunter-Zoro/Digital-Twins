@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import multiprocessing
 import numpy as np
+import time
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
@@ -65,8 +66,11 @@ def run(vector_source: VectorSource):
     chunk_ids = sorted_test_ids[start_index:end_index]
     results = []
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker) as pool:
+        done = 0
         for res in pool.imap_unordered(evaluate_patient, chunk_ids):
             results.extend(res)
+            done+=1
+            print(f"Completed {done} neighborhood constructions out of {len(chunk_ids)} for {source.name} and SLURM id {slurm_task_id}...", flush=True)
     # Save dataframe of results
     pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results_{source.name}_{slurm_task_id}.csv")
     

@@ -1,0 +1,263 @@
+PATIENT VECTOR & ML BASELINE — REMAINING WORK
+================================================
+
+DECISIONS MADE THIS SESSION (2026-04-20):
+------------------------------------------
+- [x] BUG DISCOVERED ON SHAKEDOWN RUN (now MOOT):
+        * retriever.py:141 raised UnboundLocalError: normalized_vector during
+          deterministic-source neighborhood construction.
+        * Root cause: missing vitals (bmi/bp_sys/bp_dias) stored as np.nan in
+          the deterministic vector. np.linalg.norm of a NaN-containing array
+          returns NaN. `if mag > 0:` evaluates False when mag is NaN, so
+          normalized_vector is never bound, and the next line references an
+          undefined local.
+        * Resolution: the deterministic KNN path is being deleted entirely
+          (see next item). No retriever code fix needed.
+
+- [x] DROP KNN RETRIEVAL ON DETERMINISTIC VECTORS.
+        Cosine / Euclidean distance on a vector mixing unscaled counts, 0/1
+        flags, and one-hot demographics is clinically meaningless — numeric
+        columns dominate the norm, binary columns contribute trivially.
+        The 2x2 evaluation matrix becomes asymmetric:
+          * Classical ML: deterministic AND embedding
+          * Neighbor-weighted KNN: embedding ONLY
+        VectorSource.DETERMINISTIC is stripped from Retriever, TRDPredictor,
+        run_neighborhood_constructor, analyze_trd_prediction, and all four
+        analysis scripts. Classical ML retains both sources.
+
+- [x] REFACTOR DETERMINISTIC VECTORS TO TYPED PANDAS DATAFRAME.
+        1. Output: single parquet file keyed by patient_id. Retire per-patient
+           .npy files. Retire patient_attributes.json.
+        2. Column schema by dtype:
+             - float64: quantitative features (counts, days, vitals, ages,
+               adequate-trial counts)
+             - bool:    single-valued binary flags AND multi-label set
+               indicators (psych_/medical_/safety_/sud_/sdoh_)
+             - category: single-valued nominal fields (Sex, PreferredLanguage,
+               MaritalStatus, Religion, SmokingStatus, Race_Ethnicity,
+               mdd_recurrence, mdd_severity). Sex becomes ONE column, killing
+               the Sex_Male/Sex_Female redundancy.
+        3. Preprocessing: single sklearn ColumnTransformer, dtype-routed via
+           make_column_selector:
+             - numeric:  SimpleImputer(median) -> StandardScaler
+             - category: OneHotEncoder(drop='if_binary',
+                         handle_unknown='ignore')
+             - bool:     passthrough (cast to int8)
+        4. XGBoost goes through the same ColumnTransformer output as the
+           others — no native enable_categorical branch this iteration.
+        5. Missing vitals stay np.nan in the DataFrame. Imputation happens
+           inside the pipeline, train-only, preventing the test-set leakage
+           the current vector-stage imputation would introduce.
+        6. Naive Bayes splits into two lineup entries:
+             - GaussianNB  — numeric subset only (dtype_include='number')
+             - BernoulliNB — bool + one-hot subset only
+                             (dtype_include=['bool','category'])
+           Classifier lineup grows from 6 to 7.
+        7. Categorical levels discovered in a one-shot JSON-scan pass at
+           generator init, cached to categorical_levels.json (much smaller
+           than patient_attributes.json).
+
+- [x] README.md overhauled to reflect asymmetric 2x2 matrix, typed-DataFrame
+      architecture, 7-classifier lineup, and parquet persistence.
+
+NEXT UP (IMPLEMENTATION ORDER):
+-------------------------------
+- [ ] Refactor deterministic_vector.py to emit a typed pandas Series
+- [ ] Refactor vectors/generator.py to discover category levels, assemble
+      the cohort DataFrame, and persist to parquet
+- [ ] Update classical_ml.py: DataFrame loader, dtype-routed ColumnTransformer,
+      split NB into GaussianNB(numerics) + BernoulliNB(bools+one-hot)
+- [ ] Strip VectorSource.DETERMINISTIC from retriever.py, trd_predictor.py,
+      run_neighborhood_constructor.py, analyze_trd_prediction.py, and all
+      four analysis scripts (trd_prediction_computation, trd_ranking_analysis,
+      trd_sanity_checks, trd_binning_analysis)
+- [ ] Rename .env DETERMINISTIC_VECTORS_DIR -> DETERMINISTIC_DATAFRAME_PATH
+- [ ] Remove patient_attributes.json emission; emit categorical_levels.json
+- [ ] Re-run end-to-end shakedown with pruned grids
+- [ ] Causal forest notebook (separate from pipeline) — see item 22 below
+- [ ] Continue cohort_investigation.ipynb
+
+DECISIONS MADE THIS SESSION (2026-04-17):
+------------------------------------------
+- [x] GridSearchCV grids pruned to defensible sizes (coarse grid over meaningful regimes,
+      not RandomizedSearchCV):
+        * Random Forest: 2,916 -> 12 combos (60 fits)
+        * Gradient Boosting: 80 -> 9 combos (45 fits)
+        * XGBoost: 4,374 -> 18 combos (90 fits)
+        * LR / SVM / NB: unchanged (already reasonable)
+      Boosting: fixed n_estimators at 300, dropped learning_rate >= 1, kept shallow
+      depths [3, 5, 8]. XGBoost subsample narrowed to [0.5, 1.0].
+- [x] Causal Random Forest: overriding prior "permanently deferred" decision per advisor.
+      Will live in a separate notebook (NOT the main pipeline) since CATE evaluation is
+      incompatible with the classification harness (ROC/PR/Calibration).
+      Decisions:
+        * Treatments: run all candidates — augmentation, polypharmacy, somatic/ECT,
+          adequate trial (>=1). Check prevalence; drop any <5% or >95%.
+        * X matrix: Option B — build a single reduced X with ALL candidate treatment
+          columns stripped up front, reuse across all treatment fits.
+        * Evaluation: Qini coefficient + uplift curve, plus doubly-robust CATE
+          calibration (bin by tau_hat decile, compare to DR-estimated ATE per bin).
+
+COMPLETED:
+----------
+- [x] fit_to_anchor.py: Track latest MDD diagnosis date preceding anchor, store as mdd_to_anchor_days
+- [x] fit_to_anchor.py: Store num_encounters in sliced patient dict
+- [x] fit_to_anchor.py: Track latest MDD recurrence and severity separately (mdd_recurrence, mdd_severity)
+- [x] deterministic_narrative.py: Add MDD-to-anchor gap, encounters in window, MDD-within-window flag to HEADER
+- [x] deterministic_narrative.py: Read MDD components from sliced JSON instead of re-scanning encounters
+- [x] diagnoses_definitions.py: Created get_mdd_components() returning (recurrence, severity) tuple, replaced get_mdd_description
+- [x] Renamed patient_vector.py to deterministic_vector.py
+- [x] deterministic_vector.py: Scaffold function, call all feature extractors, handle vitals with NaN for missing
+- [x] deterministic_vector.py: Full vector assembly — numeric, binary flags, counts, burden, utilization
+- [x] deterministic_vector.py: Comorbidity dicts (psych, medical, safety) and trial counts one-hot
+- [x] deterministic_vector.py: Categorical demographics one-hot encoding (discovered from data via JSON scan)
+- [x] deterministic_vector.py: SUD substances one-hot encoding (fixed set from get_sud_substance)
+- [x] deterministic_vector.py: SDOH categories one-hot encoding (from SDOH_MAP values)
+- [x] deterministic_vector.py: MDD recurrence and severity one-hot encoding
+- [x] deterministic_vector.py: mdd_within_window binary flag added
+- [x] deterministic_vector.py: Refactored ATTRIBUTE_INDICES to module-level with initialize_attribute_indices() and JSON caching
+- [x] deterministic_vector.py: Save as .npy, return np.array, load cached vector on re-run
+- [x] fit_to_anchor.py: Fixed "2 day window" typo
+- [x] Added DETERMINISTIC_VECTORS_DIR and SCRUB_DETERMINISTIC_VECTORS to .env
+- [x] Built vectors/generator.py and vectors/runner.py (parallel to narratives/) with multiprocessing and sanity check report
+- [x] Included vector sanity check and reporting in vectors/generator.py
+- [x] classical_ml.py: Data loading scaffolding (load .npy vectors, pair with TRD labels, stack into X/y)
+- [x] create_train_test_split.py: Stratified 80/20 split, caches test IDs, returns (train_ids, test_ids) sets
+- [x] Verified vectors match narratives via vector_sanity_check.txt (cross-checked multiple patients)
+- [x] deterministic_data.sbatch: Slurm job for narrative + vector generation pipeline
+
+COMPLETED — CATEGORICAL VARIABLE COMPRESSION:
+-----------------------------------------------
+- [x] 18a. LANGUAGE_MAP — ACS 5 groups (English Only, Spanish, Other Indo-European, Asian and Pacific Island, Other)
+- [x] 18b. MARITAL_MAP — ACS 5 categories (Now Married, Never Married, Divorced, Separated, Widowed)
+- [x] 18c. SMOKING_MAP — BRFSS/CDC 3 categories (Current Smoker, Former Smoker, Never Smoker)
+- [x] 18d. RELIGION_MAP — GSS-inspired 5 groups (Protestant, Catholic, Orthodox, Non-Christian, Other/Unknown)
+- [x] 18e. Race_Ethnicity — already ACS/OMB compliant, no change
+- [x] 18f. Sex — already ACS compliant, no change
+- [x] 18g. SexualOrientation — dropped (nan for all patients), removed from CATEGORICAL_FIELDS
+- [x] Applied maps in initialize_attribute_indices() JSON scanning loop
+- [x] Applied maps in generate_deterministic_vector() one-hot encoding loop
+- [x] Fixed map keys to match exact EHR strings (Farsi; Persian, Chinese Cantonese, Urdu Pakistan, etc.)
+- [x] Fixed initialize_attribute_indices() race condition: workers no longer rescan 60k JSONs per call
+- [x] Regenerated all vectors with SCRUB_DETERMINISTIC_VECTORS=1
+- [x] Verified vector_sanity_check.txt — 92 columns total, compressed categories correct
+
+COMPLETED — CLASSICAL ML HYPERPARAMETER TUNING:
+------------------------------------------------
+# Cross validation on hyperparameters of ML models
+# sklearn tuning grid
+# ways to limit seach size by making assumption of search space
+
+# Meaning of valid patient
+- MDD with an antidepressant prescription
+- At least 2 years of history before the AD date
+- MDD prescription before the AD date
+- At least 1 year of history succeding the AD date
+- NOT bipolar, NOT schizophrenic
+
+13. Define a shared held-out test set for ALL evaluation pipelines:
+    - [x] create_train_test_split.py is WRITTEN and READY
+    - Stratified 80/20 split of full cohort (preserves natural class imbalance)
+    - Save test set patient IDs to a persistent file (test_patient_ids.txt in ANALYSIS_DIR)
+    - Both classical ML and neighbor pipeline must use the SAME test patients
+
+14. Refactor neighbor pipeline evaluation (run_neighborhood_constructor.py) to respect the shared test set:
+    - [x] Test patients queried against the database but EXCLUDED from each other's neighbor pools
+    - [x] Eliminates current leakage: test patients can no longer appear as neighbors for other test patients
+    - [x] Replace the current balanced 500/500 random sampling with the shared test set
+    - [x] Retriever.__init__ accepts exclude_ids set, filters them from in-memory search pool at load time
+    - [x] TRDPredictor.__init__ accepts and forwards exclude_ids to Retriever
+    - [x] run_trd_predictor.py renamed to run_neighborhood_constructor.py
+    - [x] Added XGBClassifier to classical_ml.py classifier lineup
+
+15. Build classical ML pipeline in classical_ml.py (using shared test set):
+    - [x] load_data_set() function
+    - [x] make_classifier() function wrapping SimpleImputer(median) + StandardScaler + classifier
+    - [x] evaluate_models() function looping through classifiers, fitting, calling predict_proba()[:,1]
+         Classifiers: Logistic Regression (max_iter=1000), Naive Bayes, SVM (probability=True)
+    - [x] return statement in evaluate_models()
+    - [x] Removed unused y_test param from evaluate_models()
+    - [x] main() function: create_train_test_split() -> load_data_set() -> evaluate_models() -> plot loop
+         Calls plot_receiving_operator_characteristic, plot_precision_recall, plot_calibration per classifier
+    - [x] Added RandomForestClassifier and GradientBoostingClassifier to classifier lineup
+    - [x] if __name__=="__main__" guard
+    - Causal Random Forest permanently deferred — CausalForestDML estimates treatment effects (CATE), not class probabilities. Incompatible with binary classification evaluation.
+
+16. Run the same ML techniques on the embedding vectors (where feasible):
+    - [x] VectorSource enum (EMBEDDING, DETERMINISTIC) added to classical_ml.py
+    - [x] load_data_set() parameterized with source; EMBEDDING branch loads from embeddings.db via IN query
+    - [x] main() loops over both VectorSource values, prefixes mode strings to avoid filename collisions
+    - Logistic Regression and SVM should work on high-dim embeddings
+
+17. Run the existing Digital Twins neighbor-weighted prediction scheme on the deterministic vectors:
+    - [x] Parameterize Retriever to accept VectorSource (embeddings.db OR .npy deterministic vectors)
+    - [x] Retriever.__init__ stores self.source; deterministic branch queries DB for IDs + chron lengths, loads .npy for vectors
+    - [x] Retriever.get_vector() branches on self.source (loads .npy for deterministic, queries DB for embedding)
+    - [x] Narrative lookups (get_narrative, get_chronological_length) always hit embeddings.db regardless of source
+    - [x] TRDPredictor forwards source to Retriever (default=EMBEDDING so label-only callers unchanged)
+    - [x] run_neighborhood_constructor.py loops over both VectorSource values, source-tags output CSVs
+    - [x] VectorSource enum moved to scripts/shared/utils.py (shared across classical_ml, retriever, predictor, analysis)
+    - [x] Refactored all 4 analysis scripts (trd_prediction_computation, trd_sanity_checks, trd_binning_analysis, trd_ranking_analysis) to accept VectorSource, pass to load_neighborhood_data, and source-tag all output filenames/plots
+    - [x] analyze_trd_prediction.py loops over VectorSource for all 4 analysis functions
+    - [x] classical_ml.py added to run_trd_prediction_analysis.sbatch
+
+18. BUGS TO FIX before running:
+    - [x] trd_prediction_computation.py: TRDPredictor() missing exclude_ids=set()
+    - [x] trd_sanity_checks.py: filename mismatch — aligned to 'summary_predictions_{source}.csv'
+    - [x] trd_binning_analysis.py: same filename mismatch — aligned to 'summary_predictions_{source}.csv'
+
+19. NEW COHORT FILTER — require minimum post-anchor follow-up:
+    - [x] Add YEARS_AHEAD .env variable (1 year initially) — minimum post-anchor observation window
+    - [x] fit_to_anchor.py: track latest_encounter_date across ALL encounters (not just pre-anchor)
+    - [x] fit_to_anchor.py: reject patients where latest_encounter_date < anchor_date + YEARS_AHEAD*365
+    - [x] Wiped artifacts directory via clean_artifacts.sbatch — next pipeline run regenerates everything with YEARS_AHEAD filter
+    - [x] README.md overhauled to document full 2x2 evaluation matrix, VectorSource, train/test split, YEARS_AHEAD, classical ML, all analysis scripts
+
+20. Hyperparameter sweep via GridSearchCV in classical_ml.py:
+    - [x] Import GridSearchCV from sklearn.model_selection
+    - [x] Module-level HYPERPARAMETERS dict with per-classifier param grids:
+         Logistic Regression: list-of-dicts partitioned by penalty (l2/l1/elasticnet/None) to respect solver compatibility; l1_ratio only in the elasticnet sub-grid; C omitted from the None sub-grid
+         Naive Bayes: model__var_smoothing (log-spaced, 100 values)
+         SVM: list-of-dicts partitioned by kernel (linear vs rbf/poly); gamma only in the nonlinear sub-grid
+         Random Forest: model__n_estimators, model__max_depth, model__min_samples_split, model__min_samples_leaf
+         Gradient Boosting: model__n_estimators, model__learning_rate, model__max_depth
+         XGBoost: model__n_estimators, model__learning_rate, model__max_depth, model__subsample
+    - [x] Each classifier wrapped in GridSearchCV(pipeline, param_grid, scoring='roc_auc', cv=5, n_jobs=-1) in the fit loop
+    - [x] predict_proba called on the GridSearchCV object (delegates to best estimator via refit=True)
+    - [x] evaluate_models returns (predictions_dict, grid_search_results_dict); main() persists the latter to grid_search_ml_results_{source}.json with float() cast on best_score_ for JSON serialization
+
+21. PIPELINE BUGS — RESOLVED:
+    - [x] forge_embeddings.py batching bug / forge_vectors .npy race condition
+    - [x] Stale vLLM server from previous runs
+    - [x] SCRUB_DETERMINISTIC_VECTORS=1 workflow established
+    - [x] Stale vLLM cleanup before orchestrator launch
+    - [x] clean_artifacts.sbatch deletes test_patient_ids.txt
+
+22. CAUSAL FOREST NOTEBOOK — STEP LIST:
+    - [ ] Create notebook scaffold (e.g., causal_forest_analysis.ipynb)
+    - [ ] Treatment dispatcher: get_treatment_indicator(patient_id, treatment) -> int
+          * augmentation   -> augmentation flag extractor (features.py)
+          * polypharmacy   -> polypharmacy flag (threshold if count)
+          * somatic        -> somatic_treatment (ECT) flag
+          * adequate_trial -> threshold adequate_trial count at >=1
+    - [ ] Prevalence report for all 4 candidates; drop any outside [5%, 95%]
+    - [ ] Reduced X matrix: load existing deterministic vectors, strip all candidate
+          treatment columns using patient_attributes.json index mapping
+    - [ ] Train/test split: reuse create_train_test_split() for consistency with rest of project
+    - [ ] CausalForestDML fit loop (one per surviving treatment):
+          * model_y = regressor nuisance for outcome
+          * model_t = classifier nuisance for binary treatment
+          * .fit(Y, T, X=X_reduced, W=X_reduced) then .effect(X_test)
+    - [ ] Evaluation per fitted model:
+          * Qini curve + coefficient
+          * Uplift curve
+          * DR-based CATE calibration (bin tau_hat, compare to DR ATE per bin)
+    - [ ] Save plots with treatment-tagged filenames
+
+23. INVESTIGATE (in decreasing priority):
+    - [ ] What percentage of patients are missing each vital?
+    - [ ] What percentage of patients have their MDD diagnosis within the 2-year window?
+    - [ ] Histogram of mdd_to_anchor_days
+    - [ ] Histogram of num_encounters
+    - [ ] Correlations between those metrics and TRD diagnosis
+    - [ ] UMAP of an embedding
