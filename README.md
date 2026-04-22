@@ -220,6 +220,7 @@ graph TD
     * Per-classifier `best_params_` and `best_score_` are persisted to `grid_search_ml_results_{source}.json` in `RESULTS_DIR` (one file per `VectorSource`).
   * **Dual-Source Evaluation**: `main()` loops over both `VectorSource` values. For each source, it loads training and test data, fits all classifiers under grid search, and generates ROC, Precision-Recall, and Calibration plots with source-prefixed filenames.
   * **Data Loading**: `load_data_set()` accepts a `VectorSource` parameter. Deterministic mode loads the cohort parquet file at `DETERMINISTIC_DATAFRAME_PATH` and slices rows by train/test ID. Embedding mode queries `embeddings.db` with a batched `SELECT ... WHERE patient_id IN (...)` query, ordered by patient ID to maintain alignment with labels, returning a DataFrame whose columns are all `float64`.
+  * **Feature Importance / SHAP Interpretability** *(planned — not yet implemented)*: For the deterministic source only, each fitted classifier emits a feature-importance ranking aligned to the post-`ColumnTransformer` feature names (`ColumnTransformer.get_feature_names_out()`). Tree-based models (Random Forest, Gradient Boosting, XGBoost) use their native `feature_importances_`; linear models (Logistic Regression, linear-kernel SVM) use coefficient magnitudes. SHAP values via the `shap` library provide a unified ranking across all seven classifiers on a held-out sample. The embedding source is skipped — its 4096-dim axes are unnamed latents, so per-feature rankings are not interpretable. Output: `feature_importance_{classifier}_DETERMINISTIC.png` per classifier and a consolidated `feature_importance_summary_DETERMINISTIC.json` in `RESULTS_DIR`.
 
 ### 6. Models (`scripts/models`)
 
@@ -265,6 +266,15 @@ Unit tests for the data loading layer, run via `pytest`.
 # Run tests
 pytest tests/
 ```
+
+---
+
+## Planned Extensions
+
+Work outside the current pipeline surface, tracked in `TODO.txt`:
+
+* **Feature Importance / SHAP Interpretability** — Adds per-classifier feature rankings to `classical_ml.py` for the deterministic source (native `feature_importances_` for tree models, coefficients for linear models, SHAP values for a unified cross-classifier view). Embedding source is deliberately skipped because its dimensions are unnamed latents.
+* **Causal Random Forest + Treatment Heterogeneity Notebook** — A separate notebook (NOT part of the main pipeline) that estimates conditional average treatment effects (CATE) via `CausalForestDML` for each candidate treatment (augmentation, polypharmacy, somatic/ECT, adequate trial ≥ 1). Unlike the classification pipeline, which predicts TRD risk, this asks *for whom does each treatment actually help?* Evaluation surface: Qini coefficient, uplift curves, doubly-robust CATE calibration, CATE distribution plots, and subgroup ATE tables stratified by the top SHAP-ranked moderators. CATE metrics are incompatible with the ROC/PR/Calibration harness of the main pipeline, which is why this lives in its own notebook.
 
 ---
 

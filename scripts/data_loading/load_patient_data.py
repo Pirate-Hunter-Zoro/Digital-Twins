@@ -75,7 +75,7 @@ def load_patient_data() -> Iterator[Dict]:
     patients_with_anchor = patients_with_anchor.sort_values(by='MedStartInstant', ascending=True)
     earliest_mask = ~patients_with_anchor.index.duplicated(keep='first')
     patients_with_anchor = patients_with_anchor[earliest_mask]
-    print(f"Found {len(patients_with_anchor)} patients with anchor dates in the cohort of {len(cohort_ids)} patients.", flush=True)
+    print(f"Found {len(patients_with_anchor)} patients with anchor dates in the cohort of {len(cohort_ids)} patients (pre-filter upper bound; YEARS_BACK / YEARS_AHEAD slicing will reject those without adequate history or follow-up).", flush=True)
     
     # In multiprocessing, each worker will need arguments to do its job
     worker_args = []

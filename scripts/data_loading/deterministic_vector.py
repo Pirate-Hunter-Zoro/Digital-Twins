@@ -35,8 +35,6 @@ CATEGORICAL_LEVELS_PATH = ANALYSIS_DIR / "categorical_levels.json"
 
 CATEGORICAL_FIELDS = ["Sex", "PreferredLanguage", "MaritalStatus", "Religion", "SmokingStatus", "Race_Ethnicity"]
 SUD_SUBSTANCES = sorted(["Alcohol", "Opioid", "Cannabis", "Sedative/Hypnotic", "Cocaine", "Other Stimulant", "Hallucinogen", "Nicotine", "Inhalant", "Other Substance"])
-MDD_RECURRENCES = sorted(["Single Episode", "Recurrent", "Dysthymia"])                                                                 
-MDD_SEVERITIES = sorted(["Mild", "Moderate", "Severe", "Psychotic", "Remission", "Unspecified"]) 
 SDOH_CATEGORIES = sorted(SDOH_MAP.values())
 KNOWN_CATEGORIES = {k: set() for k in CATEGORICAL_FIELDS}
 

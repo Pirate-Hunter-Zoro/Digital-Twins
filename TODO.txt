@@ -77,19 +77,52 @@ NEXT UP (IMPLEMENTATION ORDER):
           mdd_recurrence, mdd_severity). No .npy write, no flat one-hot.
         * Dead code swept: get_bool_int helper and the med_definitions
           ALL_ARMS import.
-- [ ] Refactor vectors/generator.py to discover category levels, assemble
+- [x] Refactor vectors/generator.py to discover category levels, assemble
       the cohort DataFrame, and persist to parquet
+        * _process_patient helper pairs (patient_id, pd.Series).
+        * initialize_categorical_levels() called once in the parent
+          process before the multiprocessing pool opens.
+        * Results collected into a list, unpacked into parallel id/series
+          lists via zip(*results), assembled into a pd.DataFrame indexed
+          by patient_id (index.name = "patient_id"), persisted to parquet
+          at DETERMINISTIC_DATAFRAME_PATH.
+        * _sanity_check_report(df) writes shape + dtype schema +
+          categorical_levels.json + 10 random patient dumps (row.to_string
+          alongside narrative .md) to vector_sanity_check.txt.
+        * Verified on shakedown (2026-04-21): (9725, 64) DataFrame,
+          dtype routing correct (19 float64 / 37 bool / 8 object),
+          compression maps firing, two patients spot-checked
+          row-vs-narrative.
 - [ ] Update classical_ml.py: DataFrame loader, dtype-routed ColumnTransformer,
       split NB into GaussianNB(numerics) + BernoulliNB(bools+one-hot)
+- [ ] Add feature importance / SHAP interpretability to classical_ml.py
+        * Tree models (RF, GB, XGBoost): native .feature_importances_
+          indexed by post-ColumnTransformer feature names (via
+          ColumnTransformer.get_feature_names_out()).
+        * Linear models (LR, SVM with linear kernel): coefficient
+          magnitudes aligned to the same post-encode feature names.
+        * SHAP (optional, expensive): unified |SHAP|-value ranking via
+          shap.Explainer on a held-out sample; covers all 7 classifiers.
+        * Skip entirely for VectorSource.EMBEDDING — embedding dims are
+          unnamed 4096-D latents; per-feature interpretability is noise.
+        * Output: feature_importance_{classifier}_DETERMINISTIC.png plus
+          feature_importance_summary_DETERMINISTIC.json in RESULTS_DIR.
 - [ ] Strip VectorSource.DETERMINISTIC from retriever.py, trd_predictor.py,
       run_neighborhood_constructor.py, analyze_trd_prediction.py, and all
       four analysis scripts (trd_prediction_computation, trd_ranking_analysis,
       trd_sanity_checks, trd_binning_analysis)
 - [ ] Rename .env DETERMINISTIC_VECTORS_DIR -> DETERMINISTIC_DATAFRAME_PATH
 - [ ] Remove patient_attributes.json emission; emit categorical_levels.json
+- [ ] Fix cohort-size logging: load_patient_data.py prints pre-filter anchor
+      count (43330), not the post-slicing survivor count (~9725). Add a
+      final count in generate_deterministic_vectors() and adjust the
+      load_patient_data message to disclaim that further filtering follows.
 - [ ] Re-run end-to-end shakedown with pruned grids
-- [ ] Causal forest notebook (separate from pipeline) — see item 22 below
-- [ ] Continue cohort_investigation.ipynb
+
+LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):
+-------------------------------------------------------
+- [ ] Causal Random Forest + Treatment Heterogeneity notebook — see item 22
+- [ ] Continue cohort_investigation.ipynb — see item 23
 
 DECISIONS MADE THIS SESSION (2026-04-17):
 ------------------------------------------
@@ -240,6 +273,8 @@ COMPLETED — CLASSICAL ML HYPERPARAMETER TUNING:
     - [x] predict_proba called on the GridSearchCV object (delegates to best estimator via refit=True)
     - [x] evaluate_models returns (predictions_dict, grid_search_results_dict); main() persists the latter to grid_search_ml_results_{source}.json with float() cast on best_score_ for JSON serialization
 
+AT SOME POINT, WE NEED A SHAP ANALYSIS OR SOME KIND OF FEATURE IMPORTANCE FOT THE DETERMINISTIC VECTORS
+
 21. PIPELINE BUGS — RESOLVED:
     - [x] forge_embeddings.py batching bug / forge_vectors .npy race condition
     - [x] Stale vLLM server from previous runs
@@ -247,7 +282,11 @@ COMPLETED — CLASSICAL ML HYPERPARAMETER TUNING:
     - [x] Stale vLLM cleanup before orchestrator launch
     - [x] clean_artifacts.sbatch deletes test_patient_ids.txt
 
-22. CAUSAL FOREST NOTEBOOK — STEP LIST:
+22. CAUSAL RANDOM FOREST + TREATMENT HETEROGENEITY NOTEBOOK (lower priority):
+    This notebook addresses the question the classification pipeline CANNOT
+    answer: for whom does each candidate treatment actually help? CATE
+    estimation replaces binary-classification ROC/PR metrics; treatment
+    heterogeneity diagnostics are its native evaluation surface.
     - [ ] Create notebook scaffold (e.g., causal_forest_analysis.ipynb)
     - [ ] Treatment dispatcher: get_treatment_indicator(patient_id, treatment) -> int
           * augmentation   -> augmentation flag extractor (features.py)
@@ -255,17 +294,27 @@ COMPLETED — CLASSICAL ML HYPERPARAMETER TUNING:
           * somatic        -> somatic_treatment (ECT) flag
           * adequate_trial -> threshold adequate_trial count at >=1
     - [ ] Prevalence report for all 4 candidates; drop any outside [5%, 95%]
-    - [ ] Reduced X matrix: load existing deterministic vectors, strip all candidate
-          treatment columns using patient_attributes.json index mapping
+    - [ ] Reduced X matrix: load the deterministic DataFrame from
+          DETERMINISTIC_DATAFRAME_PATH, drop all candidate treatment
+          columns (augmentation_occured, polypharmacy_count, somatic_flag,
+          and trial-count columns above threshold) once up front, reuse
+          across all treatment fits.
     - [ ] Train/test split: reuse create_train_test_split() for consistency with rest of project
     - [ ] CausalForestDML fit loop (one per surviving treatment):
           * model_y = regressor nuisance for outcome
           * model_t = classifier nuisance for binary treatment
           * .fit(Y, T, X=X_reduced, W=X_reduced) then .effect(X_test)
-    - [ ] Evaluation per fitted model:
-          * Qini curve + coefficient
-          * Uplift curve
-          * DR-based CATE calibration (bin tau_hat, compare to DR ATE per bin)
+    - [ ] Evaluation per fitted model — treatment heterogeneity surface:
+          * Qini curve + coefficient (uplift concentration in top deciles)
+          * Uplift curve (cumulative treatment-effect gain by percentile)
+          * DR-based CATE calibration (bin tau_hat decile, compare to
+            doubly-robust ATE per bin — tests whether CATE predictions
+            are well-calibrated against ground-truth treatment effects)
+          * CATE distribution plot (histogram of predicted tau_hat across
+            the test cohort — visualizes heterogeneity magnitude)
+          * Subgroup ATE table (tau_hat averaged within quartiles of the
+            top-3 SHAP-ranked moderators — identifies WHICH patient
+            features drive treatment-effect variation)
     - [ ] Save plots with treatment-tagged filenames
 
 23. INVESTIGATE (in decreasing priority):
