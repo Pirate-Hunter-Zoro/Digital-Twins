@@ -3,12 +3,10 @@ from pathlib import Path
 import os
 import multiprocessing
 import numpy as np
-import time
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
-from scripts.shared.utils import VectorSource
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -16,14 +14,12 @@ load_dotenv()
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 os.makedirs(RESULTS_DIR, exist_ok=True)
 predictor = None
-source = None
 test_ids = create_train_test_split()[1]
 
 def init_worker():
     global predictor # This will be created for each worker
-    # We are only reading 'source', so no need to declare 'global source' - it is not something created for each worker
     np.random.seed(int(os.environ['SEED']))
-    predictor = TRDPredictor(exclude_ids=test_ids, source=source)
+    predictor = TRDPredictor(exclude_ids=test_ids)
 
 def evaluate_patient(patient_id: str):
     """Obtain all the patient's neighborhood prediction information and save it
@@ -37,13 +33,10 @@ def evaluate_patient(patient_id: str):
         results.extend(predictor.construct_neighborhood_data(index_id=patient_id, scheme=scheme))
     return results
 
-def run(vector_source: VectorSource):
+def run():
     """
     Single worker process to run TRD prediction on a sub-sample of patients
     """
-    # Establish global variable of source
-    global source
-    source = vector_source
     
     # Establish deterministic order over the different Slurm workers
     sorted_test_ids = sorted(list(test_ids))
@@ -70,10 +63,9 @@ def run(vector_source: VectorSource):
         for res in pool.imap_unordered(evaluate_patient, chunk_ids):
             results.extend(res)
             done+=1
-            print(f"Completed {done} neighborhood constructions out of {len(chunk_ids)} for {source.name} and SLURM id {slurm_task_id}...", flush=True)
+            print(f"Completed {done} neighborhood constructions out of {len(chunk_ids)} for and SLURM id {slurm_task_id}...", flush=True)
     # Save dataframe of results
-    pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results_{source.name}_{slurm_task_id}.csv")
+    pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results__{slurm_task_id}.csv")
     
 if __name__=="__main__":
-    run(VectorSource.EMBEDDING)
-    run(VectorSource.DETERMINISTIC)
+    run()

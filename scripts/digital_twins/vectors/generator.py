@@ -20,7 +20,7 @@ from scripts.data_loading.deterministic_vector import (
 )
 from scripts.data_loading.load_patient_data import load_patient_data
 RECORD_EVERY = 1000
-DETERMINISTIC_DATAFRAME_PATH = Path(os.environ['DETERMINISTIC_VECTORS_DIR']) / "deterministic_vectors.parquet"
+DETERMINISTIC_DATAFRAME_PATH = Path(os.environ['DETERMINISTIC_DATAFRAME_PATH'])
 
 def _process_patient(sliced_json: Dict) -> Tuple[str, pd.Series]:
     """Return patient's id paired with their deterministic vector

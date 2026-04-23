@@ -7,20 +7,20 @@ from scipy.stats import spearmanr
 
 from scripts.digital_twins.neighbors.retriever import Retriever
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
-from scripts.shared.utils import load_neighborhood_data, VectorSource
+from scripts.shared.utils import load_neighborhood_data
 
 from dotenv import load_dotenv
 load_dotenv()
 
-def run_chonology_check(source: VectorSource):
+def run_chonology_check():
     """
     Helper function to evaluate TRD prediction performance over varying chronological lengths of patient history
     """
     # Load the actual prediction risk scores
-    risk_scores_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / f'summary_predictions_{source.name}.csv')
+    risk_scores_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / f'summary_predictions.csv')
     
     # Load patient chronological lengths
-    retriever = Retriever(source=source)
+    retriever = Retriever()
     lengths_df = pd.DataFrame({
         'id': retriever.ids,
         'chronological_length': retriever.chronological_lengths
@@ -41,8 +41,8 @@ def run_chonology_check(source: VectorSource):
         plt.scatter(chronological_lengths, prediction_error)
         plt.xlabel('Chronological Length (Days) of Patient History')
         plt.ylabel('TRD Probability Prediction Error')
-        plt.title(f'Error vs. History Length: {neighbor_scheme}_{weighting_strat}_{source.name}')
-        save_path = Path(os.environ['RESULTS_DIR']) / 'chronology_checks' / f'chronology_check_{neighbor_scheme}_{weighting_strat}_{source.name}.png'
+        plt.title(f'Error vs. History Length: {neighbor_scheme}_{weighting_strat}')
+        save_path = Path(os.environ['RESULTS_DIR']) / 'chronology_checks' / f'chronology_check_{neighbor_scheme}_{weighting_strat}.png'
         os.makedirs(save_path.parent, exist_ok=True)
         plt.savefig(str(save_path))
         plt.close()
@@ -51,17 +51,17 @@ def run_chonology_check(source: VectorSource):
             'spearman_rho_correlation': correlation,
             'p_value': p_value,
         })
-    pd.DataFrame(check_results).to_csv(Path(os.environ['RESULTS_DIR']) / f'chronology_check_{source.name}.csv')
+    pd.DataFrame(check_results).to_csv(Path(os.environ['RESULTS_DIR']) / f'chronology_check.csv')
 
-def run_cosine_check(source: VectorSource):
+def run_cosine_check():
     """Helper function to produce a graph of cosine similarity over random patient pairs versus neighbor patient pairs
     """
     # Load anchor patient neighborhood data frame
-    df = load_neighborhood_data(source=source)
+    df = load_neighborhood_data()
     df = df[df['neighbor_scheme'] == NeighborScheme.NEAREST.name]
     
     # Compute anchor to anchor similarities
-    retriever = Retriever(source=source)
+    retriever = Retriever()
     unique_anchor_ids = df['anchor_patient_id'].unique()
     anchor_indices = np.array([retriever.ids_to_index[id] for id in unique_anchor_ids])
     anchor_vectors = retriever.vectors[anchor_indices]
@@ -73,12 +73,12 @@ def run_cosine_check(source: VectorSource):
     plt.hist(unique_pair_sims, alpha=0.5, color='red', label='Random Cosine Similarities', bins=100)
     plt.hist(df['cosine_sim'], alpha=0.5, color='green', label='Neighbor Cosine Similarities', bins=100)
     plt.legend()
-    plt.title(f'Random vs. Neighborhood Cosine Similarity Scores ({source.name})')
+    plt.title(f'Random vs. Neighborhood Cosine Similarity Scores')
     plt.xlabel('Score')
     plt.ylabel('Frequency')
-    plt.savefig(Path(os.environ['RESULTS_DIR']) / f'cosine_score_random_vs_neighbor_{source.name}.png')
+    plt.savefig(Path(os.environ['RESULTS_DIR']) / f'cosine_score_random_vs_neighbor.png')
     plt.close()
     
-def run_trd_sanity_checks(source: VectorSource):
-    run_chonology_check(source=source)
-    run_cosine_check(source=source)
+def run_trd_sanity_checks():
+    run_chonology_check()
+    run_cosine_check()

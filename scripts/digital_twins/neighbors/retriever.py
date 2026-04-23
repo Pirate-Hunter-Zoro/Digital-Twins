@@ -9,39 +9,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
-from scripts.shared.utils import VectorSource
 
 EMBEDDINGS_DIR = Path(os.environ['EMBEDDINGS_DIR'])
 
 class Retriever:
     
-    def __init__(self, exclude_ids: set[str]=set(), source: VectorSource=VectorSource.EMBEDDING):
+    def __init__(self, exclude_ids: set[str]=set()):
         """
         Loads all patient vectors and their corresponding narrative string IDs, excluding the specified anchor patients
         """
         embeddings_db_path = EMBEDDINGS_DIR / "embeddings.db"
-        self.vectors_dir = Path(os.environ['DETERMINISTIC_VECTORS_DIR'])
         self.connection = sqlite3.connect(embeddings_db_path)
         self.cursor = self.connection.cursor()
-        self.source = source # Determines whether vectors are to be deterministic or from the embedder
         
-        # Load all patient vectors
-        if source == VectorSource.DETERMINISTIC:
-            self.cursor.execute(
-                """
-    SELECT patient_id, chronological_length FROM embeddings
-                """
-            )
-            query_result = self.cursor.fetchall()
-            self.patient_tuples = [(id, np.load(self.vectors_dir / f"{id}.npy"), l) for (id, l) in query_result]
-        else:
-            self.cursor.execute(
-                """
-    SELECT patient_id, embedding, chronological_length FROM embeddings
-                """
-            )
-            # List of tuples - (id string of narrative, vector in bytes)
-            self.patient_tuples = self.cursor.fetchall()
+        self.cursor.execute(
+            """
+SELECT patient_id, embedding, chronological_length FROM embeddings
+            """
+        )
+        # List of tuples - (id string of narrative, vector in bytes)
+        self.patient_tuples = self.cursor.fetchall()
         
         self.ids = []
         vectors = []
@@ -50,7 +37,7 @@ class Retriever:
             if row[0] not in exclude_ids:
                 self.ids.append(row[0])
                 # Load the vector which may mean creating a numpy array out of a buffer or leaving the numpy array as is in the deterministic case
-                vectors.append(np.frombuffer(row[1], dtype=np.float32) if not isinstance(row[1], np.ndarray) else row[1])
+                vectors.append(np.frombuffer(row[1], dtype=np.float32))
             # Regardless, we'd still like to see all of our chronological lengths for our histogram of such things
             self.chronological_lengths.append(row[2])
         self.ids_to_index = {id: i for i, id in enumerate(self.ids)}
@@ -93,15 +80,12 @@ SELECT text FROM embeddings WHERE patient_id=?
         :return: Respective vector
         :rtype: np.array
         """
-        if self.source == VectorSource.EMBEDDING:
-            self.cursor.execute(
-                """
-    SELECT embedding FROM embeddings WHERE patient_id=?
-                """,
-                (id,))
-            return np.frombuffer(self.cursor.fetchone()[0], dtype=np.float32)
-        else:
-            return np.load(self.vectors_dir / f"{id}.npy")
+        self.cursor.execute(
+            """
+SELECT embedding FROM embeddings WHERE patient_id=?
+            """,
+            (id,))
+        return np.frombuffer(self.cursor.fetchone()[0], dtype=np.float32)
         
     def get_chronological_length(self, id: str) -> int:
         """

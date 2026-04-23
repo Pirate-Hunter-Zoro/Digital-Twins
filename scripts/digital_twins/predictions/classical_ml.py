@@ -4,17 +4,18 @@ from pathlib import Path
 import os
 import json
 import sqlite3
+import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, FunctionTransformer
 from sklearn.linear_model import LogisticRegression
-from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.ensemble import (
     RandomForestClassifier,
     GradientBoostingClassifier
 )
 from sklearn.model_selection import GridSearchCV
+from sklearn.compose import ColumnTransformer, make_column_selector
 from xgboost import XGBClassifier
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
@@ -27,19 +28,17 @@ from scripts.shared.plots import (
 )
 from scripts.shared.utils import VectorSource
 
-def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.DETERMINISTIC) -> Tuple[np.array, np.array]:
+def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.DETERMINISTIC) -> Tuple[pd.DataFrame, np.ndarray]:
     """Load all the patient vectors and find their labels
 
     Returns:
-        Tuple[np.array, np.array]: vectors and labels
+        Tuple[pd.DataFrame, np.ndarray]: vectors and labels
     """
     predictor = TRDPredictor() # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
     if source == VectorSource.DETERMINISTIC:
-        all_vector_paths = Path(os.environ['DETERMINISTIC_VECTORS_DIR']).glob("*.npy")
-        patient_vector_paths = [p for p in all_vector_paths if p.stem in patient_ids]
-        # Sort for the purposes of keeping X and y consistent with each other
-        patient_vector_paths.sort(key=lambda x: x.stem)
-        X = np.array([np.load(f, allow_pickle=True) for f in patient_vector_paths])
+        parquet_path = Path(os.environ['DETERMINISTIC_DATAFRAME_PATH'])
+        cohort_df = pd.read_parquet(parquet_path)
+        X = cohort_df.loc[sorted(list(patient_ids))]
     else:
         embeddings_db_path = Path(os.environ['EMBEDDINGS_DIR']) / 'embeddings.db'
         connection = sqlite3.connect(embeddings_db_path)
@@ -52,19 +51,38 @@ f"SELECT embedding FROM embeddings WHERE patient_id IN ({placeholders}) ORDER BY
         X = []
         for row in cursor.fetchall():
             X.append(np.frombuffer(row[0], dtype=np.float32))
-        X = np.array(X)
+        X = pd.DataFrame(np.array(X))
         connection.close()
     y = np.array([predictor.get_trd_status(id) for id in sorted(list(patient_ids))])
     print(f"Shape of X from source {source.name}: {X.shape}; Shape of y: {y.shape}", flush=True)
     return (X, y)
 
 def make_classifier(model):
-    return Pipeline(steps=[\
-                    # Replace all 'nan' values with the median value for all values present
-                    ("fill", SimpleImputer(strategy="median")),\
-                    # Zero mean, unit variance normalization
-                    ("scale", StandardScaler()),\
-                    ("model", model)\
+    return Pipeline(steps=[
+                    ("preprocess", 
+                        ColumnTransformer(
+                            transformers=[
+                                ("num", Pipeline([
+                                        # Replace nan with column median
+                                        ("fill", SimpleImputer(strategy="median")),
+                                        # Mean 0 and unit variance
+                                        ("scale", StandardScaler())
+                                    ]),
+                                    make_column_selector(dtype_include="number")
+                                ),
+                                ("cat", 
+                                    # Collapse binary into single value, and unseen values become the all zero encoding though that should never happen
+                                    OneHotEncoder(drop='if_binary', handle_unknown='ignore'),
+                                    make_column_selector(dtype_include="category")
+                                ),
+                                ("bool", 
+                                    FunctionTransformer(func=lambda df: df.astype(np.int8)),
+                                    make_column_selector(dtype_include="bool")
+                                )
+                            ],
+                        )
+                    ),
+                    ("model", model)
                 ])
 
 HYPERPARAMETERS = {
@@ -90,9 +108,6 @@ HYPERPARAMETERS = {
             'model__solver': ['lbfgs', 'newton-cg', 'sag', 'saga']
         }
     ],
-    'naive_bayes': {
-        'model__var_smoothing': np.logspace(0, -9, num=100).tolist(),
-    },
     'svm': [
         {
             'model__kernel': ['linear'],
@@ -123,20 +138,19 @@ HYPERPARAMETERS = {
     }
 }
 
-def evaluate_models(X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray) -> tuple[dict[str, np.array], dict[str, dict]]:
+def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataFrame) -> tuple[dict[str, np.ndarray], dict[str, dict]]:
     """Obtain classification results from various ML models on the input data
 
     Args:
-        X_train (np.ndarray): Train observations
+        X_train (pd.DataFrame): Train observations
         y_train (np.ndarray): Train labels
-        X_test (np.ndarray): Test observations
+        X_test (pd.DataFrame): Test observations
 
     Returns:
-        tuple[dict[str, np.array], dict[str, dict]]: Probability scores for each model as well as grid search results
+        tuple[dict[str, np.ndarray], dict[str, dict]]: Probability scores for each model as well as grid search results
     """
     classifiers = {
         "logistic_regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
-        "naive_bayes": make_classifier(GaussianNB()),
         "svm": make_classifier(SVC(probability=True, random_state=int(os.environ['SEED']))),
         "random_forest": make_classifier(RandomForestClassifier(random_state=int(os.environ['SEED']))),
         "gradient_boosting": make_classifier(GradientBoostingClassifier(random_state=int(os.environ['SEED']))),

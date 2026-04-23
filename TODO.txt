@@ -1,7 +1,30 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
-DECISIONS MADE THIS SESSION (2026-04-20):
+DECISIONS MADE THIS SESSION (2026-04-22):
+------------------------------------------
+- classical_ml.py refactor landed end-to-end:
+    * DataFrame loader (parquet for deterministic; DataFrame-wrapped SELECT
+      for embedding).
+    * dtype-routed ColumnTransformer (num: median-impute + StandardScaler;
+      cat: OneHotEncoder drop_if_binary + handle_unknown=ignore;
+      bool: FunctionTransformer int8 cast).
+    * Naive Bayes dropped entirely. Final lineup: LR, SVM, RF, GB, XGBoost.
+- VectorSource.DETERMINISTIC stripped from the entire neighbor pipeline
+  (retriever, trd_predictor, run_neighborhood_constructor, utils.load_neighborhood_data,
+  analyze_trd_prediction, and the four trd_* analysis scripts). Filenames
+  lost their _{source.name} suffix across every neighbor-pipeline output.
+- .env rename DETERMINISTIC_VECTORS_DIR -> DETERMINISTIC_DATAFRAME_PATH
+  coordinated across .env, vectors/generator.py, create_train_test_split.py,
+  classical_ml.py, retriever.py. Value changed from directory to full
+  parquet file path.
+- Feature importance / SHAP will land in a NEW FILE
+  scripts/digital_twins/predictions/feature_importance.py (sibling to
+  classical_ml.py). Rationale: interpretability is a distinct concern from
+  fit/score, shap is expensive and optional, standalone re-run against
+  cached fits is preserved.
+
+DECISIONS MADE PRIOR SESSION (2026-04-20):
 ------------------------------------------
 - [x] BUG DISCOVERED ON SHAKEDOWN RUN (now MOOT):
         * retriever.py:141 raised UnboundLocalError: normalized_vector during
@@ -48,17 +71,18 @@ DECISIONS MADE THIS SESSION (2026-04-20):
         5. Missing vitals stay np.nan in the DataFrame. Imputation happens
            inside the pipeline, train-only, preventing the test-set leakage
            the current vector-stage imputation would introduce.
-        6. Naive Bayes splits into two lineup entries:
-             - GaussianNB  — numeric subset only (dtype_include='number')
-             - BernoulliNB — bool + one-hot subset only
-                             (dtype_include=['bool','category'])
-           Classifier lineup grows from 6 to 7.
+        6. Naive Bayes dropped entirely (REVERSED 2026-04-22). The originally
+           planned GaussianNB/BernoulliNB dtype-subset split added pipeline
+           complexity for a classifier family unlikely to outperform LR or
+           the tree models on tabular EHR features. Logistic Regression
+           covers the linear-probabilistic role; trees dominate otherwise.
+           Final lineup: LR, SVM, RF, GB, XGBoost (5 classifiers).
         7. Categorical levels discovered in a one-shot JSON-scan pass at
            generator init, cached to categorical_levels.json (much smaller
            than patient_attributes.json).
 
 - [x] README.md overhauled to reflect asymmetric 2x2 matrix, typed-DataFrame
-      architecture, 7-classifier lineup, and parquet persistence.
+      architecture, 5-classifier lineup, and parquet persistence.
 
 NEXT UP (IMPLEMENTATION ORDER):
 -------------------------------
@@ -93,30 +117,46 @@ NEXT UP (IMPLEMENTATION ORDER):
           dtype routing correct (19 float64 / 37 bool / 8 object),
           compression maps firing, two patients spot-checked
           row-vs-narrative.
-- [ ] Update classical_ml.py: DataFrame loader, dtype-routed ColumnTransformer,
-      split NB into GaussianNB(numerics) + BernoulliNB(bools+one-hot)
-- [ ] Add feature importance / SHAP interpretability to classical_ml.py
+- [x] Update classical_ml.py: DataFrame loader, dtype-routed ColumnTransformer,
+      Naive Bayes dropped entirely (see DECISIONS block above). Final lineup:
+      LR, SVM, RF, GB, XGBoost. Verified imports/types aligned to DataFrame X.
+- [ ] Add feature importance / SHAP interpretability in NEW FILE
+      scripts/digital_twins/predictions/feature_importance.py (sibling to
+      classical_ml.py; kept separate to avoid dragging shap into every
+      training run and to allow standalone re-runs against cached fits).
         * Tree models (RF, GB, XGBoost): native .feature_importances_
           indexed by post-ColumnTransformer feature names (via
           ColumnTransformer.get_feature_names_out()).
-        * Linear models (LR, SVM with linear kernel): coefficient
-          magnitudes aligned to the same post-encode feature names.
+        * Logistic Regression: coefficient magnitudes aligned to the same
+          post-encode feature names.
+        * SVM: SHAP-only fallback (non-linear kernels expose no native
+          importances; linear-kernel coefficient path is not worth the
+          special case given the final pipeline runs rbf/poly too).
         * SHAP (optional, expensive): unified |SHAP|-value ranking via
-          shap.Explainer on a held-out sample; covers all 7 classifiers.
+          shap.Explainer on a held-out sample; covers all 5 classifiers.
         * Skip entirely for VectorSource.EMBEDDING — embedding dims are
           unnamed 4096-D latents; per-feature interpretability is noise.
         * Output: feature_importance_{classifier}_DETERMINISTIC.png plus
           feature_importance_summary_DETERMINISTIC.json in RESULTS_DIR.
-- [ ] Strip VectorSource.DETERMINISTIC from retriever.py, trd_predictor.py,
+        * Open question for next session: confirm `import shap` is
+          available in the env, or scope the first pass to native
+          importances + LR coefficients only and bolt SHAP on after.
+- [x] Strip VectorSource.DETERMINISTIC from retriever.py, trd_predictor.py,
       run_neighborhood_constructor.py, analyze_trd_prediction.py, and all
       four analysis scripts (trd_prediction_computation, trd_ranking_analysis,
-      trd_sanity_checks, trd_binning_analysis)
-- [ ] Rename .env DETERMINISTIC_VECTORS_DIR -> DETERMINISTIC_DATAFRAME_PATH
-- [ ] Remove patient_attributes.json emission; emit categorical_levels.json
-- [ ] Fix cohort-size logging: load_patient_data.py prints pre-filter anchor
-      count (43330), not the post-slicing survivor count (~9725). Add a
-      final count in generate_deterministic_vectors() and adjust the
-      load_patient_data message to disclaim that further filtering follows.
+      trd_sanity_checks, trd_binning_analysis). Also stripped source param
+      from scripts/shared/utils.py::load_neighborhood_data. Filenames lost
+      their _{source.name} suffix across all neighbor-pipeline outputs.
+- [x] Rename .env DETERMINISTIC_VECTORS_DIR -> DETERMINISTIC_DATAFRAME_PATH.
+      Value also changed from a directory to a full parquet file path
+      (${ARTIFACTS_DIR}/deterministic_vectors.parquet). All consumers
+      (vectors/generator.py, create_train_test_split.py, classical_ml.py,
+      retriever.py) migrated in one coordinated pass.
+- [x] Remove patient_attributes.json emission; emit categorical_levels.json.
+      Already addressed by the generator refactor — no standalone work needed.
+- [x] Fix cohort-size logging: load_patient_data.py:78 now carries the
+      pre-filter disclaimer and vectors/generator.py:73 prints the
+      post-slicing survivor count. Both landed during earlier refactor work.
 - [ ] Re-run end-to-end shakedown with pruned grids
 
 LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):

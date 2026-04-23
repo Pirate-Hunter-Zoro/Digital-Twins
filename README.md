@@ -7,7 +7,7 @@ The pipeline produces two independent patient vector representations (determinis
 
 | Method | Deterministic Vectors | Embedding Vectors |
 | --- | --- | --- |
-| **Classical ML** | LR, GaussianNB (numerics-only), BernoulliNB (bools+one-hot), SVM, RF, GB, XGBoost | Same classifiers on high-dimensional embeddings |
+| **Classical ML** | LR, SVM, RF, GB, XGBoost | Same classifiers on high-dimensional embeddings |
 | **Neighbor-Weighted KNN** | *Not applicable — cosine distance is ill-defined on mixed categorical/numeric features* | KNN retrieval + LLM scoring on embedding vectors |
 
 The pipeline is divided into **Data Loading**, **Stage 1 (Narrative & Vector Generation)**, **Stage 2 (Vector Embedding)**, **Stage 3 (Neighbor Retrieval)**, and **Stage 4 (Prediction & Classical ML)**.
@@ -205,10 +205,8 @@ graph TD
     * Category branch (`make_column_selector(dtype_include='category')`): `OneHotEncoder(drop='if_binary', handle_unknown='ignore')`.
     * Bool branch (`make_column_selector(dtype_include='bool')`): passthrough, cast to `int8`.
   * Embedding vectors are a single all-numeric block and flow straight through the numeric branch; the categorical and bool branches are active only on the deterministic DataFrame.
-  * **Classifiers** (7 total):
+  * **Classifiers** (5 total):
     * Logistic Regression (`max_iter=1000`)
-    * GaussianNB — restricted to the **numeric subset only** via a dedicated `ColumnTransformer` with `dtype_include='number'`, respecting the Gaussian-likelihood assumption.
-    * BernoulliNB — restricted to the **bool + one-hot-category subset** via `dtype_include=['bool', 'category']`, respecting the Bernoulli-likelihood assumption.
     * SVM (`probability=True`)
     * Random Forest
     * Gradient Boosting
@@ -216,11 +214,11 @@ graph TD
   * **Hyperparameter Tuning**: Every classifier is wrapped in `GridSearchCV(pipeline, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)` before fitting; `predict_proba` delegates to the refit best estimator. Parameter grids are declared at module level in `HYPERPARAMETERS`.
     * **Logistic Regression** uses a list-of-dicts `param_grid` partitioned by `penalty` to respect solver compatibility: a pure `l2` sub-grid spanning all five solvers, an `l1` sub-grid restricted to `liblinear` and `saga`, an `elasticnet` sub-grid pinned to `saga` with a `model__l1_ratio` sweep, and a `None` sub-grid spanning `lbfgs`/`newton-cg`/`sag`/`saga` (with `C` omitted since regularization is disabled).
     * **SVM** uses a list-of-dicts partitioned by `kernel`: a `linear` sub-grid tuning only `C` (gamma is meaningless for the linear kernel), and a nonlinear sub-grid covering `rbf` and `poly` with a joint `C` and `gamma` sweep.
-    * **Naive Bayes, Random Forest, Gradient Boosting, XGBoost** use flat single-dict grids over their standard hyperparameters.
+    * **Random Forest, Gradient Boosting, XGBoost** use flat single-dict grids over their standard hyperparameters.
     * Per-classifier `best_params_` and `best_score_` are persisted to `grid_search_ml_results_{source}.json` in `RESULTS_DIR` (one file per `VectorSource`).
   * **Dual-Source Evaluation**: `main()` loops over both `VectorSource` values. For each source, it loads training and test data, fits all classifiers under grid search, and generates ROC, Precision-Recall, and Calibration plots with source-prefixed filenames.
   * **Data Loading**: `load_data_set()` accepts a `VectorSource` parameter. Deterministic mode loads the cohort parquet file at `DETERMINISTIC_DATAFRAME_PATH` and slices rows by train/test ID. Embedding mode queries `embeddings.db` with a batched `SELECT ... WHERE patient_id IN (...)` query, ordered by patient ID to maintain alignment with labels, returning a DataFrame whose columns are all `float64`.
-  * **Feature Importance / SHAP Interpretability** *(planned — not yet implemented)*: For the deterministic source only, each fitted classifier emits a feature-importance ranking aligned to the post-`ColumnTransformer` feature names (`ColumnTransformer.get_feature_names_out()`). Tree-based models (Random Forest, Gradient Boosting, XGBoost) use their native `feature_importances_`; linear models (Logistic Regression, linear-kernel SVM) use coefficient magnitudes. SHAP values via the `shap` library provide a unified ranking across all seven classifiers on a held-out sample. The embedding source is skipped — its 4096-dim axes are unnamed latents, so per-feature rankings are not interpretable. Output: `feature_importance_{classifier}_DETERMINISTIC.png` per classifier and a consolidated `feature_importance_summary_DETERMINISTIC.json` in `RESULTS_DIR`.
+  * **Feature Importance / SHAP Interpretability** *(planned, scoped to a sibling module `feature_importance.py` — not yet implemented)*: See the Planned Extensions section below.
 
 ### 6. Models (`scripts/models`)
 
@@ -273,7 +271,7 @@ pytest tests/
 
 Work outside the current pipeline surface, tracked in `TODO.txt`:
 
-* **Feature Importance / SHAP Interpretability** — Adds per-classifier feature rankings to `classical_ml.py` for the deterministic source (native `feature_importances_` for tree models, coefficients for linear models, SHAP values for a unified cross-classifier view). Embedding source is deliberately skipped because its dimensions are unnamed latents.
+* **Feature Importance / SHAP Interpretability** — New sibling module `scripts/digital_twins/predictions/feature_importance.py`, consumed by `classical_ml.py` (or runnable standalone against persisted fits). For the deterministic source only, each fitted classifier emits a feature-importance ranking aligned to the post-`ColumnTransformer` feature names (`ColumnTransformer.get_feature_names_out()`). Tree-based models (Random Forest, Gradient Boosting, XGBoost) use their native `feature_importances_`; Logistic Regression uses coefficient magnitudes; SVM falls back to SHAP-only (non-linear kernels expose no native importances). SHAP values via the `shap` library provide a unified ranking across all five classifiers on a held-out sample. The embedding source is skipped — its 4096-dim axes are unnamed latents, so per-feature rankings are not interpretable. Output: `feature_importance_{classifier}_DETERMINISTIC.png` per classifier and a consolidated `feature_importance_summary_DETERMINISTIC.json` in `RESULTS_DIR`. The module lives outside `classical_ml.py` to keep training lean, avoid pulling `shap` into every training run, and allow standalone re-runs against cached fits.
 * **Causal Random Forest + Treatment Heterogeneity Notebook** — A separate notebook (NOT part of the main pipeline) that estimates conditional average treatment effects (CATE) via `CausalForestDML` for each candidate treatment (augmentation, polypharmacy, somatic/ECT, adequate trial ≥ 1). Unlike the classification pipeline, which predicts TRD risk, this asks *for whom does each treatment actually help?* Evaluation surface: Qini coefficient, uplift curves, doubly-robust CATE calibration, CATE distribution plots, and subgroup ATE tables stratified by the top SHAP-ranked moderators. CATE metrics are incompatible with the ROC/PR/Calibration harness of the main pipeline, which is why this lives in its own notebook.
 
 ---

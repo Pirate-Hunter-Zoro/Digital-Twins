@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from sklearn.model_selection import train_test_split
+import pandas as pd
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
 
@@ -12,8 +13,9 @@ def create_train_test_split() -> tuple[set[str], set[str]]:
     Returns:
         tuple[set[str], set[str]]: train ids, test ids
     """
-    all_vector_paths = Path(os.environ['DETERMINISTIC_VECTORS_DIR']).glob("*.npy")
-    all_patient_ids = [p.stem for p in all_vector_paths]
+    # Read in just the index - no columns
+    patient_df = pd.read_parquet(Path(os.environ['DETERMINISTIC_DATAFRAMEPATH']), columns=[])
+    all_patient_ids = patient_df.index.tolist()
     predictor = TRDPredictor()
     if (not test_ids_path.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
         # Need to create stratified train/test split
