@@ -14,7 +14,7 @@ def create_train_test_split() -> tuple[set[str], set[str]]:
         tuple[set[str], set[str]]: train ids, test ids
     """
     # Read in just the index - no columns
-    patient_df = pd.read_parquet(Path(os.environ['DETERMINISTIC_DATAFRAMEPATH']), columns=[])
+    patient_df = pd.read_parquet(Path(os.environ['DETERMINISTIC_DATAFRAME_PATH']), columns=[])
     all_patient_ids = patient_df.index.tolist()
     predictor = TRDPredictor()
     if (not test_ids_path.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
