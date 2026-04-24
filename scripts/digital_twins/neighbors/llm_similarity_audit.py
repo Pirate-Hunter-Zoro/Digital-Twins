@@ -13,7 +13,7 @@ def main():
     scorer = Scorer(require_client=False)
     
     # Create a connection to the vectors database
-    vector_cursor = sqlite3.connect(Path(os.environ['EMBEDDINGS_DIR']) / "embeddings.db").cursor()
+    embedding_cursor = sqlite3.connect(Path(os.environ['EMBEDDINGS_DIR']) / "embeddings.db").cursor()
     results_dir = Path(os.environ['RESULTS_DIR']) / 'llm_audit/'
     os.makedirs(results_dir, exist_ok=True)
     
@@ -26,14 +26,14 @@ SELECT id_a, id_b, full_response FROM llm_judgements ORDER BY overall_score ASC 
         # Create report including the first narrative, the second narrative, and the third narrative
         patient_id_a, patient_id_b, response = row
         # Fetch two corresponding narratives
-        vector_cursor.execute('''
-SELECT text FROM vectors WHERE patient_id=?
+        embedding_cursor.execute('''
+SELECT text FROM embeddings WHERE patient_id=?
 ''', (patient_id_a,))
-        narrative_a = vector_cursor.fetchone()[0]
-        vector_cursor.execute('''
-SELECT text FROM vectors WHERE patient_id=?
+        narrative_a = embedding_cursor.fetchone()[0]
+        embedding_cursor.execute('''
+SELECT text FROM embeddings WHERE patient_id=?
 ''', (patient_id_b,))
-        narrative_b = vector_cursor.fetchone()[0]
+        narrative_b = embedding_cursor.fetchone()[0]
         response_indented = json.dumps(json.loads(response), indent=4)
         
         # Write the two narratives and the response to a .txt file named after the two patients
@@ -53,14 +53,14 @@ SELECT id_a, id_b, full_response FROM llm_judgements ORDER BY overall_score DESC
         # Create report including the first narrative, the second narrative, and the third narrative
         patient_id_a, patient_id_b, response = row
         # Fetch two corresponding narratives
-        vector_cursor.execute('''
-SELECT text FROM vectors WHERE patient_id=?
+        embedding_cursor.execute('''
+SELECT text FROM embeddings WHERE patient_id=?
 ''', (patient_id_a,))
-        narrative_a = vector_cursor.fetchone()[0]
-        vector_cursor.execute('''
-SELECT text FROM vectors WHERE patient_id=?
+        narrative_a = embedding_cursor.fetchone()[0]
+        embedding_cursor.execute('''
+SELECT text FROM embeddings WHERE patient_id=?
 ''', (patient_id_b,))
-        narrative_b = vector_cursor.fetchone()[0]
+        narrative_b = embedding_cursor.fetchone()[0]
         response_indented = json.dumps(json.loads(response), indent=4)
         
         # Write the two narratives and the response to a .txt file named after the two patients
