@@ -3,6 +3,7 @@ from typing import Tuple
 from pathlib import Path
 import os
 import json
+import time
 import sqlite3
 import pandas as pd
 from sklearn.pipeline import Pipeline
@@ -89,23 +90,24 @@ HYPERPARAMETERS = {
     'logistic_regression': [
         {
             'model__penalty': ['l2'],
-            'model__solver': ['lbfgs', 'liblinear', 'newton-cg', 'sag', 'saga'],
+            'model__solver': ['lbfgs', 'liblinear', 'newton-cg'],
             'model__C': [0.001, 0.01, 0.1, 1, 10, 100]
         },
         {
             'model__penalty': ['l1'],
-            'model__solver': ['liblinear', 'saga'],
+            'model__solver': ['liblinear'],
             'model__C': [0.001, 0.01, 0.1, 1, 10, 100]
         },
         {
             'model__penalty': ['elasticnet'],
             'model__solver': ['saga'],
             'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
-            'model__l1_ratio': [0.15, 0.3, 0.45, 0.6, 0.75, 0.9]   
+            'model__l1_ratio': [0.15, 0.3, 0.45, 0.6, 0.75, 0.9],
+            'model__max_iter': [5000] 
         },
         {
             'model__penalty': [None],
-            'model__solver': ['lbfgs', 'newton-cg', 'sag', 'saga']
+            'model__solver': ['lbfgs', 'newton-cg']
         }
     ],
     'svm': [
@@ -160,16 +162,20 @@ def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataF
     classifier_predictions = {}
     model_grid_search_results = {}
     for name, classifier in classifiers.items():
+        start = time.perf_counter()
+        print(f"Starting {name} classifier...", flush=True)
         param_grid = HYPERPARAMETERS[name]
         # Hyperparameter grid search to enable the model to perform as best it can
         searcher = GridSearchCV(classifier, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)
         searcher.fit(X=X_train, y=y_train)
+        elapsed = time.perf_counter() - start
         predictions = searcher.predict_proba(X=X_test)[:, 1]
         classifier_predictions[name] = predictions
         model_grid_search_results[name] = {
             'Best Parameters': searcher.best_params_,
             'Best Score' : float(searcher.best_score_)
         }
+        print(f"{name} classifier finished in {elapsed:.1f} seconds running {len(searcher.cv_results_['params'])} different models...", flush=True)
     return classifier_predictions, model_grid_search_results
 
 def main():
@@ -179,6 +185,7 @@ def main():
     for source in VectorSource:
         (train_X, train_y) = load_data_set(train_ids, source=source)
         (test_X, test_y) = load_data_set(test_ids, source=source)
+        print(f"Running ML on {source.name}...", flush=True)
         model_predictions, grid_search_results = evaluate_models(train_X, train_y, test_X)
         with open(Path(os.environ['RESULTS_DIR']) / f"grid_search_ml_results_{source.name}.json", 'w') as f:
             json.dump(grid_search_results, f, indent=4)
