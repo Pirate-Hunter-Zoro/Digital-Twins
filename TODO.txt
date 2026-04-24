@@ -1,7 +1,44 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
-DECISIONS MADE THIS SESSION (2026-04-22):
+DECISIONS MADE THIS SESSION (2026-04-24):
+------------------------------------------
+- classical_ml.py was wall-clock-starved on 8 CPUs. LR alone ran >1 hour
+  before the fix. Diagnosed and addressed on three axes:
+    * SBATCH: run_trd_prediction_analysis.sbatch bumped from
+      --cpus-per-task=8 -> 48 and --mem=64G -> 192G. N_THREADS on line 16
+      auto-inherits SLURM_CPUS_PER_TASK. GridSearchCV(n_jobs=-1) now has
+      48 workers instead of 8. c3_accel partition allows up to 96; 48 is
+      the conservative choice.
+    * LR grid thinned: elasticnet sub-grid's model__l1_ratio collapsed
+      from 6 values [0.15, 0.3, 0.45, 0.6, 0.75, 0.9] to 3 values
+      [0.25, 0.5, 0.75]. Drops elasticnet from 36 combos to 18. LR total
+      goes from 62 combos (310 fits) to 44 combos (220 fits).
+    * SVM dropped entirely from the classifier lineup. Reasoning:
+        - On embedding source (4096-dim): kernel methods suffer curse of
+          dimensionality; rbf Gram matrix degenerates; linear SVM
+          essentially duplicates LR with hinge loss.
+        - On deterministic source: tree ensembles already capture
+          nonlinearity on tabular mixed-dtype features; SVM on
+          one-hot-encoded demographics offers no unique signal.
+        - Compute disproportionate: SVC(probability=True) is
+          single-threaded per fit AND runs internal 5-fold Platt CV on
+          top of GridSearchCV's own 5-fold.
+        - Decomposition now clean: LR (linear/log-loss), RF (bagging),
+          GB + XGB (boosting). Four classifiers cover the families.
+    * No multiprocessing.Pool wrapping classifier loop. Joblib via
+      GridSearchCV(n_jobs=-1) already parallelizes across fold/combo
+      space; wrapping it in Pool(N) would either oversubscribe (if
+      n_jobs=-1 inside each worker) or partition CPUs thin across
+      classifiers (if explicit n_jobs=K/N), and LR/SVM were dominating
+      runtime anyway — Amdahl's law kills the "parallel classifiers"
+      idea when one classifier swallows most of the wall-clock.
+- Combo accounting after changes (per VectorSource):
+    LR: 44 combos / 220 fits | RF: 12 / 60 | GB: 9 / 45 | XGB: 18 / 90
+    Total: 83 combos / 415 fits (was 155 / 775 with SVM + fat LR grid).
+    Across both sources: 830 fits on 48 CPUs (was 1550 on 8).
+
+DECISIONS MADE PRIOR SESSION (2026-04-22):
 ------------------------------------------
 - classical_ml.py refactor landed end-to-end:
     * DataFrame loader (parquet for deterministic; DataFrame-wrapped SELECT
@@ -9,7 +46,8 @@ DECISIONS MADE THIS SESSION (2026-04-22):
     * dtype-routed ColumnTransformer (num: median-impute + StandardScaler;
       cat: OneHotEncoder drop_if_binary + handle_unknown=ignore;
       bool: FunctionTransformer int8 cast).
-    * Naive Bayes dropped entirely. Final lineup: LR, SVM, RF, GB, XGBoost.
+    * Naive Bayes dropped entirely. Lineup at end of that session:
+      LR, SVM, RF, GB, XGBoost (SVM since dropped 2026-04-24).
 - VectorSource.DETERMINISTIC stripped from the entire neighbor pipeline
   (retriever, trd_predictor, run_neighborhood_constructor, utils.load_neighborhood_data,
   analyze_trd_prediction, and the four trd_* analysis scripts). Filenames
@@ -76,7 +114,9 @@ DECISIONS MADE PRIOR SESSION (2026-04-20):
            complexity for a classifier family unlikely to outperform LR or
            the tree models on tabular EHR features. Logistic Regression
            covers the linear-probabilistic role; trees dominate otherwise.
-           Final lineup: LR, SVM, RF, GB, XGBoost (5 classifiers).
+           Lineup at that time: LR, SVM, RF, GB, XGBoost (5 classifiers).
+           SVM subsequently dropped 2026-04-24; final lineup is 4
+           classifiers (LR, RF, GB, XGBoost).
         7. Categorical levels discovered in a one-shot JSON-scan pass at
            generator init, cached to categorical_levels.json (much smaller
            than patient_attributes.json).
@@ -118,8 +158,9 @@ NEXT UP (IMPLEMENTATION ORDER):
           compression maps firing, two patients spot-checked
           row-vs-narrative.
 - [x] Update classical_ml.py: DataFrame loader, dtype-routed ColumnTransformer,
-      Naive Bayes dropped entirely (see DECISIONS block above). Final lineup:
-      LR, SVM, RF, GB, XGBoost. Verified imports/types aligned to DataFrame X.
+      Naive Bayes dropped entirely (see DECISIONS block above). Lineup after
+      that refactor: LR, SVM, RF, GB, XGBoost. SVM subsequently dropped
+      2026-04-24; current lineup is LR, RF, GB, XGBoost.
 - [ ] Add feature importance / SHAP interpretability in NEW FILE
       scripts/digital_twins/predictions/feature_importance.py (sibling to
       classical_ml.py; kept separate to avoid dragging shap into every

@@ -10,7 +10,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, FunctionTransformer
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
 from sklearn.ensemble import (
     RandomForestClassifier,
     GradientBoostingClassifier
@@ -102,24 +101,13 @@ HYPERPARAMETERS = {
             'model__penalty': ['elasticnet'],
             'model__solver': ['saga'],
             'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
-            'model__l1_ratio': [0.15, 0.3, 0.45, 0.6, 0.75, 0.9],
+            'model__l1_ratio': [0.25, 0.5, 0.75],
             'model__max_iter': [5000] 
         },
         {
             'model__penalty': [None],
             'model__solver': ['lbfgs', 'newton-cg']
         }
-    ],
-    'svm': [
-        {
-            'model__kernel': ['linear'],
-            'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
-        },
-        {
-            'model__kernel': ['rbf', 'poly'],
-            'model__C': [0.001, 0.01, 0.1, 1, 10, 100],
-            'model__gamma': [1, 0.1, 0.01, 0.001]
-        },
     ],
     'random_forest': {
         'model__n_estimators': [200],
@@ -153,7 +141,6 @@ def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataF
     """
     classifiers = {
         "logistic_regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
-        "svm": make_classifier(SVC(probability=True, random_state=int(os.environ['SEED']))),
         "random_forest": make_classifier(RandomForestClassifier(random_state=int(os.environ['SEED']))),
         "gradient_boosting": make_classifier(GradientBoostingClassifier(random_state=int(os.environ['SEED']))),
         "xgboost": make_classifier(XGBClassifier(random_state=int(os.environ['SEED']), eval_metric='logloss'))

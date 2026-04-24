@@ -7,7 +7,7 @@ The pipeline produces two independent patient vector representations (determinis
 
 | Method | Deterministic Vectors | Embedding Vectors |
 | --- | --- | --- |
-| **Classical ML** | LR, SVM, RF, GB, XGBoost | Same classifiers on high-dimensional embeddings |
+| **Classical ML** | LR, RF, GB, XGBoost | Same classifiers on high-dimensional embeddings |
 | **Neighbor-Weighted KNN** | *Not applicable — cosine distance is ill-defined on mixed categorical/numeric features* | KNN retrieval + LLM scoring on embedding vectors |
 
 The pipeline is divided into **Data Loading**, **Stage 1 (Narrative & Vector Generation)**, **Stage 2 (Vector Embedding)**, **Stage 3 (Neighbor Retrieval)**, and **Stage 4 (Prediction & Classical ML)**.
@@ -205,15 +205,13 @@ graph TD
     * Category branch (`make_column_selector(dtype_include='category')`): `OneHotEncoder(drop='if_binary', handle_unknown='ignore')`.
     * Bool branch (`make_column_selector(dtype_include='bool')`): passthrough, cast to `int8`.
   * Embedding vectors are a single all-numeric block and flow straight through the numeric branch; the categorical and bool branches are active only on the deterministic DataFrame.
-  * **Classifiers** (5 total):
+  * **Classifiers** (4 total):
     * Logistic Regression (`max_iter=1000`)
-    * SVM (`probability=True`)
     * Random Forest
     * Gradient Boosting
     * XGBoost (`eval_metric='logloss'`)
   * **Hyperparameter Tuning**: Every classifier is wrapped in `GridSearchCV(pipeline, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)` before fitting; `predict_proba` delegates to the refit best estimator. Parameter grids are declared at module level in `HYPERPARAMETERS`.
-    * **Logistic Regression** uses a list-of-dicts `param_grid` partitioned by `penalty` to respect solver compatibility: a pure `l2` sub-grid spanning all five solvers, an `l1` sub-grid restricted to `liblinear` and `saga`, an `elasticnet` sub-grid pinned to `saga` with a `model__l1_ratio` sweep, and a `None` sub-grid spanning `lbfgs`/`newton-cg`/`sag`/`saga` (with `C` omitted since regularization is disabled).
-    * **SVM** uses a list-of-dicts partitioned by `kernel`: a `linear` sub-grid tuning only `C` (gamma is meaningless for the linear kernel), and a nonlinear sub-grid covering `rbf` and `poly` with a joint `C` and `gamma` sweep.
+    * **Logistic Regression** uses a list-of-dicts `param_grid` partitioned by `penalty` to respect solver compatibility: a pure `l2` sub-grid spanning all five solvers, an `l1` sub-grid restricted to `liblinear` and `saga`, an `elasticnet` sub-grid pinned to `saga` with a pruned `model__l1_ratio` sweep (`[0.25, 0.5, 0.75]`) and `max_iter=5000`, and a `None` sub-grid spanning `lbfgs`/`newton-cg`/`sag`/`saga` (with `C` omitted since regularization is disabled).
     * **Random Forest, Gradient Boosting, XGBoost** use flat single-dict grids over their standard hyperparameters.
     * Per-classifier `best_params_` and `best_score_` are persisted to `grid_search_ml_results_{source}.json` in `RESULTS_DIR` (one file per `VectorSource`).
   * **Dual-Source Evaluation**: `main()` loops over both `VectorSource` values. For each source, it loads training and test data, fits all classifiers under grid search, and generates ROC, Precision-Recall, and Calibration plots with source-prefixed filenames.

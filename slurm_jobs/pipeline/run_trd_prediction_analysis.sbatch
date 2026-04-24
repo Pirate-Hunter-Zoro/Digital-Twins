@@ -3,8 +3,8 @@
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=48
+#SBATCH --mem=192G
 #SBATCH -o slurm_jobs/pipeline/logs/trd_prediction_analysis_out.txt
 #SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_analysis_err.txt
 
