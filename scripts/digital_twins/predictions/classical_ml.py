@@ -27,6 +27,7 @@ from scripts.shared.plots import (
 
 )
 from scripts.shared.utils import VectorSource
+from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
 
 def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.DETERMINISTIC) -> Tuple[pd.DataFrame, np.ndarray]:
     """Load all the patient vectors and find their labels
@@ -176,10 +177,24 @@ def main():
         model_predictions, grid_search_results = evaluate_models(train_X, train_y, test_X)
         with open(Path(os.environ['RESULTS_DIR']) / f"grid_search_ml_results_{source.name}.json", 'w') as f:
             json.dump(grid_search_results, f, indent=4)
+        text_report = ""
         for model_name, predictions in model_predictions.items():
+            metrics = compute_metrics(y_true=test_y, y_prob=predictions)
             plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
             plot_precision_recall(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
             plot_calibration(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
+        
+            text_report += f"{model_name.upper()}_{source.name} Metrics:\n\
+    'roc_score': {metrics['roc_score']}\n\
+    'auprc': {metrics['auprc']}\n\
+    'brier_score': {metrics['brier_score']}\n\
+    'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\
+    'calibration_slope': {metrics['calibration_slope']}\n\
+    'calibration_intercept': {metrics['calibration_intercept']}\n\n"
+        
+        results_txt_file = Path(os.environ['RESULTS_DIR']) / f'results.txt'
+        with open(results_txt_file, 'a') as f:
+            f.write(text_report)
         
 if __name__=="__main__":
     main()

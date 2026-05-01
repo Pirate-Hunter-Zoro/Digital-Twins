@@ -1,6 +1,41 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+DECISIONS MADE THIS SESSION (2026-05-01):
+------------------------------------------
+- classical_ml.py now appends a text metric block to results.txt for each
+  (classifier, VectorSource) pair, mirroring the format used by
+  trd_prediction_computation.py so the file ends up carrying both KNN and
+  classical-ML exact numbers in one place.
+    * compute_metrics imported from trd_prediction_computation; called in
+      main()'s per-model loop using test_y and predict_proba output.
+    * Block format matches the KNN block (4-space indent, uppercase
+      {MODEL}_{SOURCE} header, trailing \n\n separator).
+    * File opened in mode 'a' so the KNN block already on disk is preserved.
+    * Metric keys written: roc_score, auprc, brier_score,
+      weighted_calibration_error, calibration_slope, calibration_intercept.
+      Last two are NOT in the KNN block (asymmetry by design — KNN reports
+      mean_ESS instead, a neighbor-weight diagnostic with no classifier
+      analogue). Slope/intercept were added because they diagnose the
+      *kind* of miscalibration (sharpness vs offset), which ECE alone
+      cannot.
+- Backfill plan for the two completed embedders (Qwen-Qwen3-Embedding-4B
+  and -8B): re-run classical_ml.py standalone against each RESULTS_DIR so
+  the appended ML block lands in their existing results.txt without
+  rerunning the full pipeline. Third embedder (currently running) gets the
+  block natively from its first end-to-end run.
+- Orchestrator sequencing: KNN analysis (writes results.txt with mode 'w')
+  MUST run before classical_ml.py (appends with mode 'a') in the Slurm
+  pipeline, otherwise the appended ML block gets nuked on the next full
+  run. Verify in trd_prediction_orchestrator.sbatch before next pipeline
+  launch.
+- Paper scope decision: SHAP, causal random forest, and cohort
+  investigation remain second-priority. The current pipeline (4
+  classifiers x 2 vector sources, plus KNN with 4 retrieval modes x 4
+  weighting strategies) is sufficient for a paper centered on embedder
+  choice in TRD prediction. Backfill the missing exact numbers, then
+  start writing.
+
 DECISIONS MADE THIS SESSION (2026-04-24):
 ------------------------------------------
 - classical_ml.py was wall-clock-starved on 8 CPUs. LR alone ran >1 hour
