@@ -65,6 +65,14 @@ echo "Launching the prediction pipeline..."
 PREDICTION_JOB_ID=$(sbatch --parsable slurm_jobs/pipeline/run_trd_prediction_pipeline.sbatch)
 echo "scancel ${PREDICTION_JOB_ID} # Prediction Pipeline" >> "${CANCEL_SCRIPT}"
 
+VLLM_KILL_JOB_ID=$(
+  sbatch --parsable --dependency=afterany:$PREDICTION_JOB_ID \
+    --partition=c3_short \
+    --time=00:01:00 \
+    --wrap="scancel $VLLM_JOB_ID"
+)
+echo "scancel ${VLLM_KILL_JOB_ID} # vLLM Kill Stub" >> "${CANCEL_SCRIPT}"
+
 echo "Launching evaluation pipeline to run once prediction is complete..."
 ANALYSIS_JOB_ID=$(sbatch --parsable --dependency=afterok:$PREDICTION_JOB_ID slurm_jobs/pipeline/run_trd_prediction_analysis.sbatch)
 echo "scancel ${ANALYSIS_JOB_ID} # Analysis Pipeline" >> "${CANCEL_SCRIPT}"

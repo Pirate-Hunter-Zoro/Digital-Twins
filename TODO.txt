@@ -1,6 +1,62 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+DECISIONS MADE THIS SESSION (2026-05-04):
+------------------------------------------
+- BUG FOUND IN classical_ml.py DETERMINISTIC PATH:
+    * The 8 category-destined columns (Sex, PreferredLanguage,
+      MaritalStatus, Religion, SmokingStatus, Race_Ethnicity,
+      mdd_recurrence, mdd_severity) were stored in the parquet as
+      `object` dtype, not pandas `category`. ColumnTransformer's "cat"
+      branch uses make_column_selector(dtype_include="category") and
+      remainder='drop' — so these 8 columns were SILENTLY DROPPED on
+      every DET run since the 2026-04-22 refactor. DET classifiers fit
+      on 56 of 64 features.
+    * Symptom: DET CV best_score ~0.69 vs DET test ROC ~0.66 — a
+      consistent ~2-4 point gap that EMBEDDING did not exhibit. Caught
+      while debugging the Qwen-8B grid_search_ml_results.json-vs-ROC
+      mismatch.
+    * Fix: classical_ml.load_data_set casts object columns to category
+      after read_parquet (cohort_df[obj_cols] =
+      cohort_df[obj_cols].astype('category')). Two lines, no parquet
+      regeneration required. Backfill-friendly.
+    * All three completed embedders (bge-en-icl,
+      Qwen-Qwen3-Embedding-8B, Qwen-Qwen3-Embedding-4B) need a re-run
+      of analyze_trd_prediction + classical_ml against their
+      RESULTS_DIR to produce corrected DET JSONs and ROC plots.
+      Standalone driver: slurm_jobs/quick_runs/analysis_only.sbatch
+      (drops the audit steps; runs KNN analysis pass for clean
+      results.txt rewrite + classical_ml + rsync). Update .env's
+      EMBEDDER_MODEL_NAME between sequential runs; do not parallelize
+      (shared log paths).
+- ORCHESTRATOR vLLM KILL STUB ADDED:
+    * Two GPUs were sitting idle for hours during Stage 4 because vLLM
+      was only cancelled at the END of run_trd_prediction_analysis.
+    * Added a c3_short dependency job in
+      trd_prediction_orchestrator.sbatch that runs `scancel
+      $VLLM_JOB_ID` with --dependency=afterany on the prediction
+      pipeline (Stage 3). vLLM dies the moment LLM scoring ends; GPUs
+      released hours earlier. Stub is appended to cancel_pipeline.sh
+      for clean manual cancellation.
+- FEATURE IMPORTANCE SCOPE EXPANDED TO BOTH SOURCES:
+    * Original plan (2026-04-22): EMBEDDING importance skipped because
+      4096-D latents are unnamed.
+    * Reframed: the answerable question on the embedding side is not
+      "which dim" but "how many dims pull weight" — effective rank of
+      the predictive subspace. That's tractable.
+    * Recipe (applies to BOTH sources): (a) L1 sparsity count from the
+      best LR fit (free — falls out of the existing grid search;
+      inspect best_estimator_.named_steps['model'].coef_ nonzero count),
+      (b) cumulative |SHAP| or permutation-importance curve (knee =
+      effective feature/dim count), (c) PCA-K-vs-ROC sweep (geometric
+      confirmation; train at K ∈ {16, 32, 64, 128, 256, 512, 1024}).
+    * feature_importance.py becomes a pipeline-bound module covering
+      DETERMINISTIC and EMBEDDING. Concept-probe analyses (correlating
+      surviving EMB dims with named clinical features from the
+      deterministic vector) deferred to a sibling notebook if/when
+      interest arises — recipe is exploratory, doesn't fit a fixed
+      pipeline step.
+
 DECISIONS MADE THIS SESSION (2026-05-01):
 ------------------------------------------
 - classical_ml.py now appends a text metric block to results.txt for each
@@ -196,27 +252,54 @@ NEXT UP (IMPLEMENTATION ORDER):
       Naive Bayes dropped entirely (see DECISIONS block above). Lineup after
       that refactor: LR, SVM, RF, GB, XGBoost. SVM subsequently dropped
       2026-04-24; current lineup is LR, RF, GB, XGBoost.
-- [ ] Add feature importance / SHAP interpretability in NEW FILE
-      scripts/digital_twins/predictions/feature_importance.py (sibling to
-      classical_ml.py; kept separate to avoid dragging shap into every
-      training run and to allow standalone re-runs against cached fits).
+- [ ] Add feature importance in NEW FILE
+      scripts/digital_twins/predictions/feature_importance.py (sibling
+      to classical_ml.py; kept separate so the standalone re-run path
+      against cached fits is preserved and shap is not dragged into
+      every training run). Module loops over BOTH VectorSource values.
+
+      DETERMINISTIC source — per-feature interpretability:
         * Tree models (RF, GB, XGBoost): native .feature_importances_
           indexed by post-ColumnTransformer feature names (via
           ColumnTransformer.get_feature_names_out()).
-        * Logistic Regression: coefficient magnitudes aligned to the same
-          post-encode feature names.
-        * SVM: SHAP-only fallback (non-linear kernels expose no native
-          importances; linear-kernel coefficient path is not worth the
-          special case given the final pipeline runs rbf/poly too).
+        * Logistic Regression: coefficient magnitudes aligned to the
+          same post-encode feature names.
         * SHAP (optional, expensive): unified |SHAP|-value ranking via
-          shap.Explainer on a held-out sample; covers all 5 classifiers.
-        * Skip entirely for VectorSource.EMBEDDING — embedding dims are
-          unnamed 4096-D latents; per-feature interpretability is noise.
-        * Output: feature_importance_{classifier}_DETERMINISTIC.png plus
+          shap.Explainer on a held-out sample; covers all 4 classifiers.
+        * Output: feature_importance_{classifier}_DETERMINISTIC.png
+          (top-K bar chart) per classifier plus a consolidated
           feature_importance_summary_DETERMINISTIC.json in RESULTS_DIR.
-        * Open question for next session: confirm `import shap` is
-          available in the env, or scope the first pass to native
-          importances + LR coefficients only and bolt SHAP on after.
+
+      EMBEDDING source — effective-rank interpretability (NOT per-dim):
+        * 4096-D latents are unnamed, so the actionable question is
+          "how many dims carry the predictive signal", not "which dim".
+        * (a) L1 sparsity count: re-fit (or reuse) the best LR with
+          elasticnet/L1 penalty, count nonzero coefficients. Free —
+          best LR already lands on elasticnet via grid search.
+        * (b) Cumulative |SHAP| or permutation-importance curve:
+          rank dims by importance magnitude, plot cumulative
+          contribution vs rank. Identify the knee at ~80-90% cumulative
+          mass — that's the effective dim count. shap.TreeExplainer for
+          XGB/GB/RF is fast on 4096 dims × test rows; shap.LinearExplainer
+          for LR is faster.
+        * (c) PCA-K-vs-ROC sweep: train each classifier at K ∈
+          {16, 32, 64, 128, 256, 512, 1024} truncated principal
+          components, plot ROC AUC vs K. Plateau location is the
+          geometric confirmation of effective rank.
+        * Output: feature_importance_cumulative_{classifier}_EMBEDDING.png
+          (cumulative-importance curve), feature_importance_pca_sweep_EMBEDDING.png
+          (ROC vs K), and feature_importance_summary_EMBEDDING.json
+          (sparsity count, knee K, plateau K) in RESULTS_DIR.
+
+      Concept-probe work (correlate surviving EMB dims with named
+      clinical features from the deterministic vector) is OUT OF
+      SCOPE for this module — defer to a sibling notebook if/when
+      interest arises.
+
+      Open question for next session: confirm `import shap` is
+      available in the conda env (ehr_env). If not, scope the first
+      pass to native importances + LR coefficients + L1 sparsity +
+      PCA-K sweep, and bolt SHAP on after.
 - [x] Strip VectorSource.DETERMINISTIC from retriever.py, trd_predictor.py,
       run_neighborhood_constructor.py, analyze_trd_prediction.py, and all
       four analysis scripts (trd_prediction_computation, trd_ranking_analysis,
@@ -388,8 +471,6 @@ COMPLETED — CLASSICAL ML HYPERPARAMETER TUNING:
     - [x] Each classifier wrapped in GridSearchCV(pipeline, param_grid, scoring='roc_auc', cv=5, n_jobs=-1) in the fit loop
     - [x] predict_proba called on the GridSearchCV object (delegates to best estimator via refit=True)
     - [x] evaluate_models returns (predictions_dict, grid_search_results_dict); main() persists the latter to grid_search_ml_results_{source}.json with float() cast on best_score_ for JSON serialization
-
-AT SOME POINT, WE NEED A SHAP ANALYSIS OR SOME KIND OF FEATURE IMPORTANCE FOT THE DETERMINISTIC VECTORS
 
 21. PIPELINE BUGS — RESOLVED:
     - [x] forge_embeddings.py batching bug / forge_vectors .npy race condition

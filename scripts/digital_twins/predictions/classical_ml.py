@@ -39,6 +39,8 @@ def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.DETER
     if source == VectorSource.DETERMINISTIC:
         parquet_path = Path(os.environ['DETERMINISTIC_DATAFRAME_PATH'])
         cohort_df = pd.read_parquet(parquet_path)
+        obj_cols = cohort_df.select_dtypes(include='object').columns
+        cohort_df[obj_cols] = cohort_df[obj_cols].astype('category')
         X = cohort_df.loc[sorted(list(patient_ids))]
     else:
         embeddings_db_path = Path(os.environ['EMBEDDINGS_DIR']) / 'embeddings.db'
