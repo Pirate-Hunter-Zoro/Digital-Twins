@@ -1,6 +1,37 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+DECISIONS MADE THIS SESSION (2026-05-05):
+------------------------------------------
+- bge-en-icl IS STALE (pre-fix). Confirmed two ways:
+    * Timestamps: bge-en-icl results written 2026-05-04 11:47-11:48;
+      categorical-cast fix committed 2026-05-04 12:01:16 (commit
+      69672d4). Results predate fix by ~13 min.
+    * DET symptom intact: CV best_score vs test ROC across the 4
+      classifiers shows the documented ~2-3pt CV-higher-than-test gap
+      (LR -2.4, RF -0.4, GB -2.9, XGB -1.8). Bug not patched at run
+      time.
+    * Re-run bge-en-icl via slurm_jobs/quick_runs/analysis_only.sbatch
+      with the rest (Qwen-4B and Qwen-8B already flagged 2026-05-04).
+- NON-BUG CLARIFICATION (xgboost EMBEDDING 0.695 JSON vs 0.71 plot):
+    * JSON Best Score = mean 5-fold CV ROC-AUC on the training fold
+      (used to *select* hyperparameters). Plot ROC = held-out 20%
+      test ROC-AUC after refit on full train. Different metrics by
+      construction. ~1.5pt CV-vs-test variance is sampling noise, not
+      a defect. Test ROC is the canonical reporting number; CV
+      best_score is grid-search bookkeeping.
+    * Categorical fix only touches DETERMINISTIC. EMBEDDING numbers
+      will NOT shift after the re-run; only DET will tighten.
+- TWO NEW PIPELINE EXTENSIONS QUEUED (added to NEXT UP below):
+    * Replicate the KNN diagnostic plot suite for classical_ml across
+      both VectorSource values (calibration / DCA / PR / confusion /
+      etc. — whatever the KNN pipeline currently emits via
+      scripts/shared/plots.py that classical_ml does not).
+    * ROC plots already carry a bootstrapped 95% CI band; emit the
+      numeric upper/lower AUC bounds alongside the point estimate
+      (legend text and/or summary metrics file). Applies to both
+      classical_ml ROC plots and the KNN ROC plots.
+
 DECISIONS MADE THIS SESSION (2026-05-04):
 ------------------------------------------
 - BUG FOUND IN classical_ml.py DETERMINISTIC PATH:
@@ -317,6 +348,27 @@ NEXT UP (IMPLEMENTATION ORDER):
       pre-filter disclaimer and vectors/generator.py:73 prints the
       post-slicing survivor count. Both landed during earlier refactor work.
 - [ ] Re-run end-to-end shakedown with pruned grids
+- [ ] Re-run analysis_only.sbatch for ALL THREE embedders (bge-en-icl,
+      Qwen-Qwen3-Embedding-4B, Qwen-Qwen3-Embedding-8B) so the
+      DETERMINISTIC outputs use the categorical-cast fix. Update
+      .env's EMBEDDER_MODEL_NAME between sequential runs; do not
+      parallelize (shared log paths).
+- [ ] Replicate the KNN diagnostic plot suite for classical_ml on
+      BOTH VectorSource values (DETERMINISTIC and EMBEDDING). The KNN
+      pipeline currently emits ROC, PR, calibration, decision curve,
+      confusion matrix, and ESS distribution plots via
+      scripts/shared/plots.py; classical_ml only emits ROC, PR, and
+      calibration. Bring classical_ml to parity (ESS distribution is
+      KNN-specific and stays out — no neighbor weights for a fitted
+      classifier). Output filenames: <plot>_<classifier>_<source>.png
+      mirroring the existing classical_ml convention.
+- [ ] Emit numeric ROC AUC 95% CI bounds (upper/lower from the
+      existing bootstrap band) on every ROC plot — both classical_ml
+      and KNN. Update plot_receiving_operator_characteristic in
+      scripts/shared/plots.py to (a) print "ROC curve (score X.XX,
+      95% CI [low, high])" in the legend and (b) return the bounds
+      so the caller can persist them to results.txt / summary.csv
+      next to the point estimate.
 
 LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):
 -------------------------------------------------------
