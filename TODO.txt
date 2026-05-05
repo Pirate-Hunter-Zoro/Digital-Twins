@@ -31,6 +31,46 @@ DECISIONS MADE THIS SESSION (2026-05-05):
       numeric upper/lower AUC bounds alongside the point estimate
       (legend text and/or summary metrics file). Applies to both
       classical_ml ROC plots and the KNN ROC plots.
+- SEMANTIC-FEATURE ABLATION STUDY QUEUED (advisor ask, added to NEXT
+  UP below): perturb a named deterministic feature in the narrative,
+  re-embed cohort, re-run classical_ml on EMBEDDING source only,
+  measure score delta vs baseline. Wrapped via a new ABLATION_ID env
+  var that suffixes DETERMINISTIC_NARRATIVES_DIR / EMBEDDINGS_DIR /
+  RESULTS_DIR; baseline pipeline untouched. Cost-bound to 3-5
+  representative features (full re-embed per ablation). Deferred
+  until feature_importance.py and other open NEXT UP items land.
+- feature_importance.py — IN PROGRESS, RESUME FROM extract_feature_importances:
+    * load_best_params(model_name, source) -> dict        [DONE]
+        Reads grid_search_ml_results_{SOURCE}.json from RESULTS_DIR,
+        returns the inner "Best Parameters" dict for the named
+        classifier.
+    * refit_best_model(model_name, source, X_train, y_train) -> Pipeline
+                                                              [DONE]
+        Builds a fresh base estimator with random_state=SEED, wraps
+        in make_classifier (reused from classical_ml — no
+        ColumnTransformer duplication), splats best_params via
+        set_params, fits, returns the fitted Pipeline. Mirrors the
+        constructor kwargs in classical_ml.evaluate_models exactly
+        (max_iter=1000 on LR, eval_metric='logloss' on XGB).
+    * extract_feature_importances(pipeline, model_name)
+                                       -> (np.ndarray, list[str])
+                                                  [SKELETON ONLY]
+        Signature, docstring, and `pass` body in place. Body to
+        implement next session:
+          - pull pipeline.named_steps["preprocess"], call
+            get_feature_names_out(), list-cast.
+          - pull pipeline.named_steps["model"].
+          - branch on model_name: LR -> np.abs(model.coef_[0]);
+            tree family (RF/GB/XGB) -> model.feature_importances_.
+          - return (importances, names). No renormalization, no
+            sort, no defensive asserts.
+    * Still-to-write after extract_feature_importances lands:
+      DET-side bar-chart plot + summary JSON, EMB-side L1 sparsity
+      count, EMB-side cumulative-importance curve (SHAP or
+      permutation), EMB-side PCA-K-vs-ROC sweep, main() loop over
+      classifiers x VectorSource, integration into
+      run_trd_prediction_analysis.sbatch. SHAP availability in
+      ehr_env still unverified — open question from prior session.
 
 DECISIONS MADE THIS SESSION (2026-05-04):
 ------------------------------------------
@@ -369,6 +409,51 @@ NEXT UP (IMPLEMENTATION ORDER):
       95% CI [low, high])" in the legend and (b) return the bounds
       so the caller can persist them to results.txt / summary.csv
       next to the point estimate.
+- [ ] Semantic-feature ablation study for the embedding-ML pipeline
+      (advisor ask). Question the existing pipeline cannot answer:
+      when a *named* deterministic feature is removed/altered in the
+      narrative, how does the embedding-source classical_ml score
+      shift? This is the only path to per-concept attribution on the
+      embedding side, since 4096 latents are unnamed. Distinct from
+      feature_importance.py, which answers "how many dims" not "which
+      named concept".
+
+      Architecture (wrap the pipeline, do NOT rewrite it):
+        * New env var ABLATION_ID (default 'baseline'). When unset or
+          'baseline', behavior is unchanged.
+        * deterministic_narrative.py grows ONE conditional that reads
+          ABLATION_ID and skips/alters the named feature's section
+          when generating the markdown. No other narrative changes.
+        * DETERMINISTIC_NARRATIVES_DIR, EMBEDDINGS_DIR, and RESULTS_DIR
+          all become ABLATION_ID-suffixed (e.g. narratives_<id>/,
+          embeddings_<id>.db, results_<id>/). Baseline artifacts are
+          never overwritten — each ablation is a sibling tree.
+        * forge_embeddings.py and classical_ml.py require NO code
+          changes — they already read these env vars. Only the
+          narrative generator and orchestrator paths change.
+        * Run order per ablation: narrative regen -> full re-embed of
+          cohort -> classical_ml.py (EMBEDDING source only). KNN and
+          LLM judging are OUT OF SCOPE — analysis surface is the
+          embedding-ML score delta vs baseline.
+        * Reporting: tabulate ROC/AUPRC/Brier/calibration deltas
+          (ABLATION_ID vs baseline) per classifier in a single
+          ablation_summary.csv. Significant delta => the named
+          feature carries embedding-side predictive signal.
+
+      Cost: each ablation = one full embedding pass (the wall-clock
+      bottleneck on the c3_accel partition). Pick 3-5 representatives,
+      NOT all 64 deterministic features. Candidate slate:
+        * one demographic (e.g. Race_Ethnicity)
+        * one psych comorbidity family (e.g. psych_*)
+        * one treatment-history field (e.g. trial counts /
+          augmentation_occured)
+        * one safety flag (e.g. suicide_flag)
+        * optional fifth: one SDOH family
+
+      Defer until feature_importance.py and the four other open NEXT
+      UP items land. Bigger than any single one of them. Do not start
+      until the baseline pipeline is fully green and bge-en-icl
+      backfill is done.
 
 LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):
 -------------------------------------------------------
