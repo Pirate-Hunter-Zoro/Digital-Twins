@@ -10,12 +10,12 @@ from scripts.models.patient_embedder import PatientEmbedder
 RECORD_EVERY = 30
 
 def forge():
-    narratives_dir = Path(os.environ['DETERMINISTIC_NARRATIVES_DIR'])
+    narratives_dir = Path(os.environ['NARRATIVES_DIR'])
     if not narratives_dir.exists():
         raise ValueError(f"Missing directory: {str(narratives_dir)}...", flush=True)
     else:
         embedder = PatientEmbedder()
-        # Embed all of our deterministic narratives
+        # Embed all of our narratives
         narrative_files = narratives_dir.glob("*.md")
         batch_size = int(os.environ['EMBEDDER_BATCH_SIZE'])
         current_narrative_batch = []

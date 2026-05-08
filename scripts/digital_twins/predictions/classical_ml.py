@@ -29,15 +29,15 @@ from scripts.shared.plots import (
 from scripts.shared.utils import VectorSource
 from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
 
-def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.DETERMINISTIC) -> Tuple[pd.DataFrame, np.ndarray]:
+def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATURE) -> Tuple[pd.DataFrame, np.ndarray]:
     """Load all the patient vectors and find their labels
 
     Returns:
         Tuple[pd.DataFrame, np.ndarray]: vectors and labels
     """
     predictor = TRDPredictor() # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
-    if source == VectorSource.DETERMINISTIC:
-        parquet_path = Path(os.environ['DETERMINISTIC_DATAFRAME_PATH'])
+    if source == VectorSource.FEATURE:
+        parquet_path = Path(os.environ['FEATURE_DATAFRAME_PATH'])
         cohort_df = pd.read_parquet(parquet_path)
         obj_cols = cohort_df.select_dtypes(include='object').columns
         cohort_df[obj_cols] = cohort_df[obj_cols].astype('category')

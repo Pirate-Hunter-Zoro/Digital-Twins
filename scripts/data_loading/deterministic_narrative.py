@@ -41,7 +41,7 @@ def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
         tuple[str, int]: Patient id and chronologic length of the patient
     """
     # First check for pre-existence
-    narrative_save_path = Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']) / f"{sliced_json['patient_id']}.md"
+    narrative_save_path = Path(os.environ['NARRATIVES_DIR']) / f"{sliced_json['patient_id']}.md"
     if narrative_save_path.exists() and int(os.environ['SCRUB_NARRATIVES']) == 0:
         return (sliced_json['patient_id'], sliced_json['days_of_history'])
     
@@ -156,7 +156,7 @@ NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingr
 
 if __name__=="__main__":
     # Take a sample of produced narratives and put them in the local test_data directory
-    all_narratives = list(Path(os.environ['DETERMINISTIC_NARRATIVES_DIR']).glob("*.md"))
+    all_narratives = list(Path(os.environ['NARRATIVES_DIR']).glob("*.md"))
     for narrative in random.sample(all_narratives, 10):
         with open(narrative, 'r') as f:
             content = f.read()

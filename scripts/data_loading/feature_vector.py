@@ -124,8 +124,8 @@ CATEGORICAL_MAPS = {
 
 def initialize_categorical_levels():
     global KNOWN_CATEGORIES
-    # We need a function to write to a json recording what components are in each deterministic patient vector component
-    if (not CATEGORICAL_LEVELS_PATH.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
+    # We need a function to write to a json recording what components are in each patient's feature vector
+    if (not CATEGORICAL_LEVELS_PATH.exists()) or (int(os.environ['SCRUB_FEATURE_VECTORS']) == 1):
         # One hot encodings for categorical fields
         sliced_json_dir = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
         for sliced_json_file in sliced_json_dir.glob("*.json"):
@@ -157,14 +157,14 @@ def initialize_categorical_levels():
             for field in CATEGORICAL_FIELDS:
                 KNOWN_CATEGORIES[field] = set(res[field])
                 
-def generate_deterministic_vector(sliced_json: Dict) -> pd.Series:
-    """Parse the sliced patient json to generate a deterministic vector to represent the patient
+def generate_feature_vector(sliced_json: Dict) -> pd.Series:
+    """Parse the sliced patient json to generate a feature vector to represent the patient
 
     Args:
         sliced_json (Dict): Anchor date going back a certain number of years
 
     Returns:
-        pd.Series: Resulting deterministic vector
+        pd.Series: Resulting feature vector
     """
     # First check for pre-existence
     initialize_categorical_levels()

@@ -36,7 +36,7 @@ SELECT patient_id, embedding, chronological_length FROM embeddings
         for row in self.patient_tuples:
             if row[0] not in exclude_ids:
                 self.ids.append(row[0])
-                # Load the vector which may mean creating a numpy array out of a buffer or leaving the numpy array as is in the deterministic case
+                # Load the vector by deserializing from the BLOB column
                 vectors.append(np.frombuffer(row[1], dtype=np.float32))
             # Regardless, we'd still like to see all of our chronological lengths for our histogram of such things
             self.chronological_lengths.append(row[2])

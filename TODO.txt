@@ -1,6 +1,190 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+DECISIONS MADE THIS SESSION (2026-05-08):
+------------------------------------------
+- ADVISOR MEETING NOTES (raw, distilled below):
+    Feature Vectors, Embedded Vectors
+    (Easier than shap)
+    Direction from univariate direction correlation with random
+    forest or other models
+
+- VECTOR TERMINOLOGY RENAME landed end-to-end:
+    * VectorSource.DETERMINISTIC -> VectorSource.FEATURE.
+    * VectorSource.EMBEDDING     -> VectorSource.EMBEDDED.
+    * scripts/data_loading/deterministic_vector.py
+        -> scripts/data_loading/feature_vector.py (git mv).
+    * generate_deterministic_vector(s) -> generate_feature_vector(s).
+    * Env var renames:
+        DETERMINISTIC_DATAFRAME_PATH  -> FEATURE_DATAFRAME_PATH
+        DETERMINISTIC_NARRATIVES_DIR  -> NARRATIVES_DIR
+            (qualifier dropped — only one kind of narrative
+            exists in the project, so prefix was redundant)
+        SCRUB_DETERMINISTIC_VECTORS   -> SCRUB_FEATURE_VECTORS
+    * deterministic_narrative.py / generate_deterministic_narrative
+      KEPT — the "deterministic" adjective there describes the
+      rule-based generation process, which is still accurate
+      regardless of what we call the resulting vector type.
+    * EMBEDDINGS_DIR, embeddings.db, forge_embeddings.py,
+      PatientEmbedder, SCRUB_EMBEDDINGS all KEPT — these refer to
+      the neural embedding *process*, not the vector *type*.
+    * .env file MUST BE UPDATED by the user before next pipeline
+      run. Three keys: FEATURE_DATAFRAME_PATH, NARRATIVES_DIR,
+      SCRUB_FEATURE_VECTORS.
+    * Touched 13 source files plus README. README's Planned
+      Extensions section also rewritten to match the new
+      terminology and the SHAP-downgrade decision below.
+    * slurm_jobs/quick_runs/deterministic_data.sbatch left alone
+      — sbatch generates BOTH narratives (still deterministic)
+      AND feature vectors, name is defensible.
+
+- SHAP DOWNGRADED from required to optional. Advisor's univariate
+  Spearman correlation trick replaces SHAP for every queued
+  purpose:
+    * FEATURE-side tree direction-of-effect: magnitude from native
+      feature_importances_, sign from sign(spearmanr(column, y)).
+      Two cheap arrays, no shap dependency.
+    * EMBEDDED-side cumulative-importance curve: rank dims by
+      |spearmanr(dim, y)| descending, plot cumulative contribution
+      vs rank, knee at ~80-90% = effective dim count. Replaces the
+      original |SHAP| ranking in the EMB recipe.
+    * Caveat: univariate correlation is interaction-blind. A
+      feature whose contribution is purely XOR-style with another
+      feature shows ~0 correlation but real model importance.
+      Footnote-worthy on the EMB cumulative curve. For FEATURE-side
+      direction it does not matter — magnitude still comes from
+      the model's native importance, correlation only informs the
+      sign.
+    * SHAP availability in ehr_env (open question carried since
+      2026-04-22) is no longer a blocker. Pipeline ships green
+      without it. Bolt on later as gold-standard if interest.
+
+- feature_importance.py PROGRESS:
+    * extract_feature_importances [DONE].
+        - LR: returns SIGNED coef_[0] (np.abs dropped on review —
+          sign carries direction, caller takes |value| at the
+          display layer for sorting).
+        - Tree models (RF, GB, XGB): returns native
+          feature_importances_ (always nonneg; direction
+          unavailable natively).
+        - Honest asymmetry: returned LR array is signed, returned
+          tree array is magnitude-only. Same signature, two
+          slightly different jobs. Documented at the return
+          statement.
+    * plot_feature_importance [DONE].
+        - Top-K horizontal bar chart, K default 20.
+        - Sort by |importance| descending; bar lengths are
+          np.abs(top_importances) so sign lives in color, not
+          length.
+        - Color: sign-coded for LR (steelblue=raises TRD,
+          firebrick=lowers TRD); single steelblue for tree models
+          with title note "(direction unavailable for tree models)"
+          pending the correlation overlay step.
+        - Source param DROPPED on review — function is FEATURE-only
+          by design (EMB path produces different plots: cumulative
+          curve + PCA sweep), so source was dead weight.
+        - Output: RESULTS_DIR/feature_importance/
+          feature_importance_{model_name}.png. No source suffix
+          in the filename (function is single-source).
+        - Module-internal, NOT in scripts/shared/plots.py —
+          feature importance is specific to classical ML.
+    * Still-to-write (DET path first, then EMB):
+        - Univariate Spearman correlation helper (single function,
+          dual-purpose: produces sign array for FEATURE-side tree
+          direction overlay AND |correlation| ranking for
+          EMBEDDED-side cumulative curve). Keep general — do not
+          bake DET-specific assumptions into the body.
+        - Wire correlation sign into plot_feature_importance for
+          tree models: replace the "direction unavailable" footnote
+          with red/blue bar coloring, like LR.
+        - Summary JSON writer: top-K rows per classifier with
+          name / importance / sign fields.
+            -> finishes the FEATURE path.
+        - EMBEDDED-side: L1 sparsity count from the best
+          elasticnet/L1 LR fit (reuse grid-search artifact).
+        - EMBEDDED-side: cumulative-correlation curve plotter
+          (line plot of cumulative |spearmanr|, find knee).
+        - EMBEDDED-side: PCA-K-vs-ROC sweep at K ∈ {16, 32, 64,
+          128, 256, 512, 1024}, plot ROC AUC vs K.
+        - main() loop over classifiers x VectorSource that wires
+          everything together.
+        - Integration into run_trd_prediction_analysis.sbatch.
+
+- SEMANTIC-FEATURE ABLATION STUDY DESIGN refined (architecture
+  locked, implementation still queued):
+    * Narrative anatomy is rigid and identical across patients:
+      9 sections, ~60 fields total. Confirmed by reading
+      test_data/*.md examples. Sections:
+        ### COHORT & INDEX
+        ### SOCIODEMOGRAPHICS / ACCESS
+        ### PHYSICAL HEALTH
+        ### PSYCH HISTORY
+        ### MEDICAL COMORBIDITY
+        ### TREATMENT EXPOSURE
+        ### MEDICATION BURDEN
+        ### UTILIZATION
+        ### SAFETY
+    * Two granularity levels:
+        - Section: drop entire ### PSYCH HISTORY block. Coarse
+          but cheap to interpret — positive delta tells you
+          "*something* in psych history matters" without isolating
+          which field.
+        - Field: drop just SmokingStatus. Fine. Null delta
+          uninformative due to co-correlation; positive delta
+          informative.
+    * Three replacement strategies considered:
+        - Hard delete: confounds with narrative length (embedders
+          use length as a feature).
+        - Mask/redact ([REDACTED]): out-of-distribution token
+          sequence the embedder has never seen.
+        - Neutralize ("Missing", "Absent", "0"): in-distribution
+          (the embedder has seen these strings in real patient
+          narratives — see "BMI: Missing" in the test data),
+          length stable. RECOMMENDED DEFAULT.
+    * Three confounds:
+        - Length: solved by neutralization above.
+        - Position: keep section headers and field labels intact;
+          replace only values. Headers act as positional anchors
+          for the embedder; dropping them shifts positional
+          encoding for everything after.
+        - Co-correlation: irreducible. Multi-field ablations
+          required when isolating clinically-correlated joint
+          concepts (e.g. polypharmacy + Active meds at baseline).
+    * ARCHITECTURE: REGISTRY DICT in a new ablation module mapping
+      ABLATION_ID -> override spec. Two locator types:
+        - {"field": "<field_name>", "value": "<replacement>"}
+        - {"section": "<section_header>", "value_per_field": {...}}
+      deterministic_narrative.py grows ONE conditional that reads
+      ABLATION_ID, looks up the spec, applies the override at a
+      single chokepoint before rendering. No if/elif ladder; no
+      narrative-generator edits per ablation. Adding an ablation
+      = adding one dict entry.
+    * Module is SEPARATE from feature_importance.py — ablation is
+      pipeline orchestration (re-run upstream stages, diff
+      downstream metrics), not classifier introspection.
+    * Run order per ablation: narrative regen -> full cohort
+      re-embed (wall-clock bottleneck on c3_accel) -> classical_ml
+      on EMBEDDED only. KNN and LLM judging out of scope. Reporting:
+      ablation_summary.csv with ROC/AUPRC/Brier/calibration deltas
+      per classifier per ablation.
+    * SLATE: 3-5 representative concepts, decided WITH the advisor.
+      Build the registry plumbing first with 2-3 trivial entries
+      so the chokepoint is exercised end-to-end; advisor fills in
+      the real slate after. Cost: each ablation = one full
+      embedding pass.
+
+- "WHICH NAMED CLINICAL CONCEPT MATTERS ON THE EMBEDDING SIDE"
+  is answered by the ablation study, NOT by feature_importance.py.
+  feature_importance.py answers "what does the trained classifier
+  weigh on its inputs"; the embedding classifier sees 4096
+  entangled latents, not named clinical columns, so per-concept
+  attribution is mathematically unavailable from the classifier
+  alone. The ablation study sidesteps this by perturbing the
+  *embedder's input* (the narrative) and reading the downstream
+  AUC delta — a pipeline-level rather than classifier-level
+  question. Important conceptual distinction; locked in for
+  future-Claude / future-self.
+
 DECISIONS MADE THIS SESSION (2026-05-05):
 ------------------------------------------
 - bge-en-icl IS STALE (pre-fix). Confirmed two ways:

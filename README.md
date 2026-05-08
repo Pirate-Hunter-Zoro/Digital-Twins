@@ -3,12 +3,12 @@
 
 This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"---vectorized representations of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
 
-The pipeline produces two independent patient vector representations (deterministic feature vectors and neural embeddings) and evaluates TRD risk prediction across an asymmetric evaluation matrix:
+The pipeline produces two independent patient vector representations (rule-based feature vectors and neural embedded vectors) and evaluates TRD risk prediction across an asymmetric evaluation matrix:
 
-| Method | Deterministic Vectors | Embedding Vectors |
+| Method | Feature Vectors | Embedded Vectors |
 | --- | --- | --- |
-| **Classical ML** | LR, RF, GB, XGBoost | Same classifiers on high-dimensional embeddings |
-| **Neighbor-Weighted KNN** | *Not applicable — cosine distance is ill-defined on mixed categorical/numeric features* | KNN retrieval + LLM scoring on embedding vectors |
+| **Classical ML** | LR, RF, GB, XGBoost | Same classifiers on high-dimensional embedded vectors |
+| **Neighbor-Weighted KNN** | *Not applicable — cosine distance is ill-defined on mixed categorical/numeric features* | KNN retrieval + LLM scoring on embedded vectors |
 
 The pipeline is divided into **Data Loading**, **Stage 1 (Narrative & Vector Generation)**, **Stage 2 (Vector Embedding)**, **Stage 3 (Neighbor Retrieval)**, and **Stage 4 (Prediction & Classical ML)**.
 
@@ -17,11 +17,11 @@ graph LR
     A[Raw EHR Data] --> B(Data Loading)
     B --> C{Patient JSONs}
     C --> D[Stage 1a: Narrative Gen]
-    C --> E[Stage 1b: Deterministic Vector Gen]
+    C --> E[Stage 1b: Feature Vector Gen]
     D --> F[Markdown Narratives]
     F --> G[Stage 2: Embedding]
     G --> H[(embeddings.db)]
-    E --> I[Deterministic DataFrame .parquet]
+    E --> I[Feature Vector DataFrame .parquet]
     H --> J[Stage 3: Retrieval & Scoring]
     J --> K[(Judgements.db)]
     K --> L[Stage 4a: Neighbor-Weighted Prediction]
@@ -39,7 +39,7 @@ All evaluation pipelines share a single stratified 80/20 train/test split (`crea
 
 **Test Set Isolation**: In the neighbor-weighted pipeline, test patients are excluded from each other's neighbor pools at retrieval time. The `Retriever` filters out all test patient IDs from its in-memory search arrays during initialization, preventing data leakage while still allowing test patients to serve as query anchors. Narrative and chronological length lookups remain available for all patients via direct SQLite queries.
 
-**Dual Vector Source (classical ML only)**: The `VectorSource` enum (`EMBEDDING`, `DETERMINISTIC`) parameterizes the classical ML pipeline, which runs the full classifier lineup against both vector representations. The neighbor-weighted KNN pipeline runs on `EMBEDDING` only — cosine similarity is not defined over mixed quantitative/categorical features, so `Retriever`, `TRDPredictor`, the neighborhood constructor, and the four neighbor-based analysis scripts accept only embedding vectors.
+**Dual Vector Source (classical ML only)**: The `VectorSource` enum (`EMBEDDED`, `FEATURE`) parameterizes the classical ML pipeline, which runs the full classifier lineup against both vector representations. The neighbor-weighted KNN pipeline runs on `EMBEDDED` only — cosine similarity is not defined over mixed quantitative/categorical features, so `Retriever`, `TRDPredictor`, the neighborhood constructor, and the four neighbor-based analysis scripts accept only embedded vectors.
 
 ---
 
@@ -54,7 +54,7 @@ The foundation. These scripts ingest raw EHR exports and structure them into usa
 * **`fit_to_anchor.py`**: Enforces both the `YEARS_BACK` pre-anchor chronological window and the `YEARS_AHEAD` post-anchor follow-up requirement. It truncates encounters, procedures, and medications that cross the backward boundary and purges ancient history entirely. Patients without sufficient post-anchor observation time (to reliably determine TRD outcome) are rejected.
 * **`load_patient_data.py`**: Orchestrates the timeline slicing and generates `.rejected` marker files for patients who fail the strict MDD, chronological, or follow-up prerequisites to prevent redundant processing.
 * **`deterministic_narrative.py`**: The logic that deterministically translates structured JSON features (labs, meds, diagnoses) into a human-readable Markdown narrative. Note that the generated narrative only summarizes the precise `YEARS_BACK` window, not the patient's entire lifetime.
-* **`deterministic_vector.py`**: Constructs a typed `pandas.Series` of features for each patient from the sliced JSON, with explicit dtypes that drive downstream preprocessing:
+* **`feature_vector.py`**: Constructs a typed `pandas.Series` of features for each patient from the sliced JSON, with explicit dtypes that drive downstream preprocessing:
   * `float64` — quantitative features (vitals, counts, days, age, adequate-trial counts). Missing vitals remain `NaN` and are imputed inside the sklearn pipeline (train-only, no leakage).
   * `bool` — single-valued binary flags (`suicide_flag`, `somatic_flag`, `augmentation_occured`, `mdd_within_window`) and multi-label set indicators (`psych_*`, `medical_*`, `safety_*`, `sud_*`, `sdoh_*`) where a patient can carry several members simultaneously.
   * `category` — single-valued nominal fields: `Sex`, `PreferredLanguage`, `MaritalStatus`, `Religion`, `SmokingStatus`, `Race_Ethnicity`, `mdd_recurrence`, `mdd_severity`. Each is a single column (not one-hot at the storage layer), compressed via standardized maps (ACS language/marital, BRFSS smoking, GSS religion) where applicable. `Sex` is a single binary category, not two redundant columns.
@@ -66,14 +66,14 @@ The foundation. These scripts ingest raw EHR exports and structure them into usa
 
 Transforms the structured JSONs into textual narratives.
 
-* **`generator.py`**: Iterates through the cohort, applies the `deterministic_narrative` logic, and saves `.md` files to the `DETERMINISTIC_NARRATIVES_DIR`.
+* **`generator.py`**: Iterates through the cohort, applies the `deterministic_narrative` logic, and saves `.md` files to the `NARRATIVES_DIR`.
 * **`runner.py`**: Orchestrates the generation job via Slurm.
 
-### 2b. Stage 1b: Deterministic Vector Generation (`scripts/digital_twins/vectors`)
+### 2b. Stage 1b: Feature Vector Generation (`scripts/digital_twins/vectors`)
 
-Constructs a typed, cohort-wide pandas DataFrame of features directly from the structured patient JSONs, bypassing the narrative/embedding pipeline entirely. This DataFrame serves as a classical ML baseline to compare against the high-dimensional embedding vectors.
+Constructs a typed, cohort-wide pandas DataFrame of features directly from the structured patient JSONs, bypassing the narrative/embedding pipeline entirely. This DataFrame serves as a classical ML baseline to compare against the high-dimensional embedded vectors.
 
-* **`generator.py`**: First performs a single cohort-wide JSON scan to discover all categorical levels and cache them to `categorical_levels.json` (replaces the former `patient_attributes.json`). Then uses multiprocessing to iterate the cohort and call `generate_deterministic_vector` for each patient, collecting per-patient Series into a single DataFrame and persisting it to parquet. Produces a sanity check report sampling 10 random rows alongside their narratives and the column dtype schema.
+* **`generator.py`**: First performs a single cohort-wide JSON scan to discover all categorical levels and cache them to `categorical_levels.json` (replaces the former `patient_attributes.json`). Then uses multiprocessing to iterate the cohort and call `generate_feature_vector` for each patient, collecting per-patient Series into a single DataFrame and persisting it to parquet. Produces a sanity check report sampling 10 random rows alongside their narratives and the column dtype schema.
 * **`runner.py`**: Thin orchestrator that invokes the generator.
 
 ### 3. Stage 2: Vector Embedding (`scripts/digital_twins/embeddings`)
@@ -97,10 +97,10 @@ Converts text narratives into high-dimensional vectors using the `PatientEmbedde
 
 ### 4. Stage 3: Retrieval & Scoring (`scripts/digital_twins/neighbors`)
 
-Finds and scores patient similarity on the embedding vectors.
+Finds and scores patient similarity on the embedded vectors.
 
 * **`retriever.py`**:
-  * Accepts an `exclude_ids` set at initialization. Embedding-only — cosine similarity is not defined over mixed categorical/numeric features, so the deterministic retrieval path has been removed.
+  * Accepts an `exclude_ids` set at initialization. Embedded-only — cosine similarity is not defined over mixed categorical/numeric features, so the feature-vector retrieval path has been removed.
   * Loads patient IDs, embeddings, and chronological lengths from `embeddings.db`.
   * Patients in `exclude_ids` are filtered out of the in-memory search arrays during initialization, ensuring test patients never appear as neighbors.
   * Performs fast cosine similarity search to find candidates using four distinct retrieval modes:
@@ -153,7 +153,7 @@ graph TD
   * For each anchor patient: retrieves the query vector, finds top-K neighbors via `Retriever.search()`, scores each pair via the LLM `Scorer`, and returns structured neighborhood data including cosine similarity, LLM similarity, and neighbor TRD labels.
 
 * **`run_neighborhood_constructor.py`**:
-  * Slurm-parallelized driver that constructs neighborhoods for all test patients on the embedding vectors.
+  * Slurm-parallelized driver that constructs neighborhoods for all test patients on the embedded vectors.
   * Chunks the sorted test set across Slurm array tasks.
   * Each worker process initializes its own `TRDPredictor` with the test set as `exclude_ids`.
   * **Output**: CSV files (`neighbor_results_{task_id}.csv`).
@@ -199,12 +199,12 @@ graph TD
 #### 5b. Classical ML Prediction
 
 * **`classical_ml.py`**:
-  * Trains and evaluates standard classifiers on both deterministic and embedding vector representations.
+  * Trains and evaluates standard classifiers on both feature and embedded vector representations.
   * **Pipeline**: Each classifier is wrapped in a `sklearn.pipeline.Pipeline` with a dtype-routed `ColumnTransformer`:
     * Numeric branch (`make_column_selector(dtype_include='number')`): `SimpleImputer(median)` → `StandardScaler`.
     * Category branch (`make_column_selector(dtype_include='category')`): `OneHotEncoder(drop='if_binary', handle_unknown='ignore')`.
     * Bool branch (`make_column_selector(dtype_include='bool')`): passthrough, cast to `int8`.
-  * Embedding vectors are a single all-numeric block and flow straight through the numeric branch; the categorical and bool branches are active only on the deterministic DataFrame.
+  * Embedded vectors are a single all-numeric block and flow straight through the numeric branch; the categorical and bool branches are active only on the feature vector DataFrame.
   * **Classifiers** (4 total):
     * Logistic Regression (`max_iter=1000`)
     * Random Forest
@@ -216,7 +216,7 @@ graph TD
     * Per-classifier `best_params_` and `best_score_` are persisted to `grid_search_ml_results_{source}.json` in `RESULTS_DIR` (one file per `VectorSource`).
   * **Dual-Source Evaluation**: `main()` loops over both `VectorSource` values. For each source, it loads training and test data, fits all classifiers under grid search, and generates ROC, Precision-Recall, and Calibration plots with source-prefixed filenames.
   * **Metrics Reporting**: For each `(classifier, VectorSource)` pair, the shared `compute_metrics` from `trd_prediction_computation.py` is invoked on the held-out test labels and `predict_proba` output. A formatted text block (uppercase `{MODEL}_{SOURCE} Metrics:` header, four-space indented metric lines) is appended to `results.txt` in `RESULTS_DIR`, mirroring the KNN pipeline's block format so both classical-ML and neighbor-weighted exact numbers live in a single file. Six keys per block: `roc_score`, `auprc`, `brier_score`, `weighted_calibration_error`, `calibration_slope`, `calibration_intercept`. The last two (sharpness and bias diagnostics for probabilistic calibration) are exclusive to the classical-ML rows; the KNN rows carry `mean_ESS` instead, since neighbor-weight effective sample size has no classifier analogue. The file is opened in append mode (`'a'`), so the orchestrator MUST run KNN analysis (which writes `results.txt` with mode `'w'`) before classical ML, otherwise the appended ML block is overwritten on the next full pipeline run.
-  * **Data Loading**: `load_data_set()` accepts a `VectorSource` parameter. Deterministic mode loads the cohort parquet file at `DETERMINISTIC_DATAFRAME_PATH` and slices rows by train/test ID. Embedding mode queries `embeddings.db` with a batched `SELECT ... WHERE patient_id IN (...)` query, ordered by patient ID to maintain alignment with labels, returning a DataFrame whose columns are all `float64`.
+  * **Data Loading**: `load_data_set()` accepts a `VectorSource` parameter. Feature mode loads the cohort parquet file at `FEATURE_DATAFRAME_PATH` and slices rows by train/test ID. Embedded mode queries `embeddings.db` with a batched `SELECT ... WHERE patient_id IN (...)` query, ordered by patient ID to maintain alignment with labels, returning a DataFrame whose columns are all `float64`.
   * **Feature Importance** *(planned, scoped to a sibling module `feature_importance.py` covering both sources — not yet implemented)*: See the Planned Extensions section below.
 
 ### 6. Models (`scripts/models`)
@@ -232,7 +232,7 @@ Interfaces for the neural networks.
 
 ### 7. Shared Utilities (`scripts/shared`)
 
-* **`utils.py`**: Core helpers including `VectorSource` enum (`EMBEDDING`, `DETERMINISTIC`) consumed by the classical ML pipeline, and `load_neighborhood_data()` for loading neighborhood CSVs (embedding source only).
+* **`utils.py`**: Core helpers including `VectorSource` enum (`EMBEDDED`, `FEATURE`) consumed by the classical ML pipeline, and `load_neighborhood_data()` for loading neighborhood CSVs (embedded source only).
 * **`plots.py`**: Wraps `matplotlib` and `sklearn` to generate diagnostic visualizations. Computes and saves ROC curves (with bootstrapped error bands), Precision-Recall curves, Calibration curves, Decision Curve Analyses (DCA), Effective Sample Size distributions, and Optimal Confusion Matrices.
 * **`prompts.py`**: Strict loader for the LLM system and user prompt templates located in the `./prompts` directory. Formats and injects patient narratives into the structured evaluation prompts for the vLLM server.
 
@@ -270,11 +270,13 @@ pytest tests/
 
 Work outside the current pipeline surface, tracked in `TODO.txt`:
 
-* **Feature Importance** — New sibling module `scripts/digital_twins/predictions/feature_importance.py`, consumed by `classical_ml.py` (or runnable standalone against persisted fits). The module loops over both `VectorSource` values but answers a different question per source.
-  * **DETERMINISTIC — per-feature interpretability.** Each fitted classifier emits a feature-importance ranking aligned to the post-`ColumnTransformer` feature names (`ColumnTransformer.get_feature_names_out()`). Tree-based models (Random Forest, Gradient Boosting, XGBoost) use their native `feature_importances_`; Logistic Regression uses coefficient magnitudes. SHAP values via the `shap` library (`TreeExplainer` for trees, `LinearExplainer` for LR) provide a unified ranking on a held-out sample. Output: `feature_importance_{classifier}_DETERMINISTIC.png` per classifier and `feature_importance_summary_DETERMINISTIC.json` in `RESULTS_DIR`.
-  * **EMBEDDING — effective-rank interpretability.** Per-dim importance on 4096 unnamed latents is uninterpretable, so the module instead estimates *how many* dims carry predictive signal: (a) **L1 sparsity count** — nonzero coefficient count from the best elasticnet/L1 LR fit (free; falls out of the existing grid search); (b) **cumulative importance curve** — dims ranked by `|SHAP|` or permutation-importance magnitude, plotted as cumulative contribution vs rank, with the knee at ~80-90% cumulative mass marking the effective dim count; (c) **PCA-K-vs-ROC sweep** — classifier retrained on K ∈ {16, 32, 64, 128, 256, 512, 1024} truncated principal components, plotting ROC AUC vs K to locate the geometric plateau. Output: `feature_importance_cumulative_{classifier}_EMBEDDING.png`, `feature_importance_pca_sweep_EMBEDDING.png`, and `feature_importance_summary_EMBEDDING.json` (sparsity count, knee K, plateau K) in `RESULTS_DIR`.
-  * **Concept-probe work** (correlating surviving embedding dims with named clinical features from the deterministic vector) is **out of scope** for this module — deferred to a sibling notebook if/when interest arises.
+* **Feature Importance** — Sibling module `scripts/digital_twins/predictions/feature_importance.py`, consumed by `classical_ml.py` (or runnable standalone against persisted fits). The module loops over both `VectorSource` values but answers a different question per source. The two paths share `load_best_params` / `refit_best_model` plumbing and a shared univariate-correlation helper, but produce different outputs because feature-level interpretability does not exist on the embedded side.
+  * **FEATURE — per-feature interpretability.** Each fitted classifier emits a feature-importance ranking aligned to the post-`ColumnTransformer` feature names (`ColumnTransformer.get_feature_names_out()`). Magnitude comes from the model's native attribute: tree models (Random Forest, Gradient Boosting, XGBoost) use `feature_importances_`; Logistic Regression uses *signed* `coef_[0]` (sign preserved so direction is recoverable). Direction-of-effect for tree models is recovered separately via univariate Spearman correlation between each post-encode feature column and the outcome `y` — sign of the correlation = direction. SHAP is no longer required and is treated as an optional gold-standard pass; the correlation overlay sidesteps the `shap` env-availability question entirely. Caveat: univariate correlation is interaction-blind, but the model's native importance still drives magnitude — correlation only informs sign. Output: top-K horizontal bar chart at `feature_importance/feature_importance_{classifier}.png` in `RESULTS_DIR`, color-coded by direction (steelblue = raises TRD, firebrick = lowers TRD), plus a consolidated `feature_importance_summary.json`.
+  * **EMBEDDED — effective-rank interpretability.** Per-dim importance on 4096 unnamed latents is uninterpretable (no clinical meaning attaches to a single latent dim), so the module instead estimates *how many* dims carry predictive signal: (a) **L1 sparsity count** — nonzero coefficient count from the best elasticnet/L1 LR fit (free; falls out of the existing grid search); (b) **cumulative importance curve** — dims ranked by `|Spearman correlation with y|` magnitude, plotted as cumulative contribution vs rank, with the knee at ~80-90% cumulative mass marking the effective dim count (caveat: interaction-blind, undercounts dims that contribute purely through interactions); (c) **PCA-K-vs-ROC sweep** — classifier retrained on K ∈ {16, 32, 64, 128, 256, 512, 1024} truncated principal components, plotting ROC AUC vs K to locate the geometric plateau. Sign of the correlation is meaningless on unnamed latents — only `|correlation|` is used here. Output: `feature_importance_cumulative_{classifier}_EMBEDDED.png`, `feature_importance_pca_sweep_EMBEDDED.png`, and `feature_importance_summary_EMBEDDED.json` (sparsity count, knee K, plateau K) in `RESULTS_DIR`.
+  * **Concept-probe work** (correlating surviving embedded dims with named clinical features from the feature vector) is **out of scope** for this module — deferred to a sibling notebook if/when interest arises.
+  * **Per-concept attribution on the EMBEDDED side** is answered by the Semantic-Feature Ablation Study below, *not* by `feature_importance.py`. The two answer different questions: this module asks "what does the trained classifier weigh"; the ablation study asks "what does the embedder encode".
   * The module lives outside `classical_ml.py` to keep training lean, avoid pulling `shap` into every training run, and allow standalone re-runs against cached fits.
+* **Semantic-Feature Ablation Study** — Separate module that perturbs a named clinical concept in the deterministic narrative, re-embeds the cohort, and re-fits `classical_ml.py` on `EMBEDDED` only to measure the ROC / AUPRC / Brier / calibration delta vs baseline. This is the only path to *per-concept* attribution on the embedded side, since the embedding classifier sees 4096 entangled latents rather than named columns. Architecture: an `ABLATION_ID` environment variable keys into a **registry dict** mapping each named ablation to an override spec — either a field-level locator (e.g. `SmokingStatus` → `"Missing"`) or a section-level locator (e.g. `### PSYCH HISTORY` → all flags `"Absent"`). The deterministic narrative generator reads `ABLATION_ID` once and applies the override at a single chokepoint before rendering. Adding an ablation = adding one dict entry; no narrative-generator edits per ablation. **Replacement strategy: neutralize, do not delete.** Values are replaced with in-distribution placeholders that the embedder has already seen during training (`"Missing"`, `"Absent"`, `"0"`); section headers and field labels are preserved. This holds narrative length and positional encoding stable so the AUC delta isolates the concept rather than confounding with length or position. The remaining confound — co-correlation between clinically related features — is irreducible and requires multi-field ablations for joint concepts. `DETERMINISTIC_NARRATIVES_DIR` (now `NARRATIVES_DIR`), `EMBEDDINGS_DIR`, and `RESULTS_DIR` all become `ABLATION_ID`-suffixed so baseline artifacts are never overwritten. Run order per ablation: narrative regen → full cohort re-embed (the wall-clock bottleneck, on the c3_accel partition) → `classical_ml.py` on `EMBEDDED` only. KNN and LLM judging are out of scope. Output: `ablation_summary.csv` tabulating metric deltas vs baseline per classifier per ablation. Cost-bound to a slate of 3-5 representative concepts (one demographic, one psych comorbidity family, one treatment-history field, one safety flag, optional SDOH) chosen with the advisor. Lives outside `feature_importance.py` because ablation is pipeline orchestration (re-run upstream stages, diff downstream metrics), not classifier introspection.
 * **Causal Random Forest + Treatment Heterogeneity Notebook** — A separate notebook (NOT part of the main pipeline) that estimates conditional average treatment effects (CATE) via `CausalForestDML` for each candidate treatment (augmentation, polypharmacy, somatic/ECT, adequate trial ≥ 1). Unlike the classification pipeline, which predicts TRD risk, this asks *for whom does each treatment actually help?* Evaluation surface: Qini coefficient, uplift curves, doubly-robust CATE calibration, CATE distribution plots, and subgroup ATE tables stratified by the top SHAP-ranked moderators. CATE metrics are incompatible with the ROC/PR/Calibration harness of the main pipeline, which is why this lives in its own notebook.
 
 ---
@@ -322,8 +324,8 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `YEARS_AHEAD`: 1 (Minimum post-anchor follow-up in years. Patients without sufficient observation time to determine TRD outcome are discarded).
 * `SCRUB_PATIENT_JSON`: 0 (Flag to force recreation of patient JSONs).
 * `SCRUB_NARRATIVES`: 0 (Flag to force recreation of narratives).
-* `SCRUB_DETERMINISTIC_VECTORS`: 0 (Flag to force recreation of the deterministic DataFrame and `categorical_levels.json`).
-* `SCRUB_EMBEDDINGS`: 0 (Flag to force re-computation of embedding vectors).
+* `SCRUB_FEATURE_VECTORS`: 0 (Flag to force recreation of the feature vector DataFrame and `categorical_levels.json`).
+* `SCRUB_EMBEDDINGS`: 0 (Flag to force re-computation of embedded vectors).
 
 ### Data Paths
 
@@ -359,9 +361,9 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 ### Storage & Artifacts
 
 * `ARTIFACTS_DIR`: Root directory for computed artifacts.
-* `DETERMINISTIC_NARRATIVES_DIR`: Storage for generated Markdown narratives.
-* `DETERMINISTIC_DATAFRAME_PATH`: Path to the cohort-wide deterministic feature DataFrame (parquet).
-* `EMBEDDINGS_DIR`: Storage for embedding vectors and `embeddings.db`.
+* `NARRATIVES_DIR`: Storage for generated Markdown narratives.
+* `FEATURE_DATAFRAME_PATH`: Path to the cohort-wide feature vector DataFrame (parquet).
+* `EMBEDDINGS_DIR`: Storage for embedded vectors and `embeddings.db`.
 * `JUDGEMENTS_DIR`: Storage for LLM judgements.
 * `RESULTS_DIR`: Storage for analysis results and logs.
 
@@ -384,7 +386,7 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 sbatch slurm_jobs/pipeline/trd_prediction_orchestrator.sbatch
 ```
 
-The orchestrator sequentially submits: JSON loading, embedding pipeline (narratives + deterministic DataFrame + embeddings), vLLM server startup, neighborhood construction (Slurm array on embedding vectors), and analysis (neighbor-weighted evaluation + classical ML on both sources). All results are rsynced to `results/` upon completion.
+The orchestrator sequentially submits: JSON loading, embedding pipeline (narratives + feature vector DataFrame + embedded vectors), vLLM server startup, neighborhood construction (Slurm array on embedded vectors), and analysis (neighbor-weighted evaluation + classical ML on both sources). All results are rsynced to `results/` upon completion.
 
 ## Downloading Models
 

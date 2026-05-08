@@ -14,10 +14,10 @@ def create_train_test_split() -> tuple[set[str], set[str]]:
         tuple[set[str], set[str]]: train ids, test ids
     """
     # Read in just the index - no columns
-    patient_df = pd.read_parquet(Path(os.environ['DETERMINISTIC_DATAFRAME_PATH']), columns=[])
+    patient_df = pd.read_parquet(Path(os.environ['FEATURE_DATAFRAME_PATH']), columns=[])
     all_patient_ids = patient_df.index.tolist()
     predictor = TRDPredictor()
-    if (not test_ids_path.exists()) or (int(os.environ['SCRUB_DETERMINISTIC_VECTORS']) == 1):
+    if (not test_ids_path.exists()) or (int(os.environ['SCRUB_FEATURE_VECTORS']) == 1):
         # Need to create stratified train/test split
         train_ids, test_ids = train_test_split(all_patient_ids, test_size=0.2, stratify=[predictor.get_trd_status(id) for id in all_patient_ids], random_state=int(os.environ['SEED']))
         with open(test_ids_path, 'w') as f:
