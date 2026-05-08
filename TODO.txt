@@ -1,8 +1,91 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
-DECISIONS MADE THIS SESSION (2026-05-08):
-------------------------------------------
+DECISIONS MADE THIS SESSION (2026-05-08, mentor meeting):
+---------------------------------------------------------
+- ABLATION STRATEGY PIVOT: NEUTRALIZE -> COHORT PERMUTATION.
+    * Mentor pushback: writing "Missing" / "Absent" / "0" into a
+      populated field plants *false* missing information. The
+      embedder may have learned distinct semantics for genuine
+      missingness; injecting that token where there was a real
+      value confounds the ablation signal with a missingness
+      signal we did not intend to measure.
+    * NEW STRATEGY: for each anchor patient, replace the perturbed
+      field's value with the same field's value drawn from a
+      randomly chosen DONOR patient in the cohort. The embedder
+      sees a real-looking value; the field's correlation with the
+      anchor's outcome is severed; the field's marginal
+      distribution is preserved exactly (sampled from the empirical
+      marginal, not a synthetic placeholder).
+    * Standard permutation-importance trick (Breiman 2001) lifted
+      from the feature-vector level to the embedder-input level.
+      Conceptually: scramble that one column across patients, then
+      re-embed.
+    * Section-level ablation: draw ONE donor per anchor and copy
+      EVERY field in the section jointly. Preserves intra-section
+      coherence so the embedder reads a clinically plausible block,
+      not a Frankenstein mosaic. Single-donor-per-section is the
+      default. Multi-donor-per-section (each field permuted
+      independently) is strictly stronger but breaks intra-section
+      structure and may confound the ablation with coherence loss.
+      Deferred.
+    * Override-spec format updates (registry dict in the future
+      ablation module):
+        - field-level:   {"field": "<field_name>",
+                          "strategy": "permute"}
+        - section-level: {"section": "<section_header>",
+                          "strategy": "permute_section"}
+      No more {"value": "Missing"} static replacement.
+    * deterministic_narrative chokepoint now needs three new
+      inputs: (a) the anchor patient ID, (b) access to the cohort
+      donor pool (or at minimum the subset of patients holding
+      that field non-null), (c) a seeded RNG keyed on
+      (anchor_id, ABLATION_ID, SEED) for reproducibility per
+      anchor per ablation. Self-donor MUST be excluded so every
+      perturbation is genuine.
+    * Length and positional encoding stay stable: section headers
+      and field labels are preserved; only values move. Original
+      design's length/position confounds remain solved.
+
+- PAPER FORMAT TARGET: JMIR Mental Health (online journal). When
+  this work becomes a paper, format to JMIR's submission template
+  before drafting prose. Note ahead of writing; no action required
+  now.
+
+- feature_importance.py FEATURE PATH LANDED THIS SESSION:
+    * compute_univariate_spearman(X, risk_scores, feature_names)
+      [DONE]. Returns signed Spearman rho between every post-encode
+      feature column and the model's predict_proba scores. Caller
+      takes np.sign(...) for direction overlay or np.abs(...) for
+      magnitude ranking. Caller passes risk_scores
+      (pipeline.predict_proba(X)[:, 1]), NOT ground-truth y — the
+      function explains the *model*, not the data, so direction
+      should match LR's coef_ convention across all classifiers.
+    * plot_feature_importance now accepts direction_signs kwarg
+      [DONE]. Three-branch coloring ladder: LR signs from coef_
+      themselves; tree + signs provided -> red/blue overlay; tree +
+      no signs -> flat steelblue + "(direction unspecified)"
+      footnote. Title condition collapses across all branches.
+    * write_feature_importance_summary(summary) [DONE]. Per-
+      classifier top-K rows in a single
+      feature_importance_summary.json under
+      RESULTS_DIR/feature_importance/. Builds a copy.deepcopy
+      before sanitizing so the caller's NumPy types are never
+      silently mutated. importance cast to float, sign cast to int.
+    * Still-to-write (resume next session):
+        - count_nonzero_lr_coefficients(pipeline) -> tuple[int, int]
+          for EMBEDDED-side L1 sparsity. Instructions drafted; body
+          not implemented. Six-line body, isinstance(LR) guard,
+          1e-10 abs-tolerance on the nonzero count.
+        - cumulative |spearman rho| curve plotter (EMBEDDED).
+        - PCA-K-vs-ROC sweep at K in {16, 32, 64, 128, 256, 512,
+          1024} (EMBEDDED).
+        - main() loop wiring all primitives across classifiers x
+          VectorSource.
+        - Integration into run_trd_prediction_analysis.sbatch.
+
+DECISIONS MADE THIS SESSION (2026-05-08, AM):
+---------------------------------------------
 - ADVISOR MEETING NOTES (raw, distilled below):
     Feature Vectors, Embedded Vectors
     (Easier than shap)
@@ -111,7 +194,14 @@ DECISIONS MADE THIS SESSION (2026-05-08):
         - Integration into run_trd_prediction_analysis.sbatch.
 
 - SEMANTIC-FEATURE ABLATION STUDY DESIGN refined (architecture
-  locked, implementation still queued):
+  locked, implementation still queued)
+  *** REPLACEMENT STRATEGY SUPERSEDED 2026-05-08 PM — see top
+      block. Neutralize ("Missing"/"Absent"/"0") is REJECTED;
+      cohort permutation is the new default. Override-spec format
+      below also changes ({"value": ...} -> {"strategy":
+      "permute"}). The rest of this block (narrative anatomy,
+      granularity levels, confounds, registry-chokepoint
+      architecture, run order, slate sizing) still stands.
     * Narrative anatomy is rigid and identical across patients:
       9 sections, ~60 fields total. Confirmed by reading
       test_data/*.md examples. Sections:
@@ -594,31 +684,47 @@ NEXT UP (IMPLEMENTATION ORDER):
       so the caller can persist them to results.txt / summary.csv
       next to the point estimate.
 - [ ] Semantic-feature ablation study for the embedding-ML pipeline
-      (advisor ask). Question the existing pipeline cannot answer:
-      when a *named* deterministic feature is removed/altered in the
-      narrative, how does the embedding-source classical_ml score
-      shift? This is the only path to per-concept attribution on the
-      embedding side, since 4096 latents are unnamed. Distinct from
-      feature_importance.py, which answers "how many dims" not "which
-      named concept".
+      (advisor + mentor ask). Question the existing pipeline cannot
+      answer: when a *named* feature is perturbed in the narrative,
+      how does the embedding-source classical_ml score shift? This
+      is the only path to per-concept attribution on the embedding
+      side, since 4096 latents are unnamed. Distinct from
+      feature_importance.py, which answers "how many dims" not
+      "which named concept".
 
       Architecture (wrap the pipeline, do NOT rewrite it):
-        * New env var ABLATION_ID (default 'baseline'). When unset or
-          'baseline', behavior is unchanged.
-        * deterministic_narrative.py grows ONE conditional that reads
-          ABLATION_ID and skips/alters the named feature's section
-          when generating the markdown. No other narrative changes.
-        * DETERMINISTIC_NARRATIVES_DIR, EMBEDDINGS_DIR, and RESULTS_DIR
-          all become ABLATION_ID-suffixed (e.g. narratives_<id>/,
-          embeddings_<id>.db, results_<id>/). Baseline artifacts are
-          never overwritten — each ablation is a sibling tree.
+        * New env var ABLATION_ID (default 'baseline'). When unset
+          or 'baseline', behavior is unchanged.
+        * deterministic_narrative.py grows ONE conditional that
+          reads ABLATION_ID, looks the spec up in a registry dict,
+          and applies the override at a single chokepoint before
+          rendering. Override spec uses one of:
+            - {"field": "<field_name>",
+               "strategy": "permute"}
+            - {"section": "<section_header>",
+               "strategy": "permute_section"}
+        * Permutation strategy (mentor 2026-05-08): for each anchor
+          patient, draw a random DONOR patient from the cohort
+          (excluding self) and copy the donor's value(s) for the
+          perturbed field/section into the anchor's narrative. The
+          embedder sees an in-distribution real value; the field's
+          correlation with the anchor's outcome is severed; the
+          field's marginal distribution is preserved exactly. RNG
+          seeded on (anchor_id, ABLATION_ID, SEED) for
+          reproducibility. Section-level: ONE donor per anchor,
+          all section fields copied jointly (intra-section
+          coherence preserved).
+        * NARRATIVES_DIR, EMBEDDINGS_DIR, and RESULTS_DIR all
+          become ABLATION_ID-suffixed (e.g. narratives_<id>/,
+          embeddings_<id>.db, results_<id>/). Baseline artifacts
+          are never overwritten — each ablation is a sibling tree.
         * forge_embeddings.py and classical_ml.py require NO code
           changes — they already read these env vars. Only the
           narrative generator and orchestrator paths change.
-        * Run order per ablation: narrative regen -> full re-embed of
-          cohort -> classical_ml.py (EMBEDDING source only). KNN and
-          LLM judging are OUT OF SCOPE — analysis surface is the
-          embedding-ML score delta vs baseline.
+        * Run order per ablation: narrative regen -> full re-embed
+          of cohort -> classical_ml.py (EMBEDDED source only). KNN
+          and LLM judging are OUT OF SCOPE — analysis surface is
+          the embedding-ML score delta vs baseline.
         * Reporting: tabulate ROC/AUPRC/Brier/calibration deltas
           (ABLATION_ID vs baseline) per classifier in a single
           ablation_summary.csv. Significant delta => the named

@@ -1,6 +1,7 @@
 import os
 import json
 from pathlib import Path
+import copy
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from xgboost import XGBClassifier
+from scipy.stats import spearmanr
 
 from scripts.digital_twins.predictions.classical_ml import make_classifier
 from scripts.shared.utils import VectorSource
@@ -94,7 +96,8 @@ def plot_feature_importance(
     importances: np.ndarray,
     feature_names: list[str],
     model_name: str,
-    top_k: int=20
+    top_k: int=20,
+    direction_signs: np.array | None = None
 ):
     """Helper method to plot the different feature importances of the given model
 
@@ -102,6 +105,7 @@ def plot_feature_importance(
         importances (np.ndarray): Importances of each feature from the learning model
         feature_names (list[str]): Names of each feature
         model_name (str): Name of classifier - e.g. logistic_regression, etc.
+        direction_signs (np.array | None, optional): Whether an increase in the numeric feature increases or decreases risk score. Defaults to None.
         top_k (int, optional): How many bars (features) to display. Defaults to 20.
     """
     magnitudes = np.abs(importances)
@@ -109,11 +113,16 @@ def plot_feature_importance(
     sorted_mag_indices = np.argsort(magnitudes)[::-1][:top_k]
     top_importances = importances[sorted_mag_indices]
     top_names = [feature_names[i] for i in sorted_mag_indices]
+    top_directions = None
+    if direction_signs is not None:
+        top_directions = direction_signs[sorted_mag_indices]
     
     if model_name == "logistic_regression":
         colors = ['steelblue' if val >= 0 else 'firebrick' for val in top_importances]
-    else:
+    elif top_directions is None:
         colors = 'steelblue' # One raw string works with matplotlib as well
+    else:
+        colors = ['steelblue' if val >= 0 else 'firebrick' for val in top_directions.tolist()]
     
     fig, ax = plt.subplots(figsize=(10, max(6, top_k * 0.3)))
     # Create bars of length corresponding to importance magnitudes
@@ -123,8 +132,8 @@ def plot_feature_importance(
     ax.invert_yaxis()
     ax.set_xlabel("Feature importance (magnitude)")
     title = f"{model_name}: {" (blue: raises TRD risk, red: lowers TRD risk)" \
-                                if model_name == "logistic_regression"\
-                                    else "(direction unavailable for tree models)"}"
+                                if model_name == "logistic_regression" or (direction_signs is not None)\
+                                    else "(direction unspecified)"}"
     ax.set_title(title)
     fig.tight_layout()
     save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" /\
@@ -132,3 +141,44 @@ def plot_feature_importance(
     os.makedirs(save_path.parent, exist_ok=True)
     fig.savefig(str(save_path), dpi=120)
     plt.close(fig)
+    
+def compute_univariate_spearman(
+    X: pd.DataFrame,
+    risk_scores: np.ndarray,
+    feature_names: list[str],
+) -> np.ndarray:
+    """Find spearman correlation between each column of X and y
+
+    Args:
+        X (pd.DataFrame): post-ColumnTransformer feature matrix (imputed, scaled, one-hot-encoded, bool-cast) (completely numeric) 
+        risk_scores (np.ndarray): TRD risk scores predicted by some model, shape (n_samples,)
+        feature_names (list[str]): Column names of X.columns
+
+    Returns:
+        np.ndarray: (n_features,) - each spearman correlation over all attribute indices in X
+    """
+    if X.shape[1] != len(feature_names):
+        raise ValueError(f"Error, expected {len(feature_names)} columns in X but found {X.shape[1]}")
+    # For each column, compute spearman correlation between X[col] and y
+    result = spearmanr(X, risk_scores).statistic # Works with X being 2D and y being 1D
+    # Output is of shape (n_features + 1, n_features + 1) - we care about the last row, first n_features
+    return result[result.shape[0]-1, 0:len(feature_names)]
+
+def write_feature_importance_summary(
+    summary: dict[str, list[dict]]
+):
+    """Record name, feature importance, and feature importance direction of each feature over all models
+
+    Args:
+        summary (dict[str, list[dict]]): Results
+    """
+    save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" / "feature_importance_summary.json"
+    os.makedirs(save_path.parent, exist_ok=True)
+    cleaned_summary = copy.deepcopy(summary)
+    for model in summary.keys():
+        # JSON chokes on np.float64 and np.int64
+        for row in cleaned_summary[model]:
+            row["importance"] = float(row["importance"])
+            row["sign"] = int(row["sign"])
+    with open(save_path, 'w') as f:
+        json.dump(cleaned_summary, f, indent=4)
