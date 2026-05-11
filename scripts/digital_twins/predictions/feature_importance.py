@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import roc_auc_score
 from xgboost import XGBClassifier
 from scipy.stats import spearmanr
 
@@ -163,6 +166,112 @@ def compute_univariate_spearman(
     result = spearmanr(X, risk_scores).statistic # Works with X being 2D and y being 1D
     # Output is of shape (n_features + 1, n_features + 1) - we care about the last row, first n_features
     return result[result.shape[0]-1, 0:len(feature_names)]
+
+def count_nonzero_lr_coefficients(pipeline: Pipeline) -> tuple[int,int]:
+    """Given a trained logistic regression learning model, find the number of non-zero (or close to it) coefficients
+
+    Args:
+        pipeline (Pipeline): "model" step is a LogisticRegression
+
+    Returns:
+        tuple[int,int]: (nonzero_count, total_count)
+    """
+    model = pipeline.named_steps["model"]
+    if not isinstance(model, LogisticRegression):
+        raise TypeError(f"Expected model of type {LogisticRegression.__name__} but received {type(model).__name__}...")
+    feature_coefficients = model.coef_[0] # index zero since shape is (1, n_features)
+    total = len(feature_coefficients)
+    nonzero = len(feature_coefficients[np.abs(feature_coefficients) > 1e-10])
+    return (nonzero, total)
+       
+def plot_cumulative_correlation_curve(correlations: np.ndarray, model_name: str):
+    """Plot of cumulative fraction of spearman correlations against risk scores for each dimension
+
+    Args:
+        correlations (np.ndarray): Univariate spearman correlations of each feature of the input vectors
+        model_name (str): Model this pertains to
+    """
+    # Sort by decreasing magnitude
+    sorted_magnitudes = np.sort(np.abs(correlations))[::-1]
+    cumulative = np.cumsum(sorted_magnitudes) # Last rank holds total mass
+    # Normalize to fraction of mass
+    fraction = cumulative / cumulative[-1]
+    # Create plot of increasing 'rank-1' on the x-axis, farther to the left is where we have added the highest remaining magnitude correlation
+    ranks = np.arange(1, len(fraction)+1)
+    knee_80 = np.searchsorted(fraction, 0.8) + 1
+    knee_90 = np.searchsorted(fraction, 0.9) + 1
+    fig, ax = plt.subplots(figsize=(10,6))
+    ax.plot(ranks, fraction, color='steelblue', linewidth=2)
+    ax.axhline(0.8, linestyle='--', color='gray', alpha=0.5)
+    ax.axvline(knee_80, linestyle='--', color='gray', alpha=0.5)
+    ax.text(knee_80, 0.8, f"K={knee_80} (80%)")
+    ax.axhline(0.9, linestyle='--', color='gray', alpha=0.5)
+    ax.axvline(knee_90, linestyle='--', color='gray', alpha=0.5)
+    ax.text(knee_90, 0.9, f"K={knee_90} (90%)")
+    ax.set_xlabel("Embedding dimension rank (by |Spearman ρ|, descending)")
+    ax.set_ylabel("Cumulative |Spearman ρ| fraction")
+    ax.set_title(f"Cumulative correlation curve — {model_name} (EMBEDDED)")
+    fig.tight_layout()
+    save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" / f"feature_importance_cumulative_{model_name}_EMBEDDED.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    fig.savefig(str(save_path), dpi=120)
+    plt.close(fig)
+    
+PCA_K_VALUES = (16, 32, 64, 128, 256, 512, 1024)
+ 
+def plot_pca_k_vs_roc(
+    model_name: str,
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: np.ndarray,
+    y_test: np.ndarray,
+):
+    """For each K in {16, 32, 64, 128, 256, 512, 1024}, refit one of the four classifiers on the embedded
+  vectors projected to K principal components, score it on the held-out test set, and plot ROC AUC
+  versus K
+
+    Args:
+        model_name (str): Specified ML model
+        X_train (pd.DataFrame): Embedded vectors
+        X_test (pd.DataFrame): Held-out embedded vectors
+        y_train (np.ndarray): Train labels
+        y_test (np.ndarray): Held-out labels
+    """
+    base_models = {
+        "logistic_regression": LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED'])),
+        "random_forest": RandomForestClassifier(random_state=int(os.environ['SEED'])),
+        "gradient_boosting": GradientBoostingClassifier(random_state=int(os.environ['SEED'])),
+        "xgboost": XGBClassifier(random_state=int(os.environ['SEED']), eval_metric='logloss')
+    }
+    best_params = load_best_params(model_name, VectorSource.EMBEDDED)
+    auc_scores = []
+    for k in PCA_K_VALUES:
+        # Different number of PCA dimensions each time
+        pipeline = Pipeline(steps=\
+            [
+                ("scale", StandardScaler()),
+                ("pca", PCA(n_components=k, random_state=int(os.environ['SEED']))),
+                ("model", base_models[model_name])
+            ]
+        )
+        pipeline.set_params(**best_params)
+        pipeline.fit(X_train, y_train)
+        y_pred = pipeline.predict_proba(X_test)[:,1]
+        score = float(roc_auc_score(y_true=y_test, y_score=y_pred))
+        auc_scores.append(score)
+    fig, ax = plt.subplots(figsize=(10,6))
+    ax.plot(PCA_K_VALUES, auc_scores, marker='o', color='steelblue', linewidth=2)
+    ax.set_xscale('log', base=2) # Logarithmic x-scale since k-values are powers of 2
+    for k, auc in zip(PCA_K_VALUES, auc_scores):
+        ax.text(k, auc, f"{auc:.3f}")
+    ax.set_xlabel("Truncated PCA components (K)")
+    ax.set_ylabel("Held-out ROC AUC")
+    ax.set_title(f"PCA-K vs ROC AUC - {model_name} (EMBEDDED)")
+    fig.tight_layout()
+    save_path = Path(os.environ['RESULTS_DIR']) / 'feature_importance' / f"feature_importance_pca_sweep_{model_name}_EMBEDDED.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    fig.savefig(str(save_path), dpi=120)
+    plt.close(fig)
 
 def write_feature_importance_summary(
     summary: dict[str, list[dict]]

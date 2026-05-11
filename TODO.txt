@@ -1,6 +1,50 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+DECISIONS MADE THIS SESSION (2026-05-11):
+------------------------------------------
+- feature_importance.py EMBEDDED-PATH TRIAD COMPLETE:
+    * count_nonzero_lr_coefficients(pipeline) -> tuple[int, int]
+      [DONE]. isinstance(LogisticRegression) guard raises
+      TypeError on any other model class; 1e-10 abs-tolerance on
+      the nonzero count; returns (nonzero, total). LR-only by
+      contract — fails loud if a tree pipeline ever leaks in.
+    * plot_cumulative_correlation_curve(correlations, model_name)
+      [DONE]. Sorts |spearman rho| descending, plots cumulative
+      fraction vs one-indexed rank with horizontal + vertical
+      dashed reference lines at the 80% and 90% knees. K computed
+      via np.searchsorted(fraction, threshold) + 1 for
+      index->rank conversion. Saves
+      feature_importance_cumulative_{model_name}_EMBEDDED.png.
+    * plot_pca_k_vs_roc(model_name, X_train, X_test, y_train,
+      y_test) [DONE]. Module-level constant
+      PCA_K_VALUES = (16, 32, 64, 128, 256, 512, 1024). For each
+      K, builds a fresh Pipeline [StandardScaler -> PCA(K,
+      random_state=SEED) -> classifier], applies best_params from
+      load_best_params(..., VectorSource.EMBEDDED) via
+      set_params(**best_params), fits on train, scores
+      roc_auc_score(y_true=y_test, y_score=proba) on the held-out
+      fold, accumulates. Plots log-2-x AUC vs K with per-point
+      AUC text labels. Saves
+      feature_importance_pca_sweep_{model_name}_EMBEDDED.png.
+    * New imports added: StandardScaler, PCA, roc_auc_score.
+    * Still-to-write (resume next session):
+        - main() loop wiring all primitives across classifiers x
+          VectorSource.
+            FEATURE branch: refit_best_model ->
+            extract_feature_importances ->
+            compute_univariate_spearman (vs predict_proba risk
+            scores) -> plot_feature_importance with direction
+            overlay -> write_feature_importance_summary.
+            EMBEDDED branch: count_nonzero_lr_coefficients (LR
+            only) -> compute_univariate_spearman ->
+            plot_cumulative_correlation_curve ->
+            plot_pca_k_vs_roc. Reuses load_data_set and
+            create_train_test_split from existing pipeline.
+        - Integration into run_trd_prediction_analysis.sbatch.
+          Must run AFTER classical_ml.py — depends on
+          grid_search_ml_results_{source}.json artifacts.
+
 DECISIONS MADE THIS SESSION (2026-05-08, mentor meeting):
 ---------------------------------------------------------
 - ABLATION STRATEGY PIVOT: NEUTRALIZE -> COHORT PERMUTATION.
@@ -74,12 +118,11 @@ DECISIONS MADE THIS SESSION (2026-05-08, mentor meeting):
       silently mutated. importance cast to float, sign cast to int.
     * Still-to-write (resume next session):
         - count_nonzero_lr_coefficients(pipeline) -> tuple[int, int]
-          for EMBEDDED-side L1 sparsity. Instructions drafted; body
-          not implemented. Six-line body, isinstance(LR) guard,
-          1e-10 abs-tolerance on the nonzero count.
+          for EMBEDDED-side L1 sparsity. [DONE 2026-05-11]
         - cumulative |spearman rho| curve plotter (EMBEDDED).
+          [DONE 2026-05-11]
         - PCA-K-vs-ROC sweep at K in {16, 32, 64, 128, 256, 512,
-          1024} (EMBEDDED).
+          1024} (EMBEDDED). [DONE 2026-05-11]
         - main() loop wiring all primitives across classifiers x
           VectorSource.
         - Integration into run_trd_prediction_analysis.sbatch.
