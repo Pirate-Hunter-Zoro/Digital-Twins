@@ -35,6 +35,7 @@ python -m scripts.digital_twins.embeddings.embedding_audit
 python -m scripts.digital_twins.neighbors.llm_similarity_audit
 python -m scripts.digital_twins.predictions.analyze_trd_prediction
 python -m scripts.digital_twins.predictions.classical_ml
+python -m scripts.digital_twins.predictions.feature_importance
 
 # Copy all files from the RESULTS_DIR to the local results/ directory for easier access
 LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"

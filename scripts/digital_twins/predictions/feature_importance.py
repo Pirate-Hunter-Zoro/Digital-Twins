@@ -16,9 +16,16 @@ from scipy.stats import spearmanr
 
 from scripts.digital_twins.predictions.classical_ml import make_classifier
 from scripts.shared.utils import VectorSource
+from scripts.digital_twins.predictions.classical_ml import load_data_set
+from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
 
 from dotenv import load_dotenv
 load_dotenv()
+
+
+PCA_K_VALUES = (16, 32, 64, 128, 256, 512, 1024)
+MODEL_NAMES = ("logistic_regression", "random_forest", "gradient_boosting", "xgboost")
+TOP_K = 20
 
 def load_best_params(model_name: str, source: VectorSource) -> dict:
     """From the recorded results, find the best parameters associated with the given model operating on the input vector source
@@ -216,9 +223,7 @@ def plot_cumulative_correlation_curve(correlations: np.ndarray, model_name: str)
     os.makedirs(save_path.parent, exist_ok=True)
     fig.savefig(str(save_path), dpi=120)
     plt.close(fig)
-    
-PCA_K_VALUES = (16, 32, 64, 128, 256, 512, 1024)
- 
+   
 def plot_pca_k_vs_roc(
     model_name: str,
     X_train: pd.DataFrame,
@@ -291,3 +296,51 @@ def write_feature_importance_summary(
             row["sign"] = int(row["sign"])
     with open(save_path, 'w') as f:
         json.dump(cleaned_summary, f, indent=4)
+        
+def main():
+    (train_ids, test_ids) = create_train_test_split()
+    summary = {}
+    for source in VectorSource:
+        print(f"Feature importance pass: {source.name} running...", flush=True)
+        (X_train, y_train) = load_data_set(train_ids, source)
+        (X_test, y_test) = load_data_set(test_ids, source)
+        for model_name in MODEL_NAMES:
+            print(f"Running {model_name} feature importance under {source.name} vectors...")
+            model_pipeline = refit_best_model(model_name, source, X_train, y_train)
+            if source == VectorSource.FEATURE:
+                (importances, feature_names) = extract_feature_importances(model_pipeline, model_name)
+                risk_scores = model_pipeline.predict_proba(X_test)[:, 1] # Extract second column
+                # Preprocess X_test so that categoricals are one-hot encoded and categoricals, bools are int8, etc. (numeric vector)
+                X_test_preprocessed = model_pipeline.named_steps['preprocess'].transform(X_test)
+                if hasattr(X_test_preprocessed, 'toarray'):
+                    X_test_preprocessed = X_test_preprocessed.toarray()
+                correlations = compute_univariate_spearman(X_test_preprocessed, risk_scores, feature_names)
+                direction_signs = np.sign(correlations)
+                plot_feature_importance(importances, feature_names, model_name, direction_signs=direction_signs)
+                # Grab top k most important features
+                sorted_indices = np.argsort(np.abs(importances))[::-1][:TOP_K]
+                classifier_top_rows = [{
+                    "name": feature_names[i],
+                    "importance": importances[i],
+                    "sign": direction_signs[i]
+                } for i in sorted_indices.tolist()]
+                summary[model_name] = classifier_top_rows
+            else:
+                if model_name == "logistic_regression":
+                    (nonzero_count, total_count) = count_nonzero_lr_coefficients(model_pipeline)
+                    results_txt_path = Path(os.environ['RESULTS_DIR']) / "results.txt"
+                    os.makedirs(results_txt_path.parent, exist_ok=True)
+                    with open(results_txt_path, 'a') as f:
+                        f.write("LOGISTIC_REGRESSION_EMBEDDED Sparsity:\n")
+                        f.write(f"  'nonzero_coefficients': {nonzero_count}\n")
+                        f.write(f"  'total_coefficients': {total_count}\n\n")
+                risk_scores = model_pipeline.predict_proba(X_test)[:, 1]
+                feature_names = [str(col) for col in X_test.columns]
+                correlations = compute_univariate_spearman(X_test, risk_scores, feature_names)
+                plot_cumulative_correlation_curve(correlations, model_name)
+                plot_pca_k_vs_roc(model_name, X_train, X_test, y_train, y_test)
+    
+    write_feature_importance_summary(summary)
+    
+if __name__=="__main__":
+    main()

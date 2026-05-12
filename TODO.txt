@@ -28,22 +28,37 @@ DECISIONS MADE THIS SESSION (2026-05-11):
       AUC text labels. Saves
       feature_importance_pca_sweep_{model_name}_EMBEDDED.png.
     * New imports added: StandardScaler, PCA, roc_auc_score.
-    * Still-to-write (resume next session):
-        - main() loop wiring all primitives across classifiers x
-          VectorSource.
-            FEATURE branch: refit_best_model ->
-            extract_feature_importances ->
-            compute_univariate_spearman (vs predict_proba risk
-            scores) -> plot_feature_importance with direction
-            overlay -> write_feature_importance_summary.
-            EMBEDDED branch: count_nonzero_lr_coefficients (LR
-            only) -> compute_univariate_spearman ->
-            plot_cumulative_correlation_curve ->
-            plot_pca_k_vs_roc. Reuses load_data_set and
-            create_train_test_split from existing pipeline.
-        - Integration into run_trd_prediction_analysis.sbatch.
-          Must run AFTER classical_ml.py — depends on
-          grid_search_ml_results_{source}.json artifacts.
+    * main() ORCHESTRATOR LANDED [DONE 2026-05-11]. Single outer
+      loop over VectorSource, single inner loop over MODEL_NAMES
+      = (logistic_regression, random_forest, gradient_boosting,
+      xgboost). Shared refit_best_model call lifted above the
+      source branch (both branches need a fitted pipeline). Module-
+      level constants: MODEL_NAMES (4-tuple), TOP_K = 20.
+        FEATURE branch (per classifier): extract_feature_importances ->
+        predict_proba risk scores -> preprocess.transform(X_test)
+        with hasattr(.,'toarray') guard for sparse output ->
+        compute_univariate_spearman -> np.sign for direction overlay
+        -> plot_feature_importance -> top-K rows accumulated into
+        summary dict. summary lives at main() scope, written once
+        AFTER the outer source loop via
+        write_feature_importance_summary.
+        EMBEDDED branch (per classifier): LR-only guard runs
+        count_nonzero_lr_coefficients and appends a
+        LOGISTIC_REGRESSION_EMBEDDED Sparsity block to results.txt
+        in mode 'a' (mirrors classical_ml's append discipline).
+        All four classifiers then run predict_proba risk scores ->
+        compute_univariate_spearman on raw X_test (Spearman is
+        rank-based, scaler skip is safe) ->
+        plot_cumulative_correlation_curve -> plot_pca_k_vs_roc.
+    * SBATCH INTEGRATION LANDED [DONE 2026-05-11]. Added
+      `python -m scripts.digital_twins.predictions.feature_importance`
+      to BOTH slurm_jobs/pipeline/run_trd_prediction_analysis.sbatch
+      AND slurm_jobs/quick_runs/analysis_only.sbatch, immediately
+      after the classical_ml invocation. results.txt write order
+      preserved: analyze_trd_prediction (mode 'w') ->
+      classical_ml (mode 'a') -> feature_importance (mode 'a') ->
+      rsync. Both drivers updated together so backfill re-runs of
+      completed embedders produce feature-importance artifacts.
 
 DECISIONS MADE THIS SESSION (2026-05-08, mentor meeting):
 ---------------------------------------------------------
@@ -640,11 +655,13 @@ NEXT UP (IMPLEMENTATION ORDER):
       Naive Bayes dropped entirely (see DECISIONS block above). Lineup after
       that refactor: LR, SVM, RF, GB, XGBoost. SVM subsequently dropped
       2026-04-24; current lineup is LR, RF, GB, XGBoost.
-- [ ] Add feature importance in NEW FILE
+- [x] Add feature importance in NEW FILE
       scripts/digital_twins/predictions/feature_importance.py (sibling
       to classical_ml.py; kept separate so the standalone re-run path
       against cached fits is preserved and shap is not dragged into
       every training run). Module loops over BOTH VectorSource values.
+      [DONE 2026-05-11] — all primitives, main() orchestrator, and
+      sbatch integration landed.
 
       DETERMINISTIC source — per-feature interpretability:
         * Tree models (RF, GB, XGBoost): native .feature_importances_
@@ -705,11 +722,18 @@ NEXT UP (IMPLEMENTATION ORDER):
       pre-filter disclaimer and vectors/generator.py:73 prints the
       post-slicing survivor count. Both landed during earlier refactor work.
 - [ ] Re-run end-to-end shakedown with pruned grids
-- [ ] Re-run analysis_only.sbatch for ALL THREE embedders (bge-en-icl,
-      Qwen-Qwen3-Embedding-4B, Qwen-Qwen3-Embedding-8B) so the
-      DETERMINISTIC outputs use the categorical-cast fix. Update
-      .env's EMBEDDER_MODEL_NAME between sequential runs; do not
-      parallelize (shared log paths).
+- [ ] Re-run analysis_only.sbatch for ALL FOUR embedders (bge-en-icl,
+      bge-small-en-v1.5, Qwen-Qwen3-Embedding-4B,
+      Qwen-Qwen3-Embedding-8B) so the FEATURE outputs use the
+      categorical-cast fix AND the new feature_importance.py
+      artifacts (per-classifier bar charts + summary JSON on the
+      FEATURE side; LR sparsity block + cumulative correlation
+      curves + PCA-K-vs-ROC sweeps on the EMBEDDED side) land for
+      every embedder. Update .env's EMBEDDER_MODEL_NAME between
+      sequential runs; do not parallelize (shared log paths).
+      Smoke test: Qwen-Qwen3-Embedding-8B first (2026-05-11) to
+      validate the feature_importance integration before fanning
+      out to the other three.
 - [ ] Replicate the KNN diagnostic plot suite for classical_ml on
       BOTH VectorSource values (DETERMINISTIC and EMBEDDING). The KNN
       pipeline currently emits ROC, PR, calibration, decision curve,
