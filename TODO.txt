@@ -44,6 +44,53 @@ DECISIONS MADE THIS SESSION (2026-05-12):
       joblib cache, plot_save_path for the matplotlib PNG. Avoids the
       shadowed-`save_path` trap the K-loop introduced.
 
+- ROC AUC 95% CI BOUNDS NOW SURFACED NUMERICALLY end-to-end.
+  Motivation: the bootstrap band on every ROC plot already encoded
+  the 95% CI geometrically; the numeric bounds were never written
+  to disk, so summary.csv / results.txt only carried the point
+  estimate. Reviewer-hostile.
+    * scripts/shared/plots.py::plot_receiving_operator_characteristic
+      now accumulates per-bootstrap-sample AUC alongside the existing
+      per-FP-grid TPR interpolations, computes 2.5/97.5 percentiles
+      of the AUC distribution, embeds them in the curve legend
+      (`ROC curve (score X.XX, 95% CI [low, high])`), and returns
+      a (score, ci_low, ci_high) tuple cast to float.
+    * Both callers (classical_ml.py, trd_prediction_computation.py)
+      now bind the tuple as `_, roc_score_ci_low, roc_score_ci_high`
+      — point estimate intentionally discarded at the call site
+      because compute_metrics already owns it (avoids two
+      definitions of the same number drifting silently).
+    * results.txt blocks in BOTH the KNN and classical-ML pipelines
+      gained two new indented lines (`roc_score_ci_low`,
+      `roc_score_ci_high`) slotted between `roc_score` and `auprc`.
+    * KNN results dict literal (feeds summary.csv) also gained the
+      two keys in the same slot, so column order in the CSV mirrors
+      the text-block order.
+    * Backwards compatibility: classical_ml.py has no in-memory
+      summary dict / summary.csv emission, so the dict-mutation step
+      had no analog on that side.
+    * Job 1904550 (the in-flight analysis_only run) cannot pick up
+      these edits — the four-embedder backfill already queued in
+      NEXT UP captures the new metric keys naturally.
+
+- KNN DIAGNOSTIC PLOT SUITE NOW MIRRORED ON CLASSICAL ML.
+  Motivation: KNN pipeline emits ROC, PR, calibration, DCA, ESS,
+  and optimal-confusion-matrix plots; classical_ml was only emitting
+  the first three. Reviewer-hostile parity gap.
+    * classical_ml.py's import block from scripts.shared.plots
+      gained two names: plot_decision_curve_analysis,
+      plot_optimal_confusion_matrix.
+    * Per-classifier loop in main() picked up two new bare calls
+      after plot_calibration, both with the same (y_true=test_y,
+      y_prob=predictions, mode=f"{model_name}_{source.name}")
+      kwargs that the surrounding trio uses.
+    * plot_effective_sample_size_distribution intentionally NOT
+      added — ESS is a neighbor-weight diagnostic with no
+      classifier analogue (no weights to compute effective sample
+      size over).
+    * Zero changes to plots.py and zero changes to results.txt
+      — pure additive plot emissions.
+
 DECISIONS MADE THIS SESSION (2026-05-11):
 ------------------------------------------
 - feature_importance.py EMBEDDED-PATH TRIAD COMPLETE:
@@ -777,22 +824,15 @@ NEXT UP (IMPLEMENTATION ORDER):
       Smoke test: Qwen-Qwen3-Embedding-8B first (2026-05-11) to
       validate the feature_importance integration before fanning
       out to the other three.
-- [ ] Replicate the KNN diagnostic plot suite for classical_ml on
-      BOTH VectorSource values (DETERMINISTIC and EMBEDDING). The KNN
-      pipeline currently emits ROC, PR, calibration, decision curve,
-      confusion matrix, and ESS distribution plots via
-      scripts/shared/plots.py; classical_ml only emits ROC, PR, and
-      calibration. Bring classical_ml to parity (ESS distribution is
-      KNN-specific and stays out — no neighbor weights for a fitted
-      classifier). Output filenames: <plot>_<classifier>_<source>.png
-      mirroring the existing classical_ml convention.
-- [ ] Emit numeric ROC AUC 95% CI bounds (upper/lower from the
+- [x] Replicate the KNN diagnostic plot suite for classical_ml on
+      BOTH VectorSource values (DETERMINISTIC and EMBEDDING). Done
+      2026-05-12 — DCA + optimal confusion matrix added; ESS
+      distribution intentionally excluded (no classifier analogue).
+- [x] Emit numeric ROC AUC 95% CI bounds (upper/lower from the
       existing bootstrap band) on every ROC plot — both classical_ml
-      and KNN. Update plot_receiving_operator_characteristic in
-      scripts/shared/plots.py to (a) print "ROC curve (score X.XX,
-      95% CI [low, high])" in the legend and (b) return the bounds
-      so the caller can persist them to results.txt / summary.csv
-      next to the point estimate.
+      and KNN. Done 2026-05-12 — plot returns (score, ci_low,
+      ci_high); callers persist bounds into results.txt blocks and
+      KNN summary.csv between roc_score and auprc.
 - [ ] Semantic-feature ablation study for the embedding-ML pipeline
       (advisor + mentor ask). Question the existing pipeline cannot
       answer: when a *named* feature is perturbed in the narrative,

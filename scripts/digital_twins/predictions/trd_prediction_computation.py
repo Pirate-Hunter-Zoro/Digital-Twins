@@ -180,7 +180,7 @@ def run_trd_prediction_computation():
                     'neighbor_scheme': scheme.name,
                 })
             metrics = compute_metrics(y_true=np.array(labels), y_prob=np.array(risks))
-            plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
+            _, roc_score_ci_low, roc_score_ci_high = plot_receiving_operator_characteristic(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
             plot_precision_recall(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
             plot_calibration(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
             plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
@@ -189,12 +189,16 @@ def run_trd_prediction_computation():
             # Add to text report
             text_report += f"{scheme.name}_{strat.name} Metrics:\n\
     'roc_score': {metrics['roc_score']}\n\
+    'roc_score_ci_low': {roc_score_ci_low}\n\
+    'roc_score_ci_high': {roc_score_ci_high}\n\
     'auprc': {metrics['auprc']}\n\
     'brier_score': {metrics['brier_score']}\n\
     'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\
     'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
             results[f"{scheme.name}_{strat.name}"] = {
                 'roc_score': metrics['roc_score'],
+                'roc_score_ci_low': roc_score_ci_low,
+                'roc_score_ci_high': roc_score_ci_high,
                 'auprc': metrics['auprc'],
                 'brier_score': metrics['brier_score'],
                 'weighted_calibration_error': metrics['weighted_calibration_error'],

@@ -24,8 +24,9 @@ from scripts.digital_twins.predictions.create_train_test_split import create_tra
 from scripts.shared.plots import (
     plot_receiving_operator_characteristic,
     plot_precision_recall,
-    plot_calibration
-
+    plot_calibration,
+    plot_decision_curve_analysis,
+    plot_optimal_confusion_matrix
 )
 from scripts.shared.utils import VectorSource
 from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
@@ -61,6 +62,17 @@ f"SELECT embedding FROM embeddings WHERE patient_id IN ({placeholders}) ORDER BY
     print(f"Shape of X from source {source.name}: {X.shape}; Shape of y: {y.shape}", flush=True)
     return (X, y)
 
+def _cast_to_int8(df: pd.DataFrame) -> pd.DataFrame:
+    """Helper function to turn all values in a pandas array into np.int8 types
+
+    Args:
+        df (pd.DataFrame): Original dataframe
+
+    Returns:
+        pd.DataFrame: Changed dataframe with np.int8 types
+    """
+    return df.astype(np.int8)
+
 def make_classifier(model):
     return Pipeline(steps=[
                     ("preprocess", 
@@ -80,7 +92,7 @@ def make_classifier(model):
                                     make_column_selector(dtype_include="category")
                                 ),
                                 ("bool", 
-                                    FunctionTransformer(func=lambda df: df.astype(np.int8)),
+                                    FunctionTransformer(func=_cast_to_int8),
                                     make_column_selector(dtype_include="bool")
                                 )
                             ],
@@ -205,12 +217,16 @@ def main():
         text_report = ""
         for model_name, predictions in model_predictions.items():
             metrics = compute_metrics(y_true=test_y, y_prob=predictions)
-            plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
+            _, roc_score_ci_low, roc_score_ci_high = plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
             plot_precision_recall(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
             plot_calibration(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
+            plot_decision_curve_analysis(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
+            plot_optimal_confusion_matrix(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
         
             text_report += f"{model_name.upper()}_{source.name} Metrics:\n\
     'roc_score': {metrics['roc_score']}\n\
+    'roc_score_ci_low': {roc_score_ci_low}\n\
+    'roc_score_ci_high': {roc_score_ci_high}\n\
     'auprc': {metrics['auprc']}\n\
     'brier_score': {metrics['brier_score']}\n\
     'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\

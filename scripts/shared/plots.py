@@ -10,28 +10,24 @@ load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 
-def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, mode: str):
-    """
-    Create and save the ROC area under curve graph for the given values and predictions
-    
-    :param y_true: Actual labels
-    :type y_true: np.array
-    :param y_prob: Predicted probability labels
-    :type y_prob: np.array
-    :param mode: llm weighting, cosine, weighting, uniform weighting
-    :type mode: str
+def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, mode: str) -> tuple[float,float,float]:
+    """Create and save the ROC AUC plot and return its score results
+
+    Args:
+        y_true (np.array): True class labels
+        y_prob (np.array): Estimated class probabilities
+        mode (str): Description of the prediction schema that produced results
+
+    Returns:
+        tuple[float,float,float]: ROC score, lower 2.5% boostrapping CI bound, upper 97.5% boostrapping CI bound
     """
     score = sklearn.metrics.roc_auc_score(y_true=y_true, y_score=y_prob)
     false_positive_rate, true_positive_rate, _ = sklearn.metrics.roc_curve(y_true=y_true, y_score=y_prob)
-    plt.plot(false_positive_rate, true_positive_rate, color='red', label=f'ROC curve (score {score:.2f})')
-    plt.plot([0,1], [0,1], color='green', linestyle='--')
-    plt.title("Receiver Operating Characteristic")
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
     
     # Bootstrapping for error bands
     base_false_positive_rate = np.linspace(0,1,100)
     interpolated_true_positive_rates = []
+    auc_list = []
     for _ in range(1000):
         # Bootstrap - sample entire sample size with replacement
         sample_indices = np.random.randint(low=0, high=y_true.shape[0], size=y_true.shape[0])
@@ -39,6 +35,7 @@ def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, m
         y_prob_sample = y_prob[sample_indices]
         if len(np.unique(y_true_sample)) < 2: # Make sure by chance we did not sample only one class
             continue
+        auc_list.append(sklearn.metrics.roc_auc_score(y_true_sample, y_prob_sample))
         sample_fp, sample_tp, _ = sklearn.metrics.roc_curve(y_true=y_true_sample, y_score=y_prob_sample)
         # For FP and TP values, interpolate them on standard np.linspace(0,1,100) to force false positive rates on grid and then estimating respective true positive values
         interpolated_roc_curve = np.interp(base_false_positive_rate, sample_fp, sample_tp)
@@ -50,12 +47,22 @@ def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, m
     q_low = np.percentile(interpolated_tp, 2.5, axis=0)
     q_high = np.percentile(interpolated_tp, 97.5, axis=0)
     plt.fill_between(base_false_positive_rate, q_low, q_high, color='gray', alpha=0.2, label='95% CI')
+    auc_arr = np.array(auc_list)
+    ci_low = np.percentile(auc_arr, 2.5)
+    ci_high = np.percentile(auc_arr, 97.5)
+    
+    plt.plot(false_positive_rate, true_positive_rate, color='red', label=f'ROC curve (score {score:.2f}, 95% CI [{ci_low:.2f},{ci_high:.2f}])')
+    plt.plot([0,1], [0,1], color='green', linestyle='--')
+    plt.title("Receiver Operating Characteristic")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
     
     plt.legend()
     save_path = RESULTS_DIR / "roc_curves" / f"roc_curve_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
     plt.savefig(str(save_path))
     plt.close()
+    return float(score), float(ci_low), float(ci_high)
 
 def plot_precision_recall(y_true: np.array, y_prob: np.array, mode: str):
     """
