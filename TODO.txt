@@ -91,6 +91,84 @@ DECISIONS MADE THIS SESSION (2026-05-12):
     * Zero changes to plots.py and zero changes to results.txt
       — pure additive plot emissions.
 
+DECISIONS MADE THIS SESSION (2026-05-12, PM — ablation pivot):
+---------------------------------------------------------------
+- ABLATION REGISTRY ARCHITECTURE PIVOTED from env-var-keyed
+  dict (one ABLATION_ID per sbatch submission) to a PYTHON LIST
+  of specs iterated by a single orchestrator script.
+    * Motivation: original design forced manual sbatch resubmission
+      per ablation. Wasteful given embedding is the wall-clock
+      bottleneck — orchestrator should fan across the slate in one
+      job. .env no longer selects "which ablation runs" — .env still
+      specifies EMBEDDER_MODEL_NAME and friends; the orchestrator
+      loops the registry.
+    * New module: scripts/data_loading/ablation_registry.py.
+      Exports ABLATIONS, a Python list of override-spec dicts. No
+      env-var helper function in the module. No baseline sentinel in
+      the list — baseline is "ABLATIONS not consulted" (ABLATION_ID
+      env var unset).
+    * Spec dict shape (one of two), all three keys mandatory:
+        - field-level:   {"id": "<short>", "field":   "<name>",
+                          "strategy": "permute"}
+        - section-level: {"id": "<short>", "section": "<header>",
+                          "strategy": "permute_section"}
+      The "id" key is the filesystem-safe short string the
+      orchestrator suffixes onto NARRATIVES_DIR / EMBEDDINGS_DIR /
+      RESULTS_DIR per iteration. Each ablation lands in a sibling
+      directory tree — baseline and other ablations are never
+      overwritten.
+    * ABLATION_ID env var still exists, but is set PROGRAMMATICALLY
+      by the orchestrator per iteration. Never a manual knob.
+      forge_embeddings.py and classical_ml.py require zero code
+      changes — they already read NARRATIVES_DIR / EMBEDDINGS_DIR /
+      RESULTS_DIR from env.
+
+- SLATE OF FIVE ABLATIONS LOCKED 2026-05-12 (advisor's abstract
+  slate from prior sessions filled in with concrete field/section
+  locators from a test_data narrative scan):
+    * swap_race          - field:   Race_Ethnicity
+    * swap_psych_history - section: ### PSYCH HISTORY
+    * swap_med_burden    - section: ### MEDICATION BURDEN
+    * swap_safety        - section: ### SAFETY
+    * swap_sdoh          - field:   SDOH
+  Rationale:
+    * ### TREATMENT EXPOSURE intentionally excluded — prior
+      adequate AD trials are part of how TRD is *defined* in this
+      cohort. Delta would be enormous, predictable, and
+      uninformative.
+    * suicide_flag not ablated standalone — already covered under
+      swap_psych_history.
+    * swap_sdoh special case: SDOH is NOT a key in the JSON
+      demographics dict. It renders as a single ' | '-joined
+      line ("SDOH: ...") under the SOCIODEMOGRAPHICS section.
+      Chokepoint logic must treat it as a single-line replacement
+      target, not a dict-key swap. Flagged for the chokepoint step.
+
+- CHOKEPOINT SCALABILITY GUARANTEE:
+  deterministic_narrative.py's chokepoint dispatches on
+  spec["strategy"], NOT on spec["id"]. Adding a 6th, 50th, 500th
+  ablation = one new dict entry in ABLATIONS. Zero chokepoint
+  edits. Only inventing a brand-new strategy (e.g. "redact",
+  "swap_multi") requires a new dispatch branch.
+
+- PER-ABLATION EMBEDDING STORAGE:
+  Each ablation's embeddings.db lives under its own sibling
+  EMBEDDINGS_DIR. PatientEmbedder's existing row-level cache
+  handles re-use automatically across re-runs (the row-existence
+  check skips recomputation). Wipe one ablation =
+  `rm -rf` its sibling dir. No schema change to the base
+  embeddings table — no "ablation_id" column polluting baseline.
+
+- ablation_registry.py CREATED this session with the locked 5-entry
+  ABLATIONS list. Imports stripped (no env-var helper means no
+  typing/os imports needed). File is ~7 lines total — the list IS
+  the file.
+- Open work: chokepoint surgery in deterministic_narrative.py,
+  donor sampler, orchestrator script. NOT YET STARTED. Donor pool
+  needs to load once in the narratives generator's parent process
+  before the multiprocessing pool opens so copy-on-write inheritance
+  avoids re-loading 9725 JSONs per worker.
+
 DECISIONS MADE THIS SESSION (2026-05-11):
 ------------------------------------------
 - feature_importance.py EMBEDDED-PATH TRIAD COMPLETE:
@@ -842,17 +920,45 @@ NEXT UP (IMPLEMENTATION ORDER):
       feature_importance.py, which answers "how many dims" not
       "which named concept".
 
-      Architecture (wrap the pipeline, do NOT rewrite it):
-        * New env var ABLATION_ID (default 'baseline'). When unset
-          or 'baseline', behavior is unchanged.
-        * deterministic_narrative.py grows ONE conditional that
-          reads ABLATION_ID, looks the spec up in a registry dict,
-          and applies the override at a single chokepoint before
-          rendering. Override spec uses one of:
-            - {"field": "<field_name>",
-               "strategy": "permute"}
-            - {"section": "<section_header>",
-               "strategy": "permute_section"}
+      Architecture (list-based registry, single orchestrator loop,
+      env-var-bridged chokepoint). PIVOT 2026-05-12: from
+      env-var-keyed dict + per-sbatch resubmission to a plain Python
+      LIST + one orchestrator that fans out across the slate in a
+      single job. .env no longer selects which ablation runs.
+        * scripts/data_loading/ablation_registry.py [CREATED
+          2026-05-12]: exports ABLATIONS, a Python list of
+          override-spec dicts. The list IS the configuration. No
+          baseline sentinel inside the list; baseline is "ABLATIONS
+          not consulted" (ABLATION_ID env var unset).
+        * Spec dict shape (one of two):
+            - field-level:   {"id": "<short>",
+                              "field":   "<field_name>",
+                              "strategy": "permute"}
+            - section-level: {"id": "<short>",
+                              "section": "<section_header>",
+                              "strategy": "permute_section"}
+          The "id" key is mandatory — orchestrator suffixes
+          NARRATIVES_DIR / EMBEDDINGS_DIR / RESULTS_DIR with it per
+          iteration so each ablation lands in a sibling directory
+          tree. Filesystem-safe: lowercase, underscores, no
+          whitespace, no '#'.
+        * ABLATION_ID env var still exists, but is set
+          programmatically by the orchestrator per iteration — NEVER
+          a manual .env knob. forge_embeddings.py and classical_ml.py
+          require zero code changes (they already read NARRATIVES_DIR
+          / EMBEDDINGS_DIR / RESULTS_DIR from env).
+        * deterministic_narrative.py chokepoint reads ABLATION_ID
+          once, looks up the matching spec in ABLATIONS by id, and
+          dispatches on spec["strategy"] (NOT on spec["id"]). Adding
+          a 6th, 50th, 500th ablation = one new dict entry. Zero
+          chokepoint edits. Only inventing a brand-new strategy
+          (e.g. "redact") requires a new dispatch branch.
+        * Per-ablation embedding cache: each ablation's
+          embeddings.db lives under its own sibling EMBEDDINGS_DIR.
+          PatientEmbedder's existing row-level cache handles re-use
+          automatically across re-runs. Wipe one ablation =
+          `rm -rf` its sibling dir. No schema change to the base
+          embeddings table.
         * Permutation strategy (mentor 2026-05-08): for each anchor
           patient, draw a random DONOR patient from the cohort
           (excluding self) and copy the donor's value(s) for the
@@ -864,36 +970,47 @@ NEXT UP (IMPLEMENTATION ORDER):
           reproducibility. Section-level: ONE donor per anchor,
           all section fields copied jointly (intra-section
           coherence preserved).
-        * NARRATIVES_DIR, EMBEDDINGS_DIR, and RESULTS_DIR all
-          become ABLATION_ID-suffixed (e.g. narratives_<id>/,
-          embeddings_<id>.db, results_<id>/). Baseline artifacts
-          are never overwritten — each ablation is a sibling tree.
-        * forge_embeddings.py and classical_ml.py require NO code
-          changes — they already read these env vars. Only the
-          narrative generator and orchestrator paths change.
-        * Run order per ablation: narrative regen -> full re-embed
-          of cohort -> classical_ml.py (EMBEDDED source only). KNN
-          and LLM judging are OUT OF SCOPE — analysis surface is
-          the embedding-ML score delta vs baseline.
+        * Run order per iteration of the orchestrator's loop over
+          ABLATIONS: set env vars (ABLATION_ID + the three suffixed
+          dirs) -> narrative regen -> full re-embed of cohort ->
+          classical_ml.py (EMBEDDED source only). KNN and LLM
+          judging are OUT OF SCOPE.
         * Reporting: tabulate ROC/AUPRC/Brier/calibration deltas
-          (ABLATION_ID vs baseline) per classifier in a single
+          (each ablation vs baseline) per classifier in a single
           ablation_summary.csv. Significant delta => the named
           feature carries embedding-side predictive signal.
 
-      Cost: each ablation = one full embedding pass (the wall-clock
-      bottleneck on the c3_accel partition). Pick 3-5 representatives,
-      NOT all 64 deterministic features. Candidate slate:
-        * one demographic (e.g. Race_Ethnicity)
-        * one psych comorbidity family (e.g. psych_*)
-        * one treatment-history field (e.g. trial counts /
-          augmentation_occured)
-        * one safety flag (e.g. suicide_flag)
-        * optional fifth: one SDOH family
+      LOCKED SLATE OF FIVE (2026-05-12, populated into ABLATIONS):
+        * swap_race          - field:   Race_Ethnicity
+        * swap_psych_history - section: ### PSYCH HISTORY
+        * swap_med_burden    - section: ### MEDICATION BURDEN
+        * swap_safety        - section: ### SAFETY
+        * swap_sdoh          - field:   SDOH  (special-cased: not a
+                               JSON demographics key, but a single
+                               rendered line in the narrative; the
+                               chokepoint must treat the "SDOH:"
+                               line as a single-line replacement
+                               target rather than a dict lookup)
 
-      Defer until feature_importance.py and the four other open NEXT
-      UP items land. Bigger than any single one of them. Do not start
-      until the baseline pipeline is fully green and bge-en-icl
-      backfill is done.
+      Rationale notes:
+        * ### TREATMENT EXPOSURE intentionally excluded — prior
+          adequate AD trials are part of how TRD is *defined* in
+          the cohort, so the delta would be enormous, predictable,
+          and uninformative.
+        * suicide_flag not ablated standalone — already covered
+          under swap_psych_history.
+
+      Cost: each ablation = one full embedding pass on c3_accel.
+      Five ablations = five full re-embeds per embedder. If
+      ablating across all 4 embedders: 20 re-embeds. Decide
+      embedder scope (winner-only vs all four) before launching.
+
+      Open work (chokepoint surgery + donor sampler + orchestrator
+      script): NOT YET STARTED. Donor pool needs to be loaded once
+      in the narratives generator's parent process before the
+      multiprocessing pool opens (copy-on-write inheritance avoids
+      9725 JSONs being re-loaded per worker). Donor sampler signature
+      TBD; chokepoint dispatch TBD; orchestrator script TBD.
 
 LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):
 -------------------------------------------------------
