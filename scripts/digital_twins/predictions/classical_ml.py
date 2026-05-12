@@ -4,6 +4,7 @@ from pathlib import Path
 import os
 import json
 import time
+import joblib
 import sqlite3
 import pandas as pd
 from sklearn.pipeline import Pipeline
@@ -131,13 +132,28 @@ HYPERPARAMETERS = {
     }
 }
 
-def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataFrame) -> tuple[dict[str, np.ndarray], dict[str, dict]]:
+def model_cache_path(model_name: str, source: VectorSource) -> Path:
+    """Determine model save path given its name and the vector source it was trained on
+
+    Args:
+        model_name (str): Name of model (e.g. 'logistic_regression')
+        source (VectorSource): EMBEDDED or FEATURE
+
+    Returns:
+        Path: Resulting save path for model
+    """
+    save_path = Path(os.environ['RESULTS_DIR']) / "trained_models" / f"{model_name}_{source.name}.joblib"
+    os.makedirs(save_path.parent, exist_ok=True)
+    return save_path
+
+def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataFrame, source: VectorSource) -> tuple[dict[str, np.ndarray], dict[str, dict]]:
     """Obtain classification results from various ML models on the input data
 
     Args:
         X_train (pd.DataFrame): Train observations
         y_train (np.ndarray): Train labels
         X_test (pd.DataFrame): Test observations
+        source (VectorSource): EMBEDDED or FEATURE
 
     Returns:
         tuple[dict[str, np.ndarray], dict[str, dict]]: Probability scores for each model as well as grid search results
@@ -152,20 +168,27 @@ def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataF
     classifier_predictions = {}
     model_grid_search_results = {}
     for name, classifier in classifiers.items():
-        start = time.perf_counter()
-        print(f"Starting {name} classifier...", flush=True)
-        param_grid = HYPERPARAMETERS[name]
-        # Hyperparameter grid search to enable the model to perform as best it can
-        searcher = GridSearchCV(classifier, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)
-        searcher.fit(X=X_train, y=y_train)
-        elapsed = time.perf_counter() - start
+        cache_path = model_cache_path(name, source)
+        if cache_path.exists() and int(os.environ['SCRUB_TRAINED_MODELS']) == 0:
+            print(f"Loading {name} from cache for {source.name}...", flush=True)
+            searcher = joblib.load(cache_path)
+        else:
+            start = time.perf_counter()
+            print(f"Starting {name} classifier...", flush=True)
+            param_grid = HYPERPARAMETERS[name]
+            # Hyperparameter grid search to enable the model to perform as best it can
+            searcher = GridSearchCV(classifier, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)
+            searcher.fit(X=X_train, y=y_train)
+            elapsed = time.perf_counter() - start
+            print(f"{name} classifier finished in {elapsed:.1f} seconds running {len(searcher.cv_results_['params'])} different models...", flush=True)
+            joblib.dump(searcher, cache_path)
+        # Find model predictions
         predictions = searcher.predict_proba(X=X_test)[:, 1]
         classifier_predictions[name] = predictions
         model_grid_search_results[name] = {
             'Best Parameters': searcher.best_params_,
             'Best Score' : float(searcher.best_score_)
         }
-        print(f"{name} classifier finished in {elapsed:.1f} seconds running {len(searcher.cv_results_['params'])} different models...", flush=True)
     return classifier_predictions, model_grid_search_results
 
 def main():
@@ -176,7 +199,7 @@ def main():
         (train_X, train_y) = load_data_set(train_ids, source=source)
         (test_X, test_y) = load_data_set(test_ids, source=source)
         print(f"Running ML on {source.name}...", flush=True)
-        model_predictions, grid_search_results = evaluate_models(train_X, train_y, test_X)
+        model_predictions, grid_search_results = evaluate_models(train_X, train_y, test_X, source)
         with open(Path(os.environ['RESULTS_DIR']) / f"grid_search_ml_results_{source.name}.json", 'w') as f:
             json.dump(grid_search_results, f, indent=4)
         text_report = ""

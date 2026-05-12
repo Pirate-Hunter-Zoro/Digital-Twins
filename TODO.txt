@@ -1,6 +1,49 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+DECISIONS MADE THIS SESSION (2026-05-12):
+------------------------------------------
+- FITTED-MODEL CACHING LANDED end-to-end across the classical-ML and
+  feature-importance pipelines. Motivation: analysis_only.sbatch was
+  dying mid-run from various small unrelated bugs and every retry was
+  burning the full GridSearchCV.fit budget from scratch. Now every
+  expensive fit is persisted via joblib and reused on the next launch.
+    * classical_ml.py: model_cache_path(model_name, source) helper
+      returns RESULTS_DIR/trained_models/{model_name}_{source.name}.joblib.
+      evaluate_models gained a `source: VectorSource` parameter so it
+      can resolve the path. Loop body now branches on
+      cache_path.exists() AND SCRUB_TRAINED_MODELS == 0: load via
+      joblib.load(cache_path) on hit; full fit + joblib.dump on miss.
+      best_params_, best_score_, cv_results_ all round-trip cleanly,
+      so the grid_search_ml_results_{source}.json write at main()
+      scope works unchanged.
+    * feature_importance.py::refit_best_model: now an
+      load-or-refit. cache_path = classical_ml.model_cache_path(...).
+      If file exists: returns joblib.load(cache_path).best_estimator_
+      (the fitted Pipeline). Else: falls back to the existing
+      rebuild-via-best_params + fit path so the module still works
+      standalone if classical_ml hasn't run yet. NO SCRUB check on
+      this side — whatever joblib lives on disk when feature_importance
+      starts IS the freshest model by construction (classical_ml
+      already honored the scrub flag).
+    * feature_importance.py::plot_pca_k_vs_roc: separate cache
+      namespace under RESULTS_DIR/trained_models_pca/. New helper
+      pca_cache_path(model_name, k) returns
+      {model_name}_K={k}.joblib in that subdirectory. K-loop body
+      branches on cache existence + SCRUB_TRAINED_MODELS identically.
+      28 cached pipelines per embedder on the EMBEDDED side (7 K-values
+      x 4 classifiers). Sibling dir keeps PCA pipelines from
+      shoulder-rubbing the grid-search caches; an isolated
+      `rm -rf trained_models_pca/` wipes the sweep without touching
+      classical_ml.
+    * New env var: SCRUB_TRAINED_MODELS (default 0). Mirrors
+      SCRUB_FEATURE_VECTORS / SCRUB_EMBEDDINGS / SCRUB_NARRATIVES /
+      SCRUB_PATIENT_JSON convention. README's Configuration section
+      and Classical ML Prediction section both updated.
+    * Variable naming inside plot_pca_k_vs_roc: pca_save_path for the
+      joblib cache, plot_save_path for the matplotlib PNG. Avoids the
+      shadowed-`save_path` trap the K-loop introduced.
+
 DECISIONS MADE THIS SESSION (2026-05-11):
 ------------------------------------------
 - feature_importance.py EMBEDDED-PATH TRIAD COMPLETE:

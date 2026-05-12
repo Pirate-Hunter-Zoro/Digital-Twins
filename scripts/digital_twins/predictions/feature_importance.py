@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 import copy
+import joblib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -16,7 +17,7 @@ from scipy.stats import spearmanr
 
 from scripts.digital_twins.predictions.classical_ml import make_classifier
 from scripts.shared.utils import VectorSource
-from scripts.digital_twins.predictions.classical_ml import load_data_set
+from scripts.digital_twins.predictions.classical_ml import load_data_set, model_cache_path
 from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
 
 from dotenv import load_dotenv
@@ -48,7 +49,7 @@ def refit_best_model(
     X_train: pd.DataFrame,
     y_train: np.ndarray,
 ) -> Pipeline:
-    """Given the model, load the best hyperparameters and use them to refit the model in the input model
+    """Given the model, load the cached fitted best estimator if available, otherwise load the best hyperparameters and use them to refit a fresh pipeline from the grid-search best params
 
     Args:
         model_name (str): Name of model to reference results with
@@ -59,6 +60,11 @@ def refit_best_model(
     Returns:
         Pipeline: fitted sklearn Pipeline
     """
+    cache_path = model_cache_path(model_name, source)
+    if cache_path.exists():
+        print(f"Loading cached best estimator for {model_name} on {source.name}...", flush=True)
+        return joblib.load(cache_path).best_estimator_
+    print(f"Cache miss for {model_name}_{source.name}; refitting from grid-search best params...", flush=True)
     seed = int(os.environ['SEED'])
     models = {
         "logistic_regression": LogisticRegression(max_iter=1000, random_state=seed),
@@ -141,9 +147,9 @@ def plot_feature_importance(
     ax.set_yticklabels(top_names)
     ax.invert_yaxis()
     ax.set_xlabel("Feature importance (magnitude)")
-    title = f"{model_name}: {" (blue: raises TRD risk, red: lowers TRD risk)" \
+    title = f"{model_name}: " + "(blue: raises TRD risk, red: lowers TRD risk)" \
                                 if model_name == "logistic_regression" or (direction_signs is not None)\
-                                    else "(direction unspecified)"}"
+                                    else "(direction unspecified)"
     ax.set_title(title)
     fig.tight_layout()
     save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" /\
@@ -224,6 +230,20 @@ def plot_cumulative_correlation_curve(correlations: np.ndarray, model_name: str)
     fig.savefig(str(save_path), dpi=120)
     plt.close(fig)
    
+def pca_cache_path(model_name: str, k: int) -> Path:
+    """Given the model name and the number of PCA dimensions, return resulting path where the model should be saved
+
+    Args:
+        model_name (str): Name of model (e.g. 'logistic_regression')
+        k (int): Number of PCA dimensions
+
+    Returns:
+        Path: Resulting save path
+    """
+    save_path = Path(os.environ['RESULTS_DIR']) / "trained_models_pca" / f"{model_name}_K={k}.joblib"
+    os.makedirs(save_path.parent, exist_ok=True)
+    return save_path
+   
 def plot_pca_k_vs_roc(
     model_name: str,
     X_train: pd.DataFrame,
@@ -252,15 +272,21 @@ def plot_pca_k_vs_roc(
     auc_scores = []
     for k in PCA_K_VALUES:
         # Different number of PCA dimensions each time
-        pipeline = Pipeline(steps=\
-            [
-                ("scale", StandardScaler()),
-                ("pca", PCA(n_components=k, random_state=int(os.environ['SEED']))),
-                ("model", base_models[model_name])
-            ]
-        )
-        pipeline.set_params(**best_params)
-        pipeline.fit(X_train, y_train)
+        pca_save_path = pca_cache_path(model_name, k)
+        if pca_save_path.exists() and int(os.environ['SCRUB_TRAINED_MODELS']) == 0:
+            print(f"Loading cached PCA-K{k} pipeline for {model_name}...", flush=True)
+            pipeline = joblib.load(pca_save_path)
+        else:
+            pipeline = Pipeline(steps=\
+                [
+                    ("scale", StandardScaler()),
+                    ("pca", PCA(n_components=k, random_state=int(os.environ['SEED']))),
+                    ("model", base_models[model_name])
+                ]
+            )
+            pipeline.set_params(**best_params)
+            pipeline.fit(X_train, y_train)
+            joblib.dump(pipeline, pca_save_path)
         y_pred = pipeline.predict_proba(X_test)[:,1]
         score = float(roc_auc_score(y_true=y_test, y_score=y_pred))
         auc_scores.append(score)
@@ -273,9 +299,9 @@ def plot_pca_k_vs_roc(
     ax.set_ylabel("Held-out ROC AUC")
     ax.set_title(f"PCA-K vs ROC AUC - {model_name} (EMBEDDED)")
     fig.tight_layout()
-    save_path = Path(os.environ['RESULTS_DIR']) / 'feature_importance' / f"feature_importance_pca_sweep_{model_name}_EMBEDDED.png"
-    os.makedirs(save_path.parent, exist_ok=True)
-    fig.savefig(str(save_path), dpi=120)
+    plot_save_path = Path(os.environ['RESULTS_DIR']) / 'feature_importance' / f"feature_importance_pca_sweep_{model_name}_EMBEDDED.png"
+    os.makedirs(plot_save_path.parent, exist_ok=True)
+    fig.savefig(str(plot_save_path), dpi=120)
     plt.close(fig)
 
 def write_feature_importance_summary(
