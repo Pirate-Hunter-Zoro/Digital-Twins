@@ -36,6 +36,47 @@ DECISIONS MADE THIS SESSION (2026-05-13):
       fetches donor bundles from _DONOR_POOL, applies ablation,
       renders, writes to NARRATIVES_DIR/{spec_id}/{patient_id}.md.
 
+- ABLATION RUNNER-SIDE WIRING LANDED end-to-end inside
+  scripts/digital_twins/narratives/generator.py. The narratives
+  runner now registers _DONOR_POOL and _PAIRINGS in the parent
+  process before the worker pool forks. New body of
+  generate_deterministic_narratives() in execution order:
+    * sliced_jsons = list(load_patient_data()) — drains the lazy
+      iterator into a concrete list so the cohort can be walked
+      twice (once parent-side to build the registries, once by
+      the worker pool to write narratives).
+    * donor_pool = {sliced_json["patient_id"]:
+      extract_fields(sliced_json) for sliced_json in
+      sliced_jsons} — dict-comprehension keyed by patient-ID
+      string (matches the contract sliced_json["patient_id"]
+      already established in generate_deterministic_narrative).
+    * pairings = build_pairings(list(donor_pool.keys())) — Sattolo
+      derangements per spec. list() wrap is intentional: avoids
+      handing a live dict_keys view to a function whose
+      annotation reads list[str] and which iterates patient_ids
+      twice internally.
+    * set_donor_pool(donor_pool); set_pairings(pairings) — parent-
+      side mutation of the module globals in
+      deterministic_narrative.py. MUST run before
+      multiprocessing.Pool opens; Linux fork inherits both via
+      copy-on-write at zero pickle cost. Children that mutate
+      neither dict pay nothing.
+    * thread_pool.imap_unordered(generate_deterministic_narrative,
+      sliced_jsons) — second argument is now the materialized
+      list, not a second load_patient_data() call. Eliminates a
+      redundant internal multiprocessing.Pool + full re-slice
+      pass and removes the nested-pool corner case entirely.
+  Cold-worker contract preserved: _DONOR_POOL and _PAIRINGS
+  default to empty dicts in deterministic_narrative.py, so a
+  worker that reaches _PAIRINGS[spec["id"]][patient_id] on a
+  cold patient with missing registration raises KeyError loud
+  and fast. Partial-rerun footgun stands: a fully-cached patient
+  short-circuits the existence guard at the top of the ablation
+  loop before any registry lookup, so registration bugs only
+  surface on cold patients. Validate with SCRUB_NARRATIVES=1
+  shakedown before declaring Task #2 complete in the field —
+  warm reruns hide registration bugs.
+
 - ABLATION REGISTRY SCHEMA pivoted from narrative-domain
   ({"field": "Race_Ethnicity"} / {"section": "### PSYCH HISTORY"})
   to bundle-domain. Each spec now carries `bundle` (always),
@@ -1172,22 +1213,29 @@ NEXT UP (IMPLEMENTATION ORDER):
       ablating across all 4 embedders: 20 re-embeds. Decide
       embedder scope (winner-only vs all four) before launching.
 
-      Open work (chokepoint surgery [DONE 2026-05-13]; runner-
-      side wiring + orchestrator script REMAIN):
-        * Runner-side wiring (Task #2): in the narratives runner's
-          parent process, iterate all sliced JSONs and build a
-          donor_pool dict mapping patient_id -> extract_fields
-          output. Then call build_pairings(list(donor_pool.keys()))
-          to get the cohort-wide derangements per spec. Then
-          call set_donor_pool(pool) and set_pairings(pairings)
-          BEFORE the multiprocessing.Pool forks workers — copy-on-
-          write inheritance means workers see both globals at
-          zero pickle cost. _DONOR_POOL and _PAIRINGS default to
-          empty dicts so a cold worker fails LOUD on missing
-          registration; partial-rerun footgun: a fully-cached
-          patient sails through without ever touching the
-          registries, so registration bugs bite only on cold
-          patients.
+      Open work (chokepoint surgery + runner-side wiring [DONE
+      2026-05-13]; orchestrator script REMAINS):
+        * Runner-side wiring (Task #2) [DONE 2026-05-13]: landed
+          inside scripts/digital_twins/narratives/generator.py.
+          generate_deterministic_narratives() now (a) materializes
+          load_patient_data() into sliced_jsons via list(), (b)
+          builds donor_pool = {sliced_json["patient_id"]:
+          extract_fields(sliced_json) for sliced_json in
+          sliced_jsons}, (c) calls build_pairings(list(donor_pool
+          .keys())) to get the cohort-wide derangements, (d)
+          calls set_donor_pool(donor_pool) and
+          set_pairings(pairings) BEFORE the multiprocessing.Pool
+          opens, (e) feeds the worker pool from sliced_jsons (not
+          a second load_patient_data() invocation, which would
+          otherwise re-trigger an internal pool + full re-slice
+          for zero gain). Copy-on-write inheritance means workers
+          see both globals at zero pickle cost. _DONOR_POOL and
+          _PAIRINGS default to empty dicts so a cold worker fails
+          LOUD on missing registration; partial-rerun footgun
+          stands: a fully-cached patient sails through without
+          ever touching the registries, so registration bugs
+          bite only on cold patients. Validate with a
+          SCRUB_NARRATIVES=1 shakedown before declaring victory.
         * Orchestrator (Task #3): runs forge_embeddings +
           classical_ml across each per-spec narrative subdir on
           the EMBEDDED side only. Mechanism likely a Python

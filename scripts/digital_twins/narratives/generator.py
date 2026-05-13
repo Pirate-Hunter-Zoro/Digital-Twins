@@ -10,8 +10,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.data_loading.deterministic_narrative import generate_deterministic_narrative
+from scripts.data_loading.deterministic_narrative import (
+    extract_fields,
+    build_pairings,
+    set_donor_pool,
+    set_pairings,
+    generate_deterministic_narrative,
+)
 from scripts.data_loading.load_patient_data import load_patient_data
+
 RECORD_EVERY = 1000
 
 # Now deterministically parsed narratives
@@ -20,9 +27,15 @@ def generate_deterministic_narratives():
     """
     Use multiprocessing to generate narratives for all the sampled patients
     """
+    sliced_jsons = list(load_patient_data())
+    # Create a mapping of each patient to their Dict of extracted fields
+    donor_pool = {sliced_json["patient_id"]: extract_fields(sliced_json) for sliced_json in sliced_jsons}
+    pairings = build_pairings(list(donor_pool.keys()))
+    set_donor_pool(donor_pool)
+    set_pairings(pairings)
     narrative_lengths = {'patient_id': [], 'days_of_history': []}
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as thread_pool:
-        for i, (patient_id, history_length) in enumerate(thread_pool.imap_unordered(generate_deterministic_narrative, load_patient_data())):
+        for i, (patient_id, history_length) in enumerate(thread_pool.imap_unordered(generate_deterministic_narrative, sliced_jsons)):
             narrative_lengths['patient_id'].append(patient_id)
             narrative_lengths['days_of_history'].append(history_length)
             if (i + 1) % RECORD_EVERY == 0:
