@@ -78,7 +78,7 @@ SELECT text FROM embeddings WHERE patient_id=?
         :param id: Patient ID of patient with corresponding narrative
         :type id: str
         :return: Respective vector
-        :rtype: np.array
+        :rtype: np.ndarray
         """
         self.cursor.execute(
             """
@@ -94,7 +94,7 @@ SELECT embedding FROM embeddings WHERE patient_id=?
         :param id: ID of patient
         :type id: str
         :return: Respective vector of patient's narrative
-        :rtype: np.array
+        :rtype: np.ndarray
         """
         self.cursor.execute(
             """
@@ -103,11 +103,11 @@ SELECT chronological_length FROM embeddings WHERE patient_id=?
             (id,))
         return self.cursor.fetchone()[0]
         
-    def search(self, query_vector: np.array, scheme: NeighborScheme) -> List[Tuple[str, float]]:
+    def search(self, query_vector: np.ndarray, scheme: NeighborScheme) -> List[Tuple[str, float]]:
         """Find the nearest patients to this patient in terms of cosine similarity of the vectors
 
         Args:
-            query_vector (np.array): Vector to find neighbors of
+            query_vector (np.ndarray): Vector to find neighbors of
             scheme (NeighborScheme): Nearest, Farthest, Subsample, Random
 
         Raises:

@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS embeddings (
         # Whether vectors are to be scrubbed and recomputing
         self.scrub_embeddings = int(os.environ['SCRUB_EMBEDDINGS']) == 1
 
-    def embed(self, patients: tuple[list[str], list[str]]) -> List[np.array]:
+    def embed(self, patients: tuple[list[str], list[str]]) -> List[np.ndarray]:
         """
         Generates normalized vector embeddings for a batch of texts using a simple .encode() call.
         

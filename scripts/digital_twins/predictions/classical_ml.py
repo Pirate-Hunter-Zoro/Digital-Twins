@@ -28,7 +28,7 @@ from scripts.shared.plots import (
     plot_decision_curve_analysis,
     plot_optimal_confusion_matrix
 )
-from scripts.shared.utils import VectorSource
+from scripts.shared.utils import VectorSource, cast_to_int8
 from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
 
 def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATURE) -> Tuple[pd.DataFrame, np.ndarray]:
@@ -62,17 +62,6 @@ f"SELECT embedding FROM embeddings WHERE patient_id IN ({placeholders}) ORDER BY
     print(f"Shape of X from source {source.name}: {X.shape}; Shape of y: {y.shape}", flush=True)
     return (X, y)
 
-def _cast_to_int8(df: pd.DataFrame) -> pd.DataFrame:
-    """Helper function to turn all values in a pandas array into np.int8 types
-
-    Args:
-        df (pd.DataFrame): Original dataframe
-
-    Returns:
-        pd.DataFrame: Changed dataframe with np.int8 types
-    """
-    return df.astype(np.int8)
-
 def make_classifier(model):
     return Pipeline(steps=[
                     ("preprocess", 
@@ -92,7 +81,7 @@ def make_classifier(model):
                                     make_column_selector(dtype_include="category")
                                 ),
                                 ("bool", 
-                                    FunctionTransformer(func=_cast_to_int8),
+                                    FunctionTransformer(func=cast_to_int8, feature_names_out="one-to-one"),
                                     make_column_selector(dtype_include="bool")
                                 )
                             ],

@@ -113,7 +113,7 @@ def plot_feature_importance(
     feature_names: list[str],
     model_name: str,
     top_k: int=20,
-    direction_signs: np.array | None = None
+    direction_signs: np.ndarray | None = None
 ):
     """Helper method to plot the different feature importances of the given model
 
@@ -121,7 +121,7 @@ def plot_feature_importance(
         importances (np.ndarray): Importances of each feature from the learning model
         feature_names (list[str]): Names of each feature
         model_name (str): Name of classifier - e.g. logistic_regression, etc.
-        direction_signs (np.array | None, optional): Whether an increase in the numeric feature increases or decreases risk score. Defaults to None.
+        direction_signs (np.ndarray | None, optional): Whether an increase in the numeric feature increases or decreases risk score. Defaults to None.
         top_k (int, optional): How many bars (features) to display. Defaults to 20.
     """
     magnitudes = np.abs(importances)

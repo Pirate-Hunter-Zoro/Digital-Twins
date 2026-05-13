@@ -13,14 +13,14 @@ import random
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-def vector_analysis(vectors: np.array) -> np.array:
+def vector_analysis(vectors: np.ndarray) -> np.ndarray:
     """Analyzes shape and norm of all the given vectors
 
     Args:
-        vectors (np.array): All vectors to perform analysis on
+        vectors (np.ndarray): All vectors to perform analysis on
 
     Returns:
-        np.array: Norm of all vectors
+        np.ndarray: Norm of all vectors
     """
     ndim = vectors.shape
     with open(RESULTS_DIR / 'vectors_shape.txt', 'w') as f:
@@ -42,15 +42,15 @@ def vector_analysis(vectors: np.array) -> np.array:
     plt.close()
     return vector_norms
     
-def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple[int,int]], np.array]:
+def cone_analysis(vectors: np.ndarray, vector_norms: np.ndarray) -> tuple[list[tuple[int,int]], np.ndarray]:
     """Obtain random pairs and their cosine similarity values
 
     Args:
-        vectors (np.array): All vectors of interest
-        vector_norms (np.array): Norms of all vectors of interest
+        vectors (np.ndarray): All vectors of interest
+        vector_norms (np.ndarray): Norms of all vectors of interest
 
     Returns:
-        tuple[list[tuple[int,int]], np.array]: Resulting random pairs generated and their cosine similarities
+        tuple[list[tuple[int,int]], np.ndarray]: Resulting random pairs generated and their cosine similarities
     """
     # Using itertools will be too large when generating all possible combinations - just make unique pairs until we have enough
     num_pairs = 5000
@@ -73,13 +73,13 @@ def cone_analysis(vectors: np.array, vector_norms: np.array) -> tuple[list[tuple
     
     return (pairs, random_similarities)
     
-def monotonicity_analysis(vectors: np.array, random_pairs: list[tuple[int,int]], cosine_sims: np.array):
+def monotonicity_analysis(vectors: np.ndarray, random_pairs: list[tuple[int,int]], cosine_sims: np.ndarray):
     """Compare Euclidean and Cosine similarity metrics of random pairs
 
     Args:
-        vectors (np.array): Vectors of interest
+        vectors (np.ndarray): Vectors of interest
         random_pairs (list[tuple[int,int]]): Pre-computed random pairs
-        cosine_sims (np.array): Cosine similarities of all pairs pre-computed
+        cosine_sims (np.ndarray): Cosine similarities of all pairs pre-computed
     """
     a_vectors = vectors[[a_idx for a_idx, _ in random_pairs]]
     b_vectors = vectors[[b_idx for _, b_idx in random_pairs]]

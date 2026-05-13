@@ -72,12 +72,12 @@ def calculated_weighted_risk(group: pd.DataFrame, strategy: WeightingStrategy) -
     
     return (risk_score, ess)
 
-def compute_metrics(y_true: np.array, y_prob: np.array) -> dict:
+def compute_metrics(y_true: np.ndarray, y_prob: np.ndarray) -> dict:
     """Compute the metrics to describe the performance of the TRD risk predictions given the actual flags
 
     Args:
-        y_true (np.array): Actual TRD flags of the patients
-        y_prob (np.array): Predicted TRD risks for the patients
+        y_true (np.ndarray): Actual TRD flags of the patients
+        y_prob (np.ndarray): Predicted TRD risks for the patients
 
     Returns:
         dict: Performance results

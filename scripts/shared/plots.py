@@ -10,12 +10,12 @@ load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 
-def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, mode: str) -> tuple[float,float,float]:
+def plot_receiving_operator_characteristic(y_true: np.ndarray, y_prob: np.ndarray, mode: str) -> tuple[float,float,float]:
     """Create and save the ROC AUC plot and return its score results
 
     Args:
-        y_true (np.array): True class labels
-        y_prob (np.array): Estimated class probabilities
+        y_true (np.ndarray): True class labels
+        y_prob (np.ndarray): Estimated class probabilities
         mode (str): Description of the prediction schema that produced results
 
     Returns:
@@ -64,14 +64,14 @@ def plot_receiving_operator_characteristic(y_true: np.array, y_prob: np.array, m
     plt.close()
     return float(score), float(ci_low), float(ci_high)
 
-def plot_precision_recall(y_true: np.array, y_prob: np.array, mode: str):
+def plot_precision_recall(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
     """
     Create and save the precision recall graph for the given values and predictions
     
     :param y_true: Actual labels
-    :type y_true: np.array
+    :type y_true: np.ndarray
     :param y_prob: Predicted probability labels
-    :type y_prob: np.array
+    :type y_prob: np.ndarray
     :param mode: llm weighting, cosine, weighting, uniform weighting
     :type mode: str
     """
@@ -87,14 +87,14 @@ def plot_precision_recall(y_true: np.array, y_prob: np.array, mode: str):
     plt.savefig(str(save_path))
     plt.close()
 
-def plot_calibration(y_true: np.array, y_prob: np.array, mode: str):
+def plot_calibration(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
     """
     Create and save the calibration graph for the given values and predictions
     
     :param y_true: Actual labels
-    :type y_true: np.array
+    :type y_true: np.ndarray
     :param y_prob: Predicted probability labels
-    :type y_prob: np.array
+    :type y_prob: np.ndarray
     :param mode: llm weighting, cosine, weighting, uniform weighting
     :type mode: str
     """
@@ -111,14 +111,14 @@ def plot_calibration(y_true: np.array, y_prob: np.array, mode: str):
     plt.savefig(str(save_path))
     plt.close()
 
-def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array, mode: str):
+def plot_decision_curve_analysis(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
     """
     Plot decision curve benefits - when only assuming patients above a certain threshold are positive, what is the benefit
     
     :param y_true: Actual labels
-    :type y_true: np.array
+    :type y_true: np.ndarray
     :param y_prob: Predicted probability labels
-    :type y_prob: np.array
+    :type y_prob: np.ndarray
     :param mode: llm weighting, cosine, weighting, uniform weighting
     :type mode: str
     """
@@ -127,14 +127,14 @@ def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array, mode: str):
     FP_ASSIGN_ALL_POSITIVE = np.sum(1-y_true)
     N = y_true.shape[0]
     
-    def positive_all_benefit(threshold: np.array) -> np.array:
+    def positive_all_benefit(threshold: np.ndarray) -> np.ndarray:
         """
         Helper method to return the benefit attributed with applying the given threshold/penalty classifying all observations as positive
         
         :param threshold: Penalty for false positive
-        :type threshold: np.array
+        :type threshold: np.ndarray
         :return: Resulting benefit
-        :rtype: np.array
+        :rtype: np.ndarray
         """
         return TP_ASSIGN_ALL_POSITIVE/N - FP_ASSIGN_ALL_POSITIVE/N*threshold/(1-threshold)
      
@@ -164,12 +164,12 @@ def plot_decision_curve_analysis(y_true: np.array, y_prob: np.array, mode: str):
     plt.savefig(str(save_path))
     plt.close()
 
-def plot_effective_sample_size_distribution(ess_values: np.array, mode: str):
+def plot_effective_sample_size_distribution(ess_values: np.ndarray, mode: str):
     """
     Create a histogram of the effective sample sizes observed in the predictions
     
     :param ess_values: Effective sample sizes from predictions
-    :type ess_values: np.array
+    :type ess_values: np.ndarray
     :param mode: llm weighting, cosine, weighting, uniform weighting
     :type mode: str
     """
@@ -184,14 +184,14 @@ def plot_effective_sample_size_distribution(ess_values: np.array, mode: str):
     plt.savefig(str(save_path))
     plt.close()
     
-def plot_optimal_confusion_matrix(y_true: np.array, y_prob: np.array, mode: str):
+def plot_optimal_confusion_matrix(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
     """
     Create confusion matrix for the given probability estimates with the optimal threshold
     
     :param y_true: Actual labels
-    :type y_true: np.array
+    :type y_true: np.ndarray
     :param y_prob: Predicted probability labels
-    :type y_prob: np.array
+    :type y_prob: np.ndarray
     :param mode: llm weighting, cosine, weighting, uniform weighting
     :type mode: str
     """

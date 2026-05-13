@@ -1,6 +1,153 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+DECISIONS MADE THIS SESSION (2026-05-13):
+------------------------------------------
+- ABLATION CHOKEPOINT SURGERY LANDED end-to-end inside
+  scripts/data_loading/deterministic_narrative.py. The prior
+  monolithic generate_deterministic_narrative has been factored
+  into three composable primitives plus a per-patient driver:
+    * extract_fields(sliced_json) -> Dict[str, Dict]: pure data
+      extraction. Returns a nine-key bundle dict mirroring the
+      nine narrative sections (cohort_index, sociodemographics,
+      physical_health, psych_history, medical_comorbidity,
+      treatment_exposure, medication_burden, utilization, safety).
+      Each inner dict holds RAW field values — f-string formatting
+      moved entirely to the renderer. Called ONCE per patient and
+      cached at module scope; ablation loop reuses the same
+      anchor_bundles across baseline + every spec.
+    * render_narrative(bundles) -> str: pure inverse of
+      extract_fields. Stamps the bundle into the same nine-section
+      markdown the old function produced. No I/O, no env reads
+      except YEARS_BACK. Format strings copied verbatim from the
+      old code; only the right-hand-side reads changed from local
+      variables to bundles[section][field].
+    * apply_ablation(anchor, donor, spec) -> bundles: swap
+      primitive. Deep-copies anchor_bundles, then dispatches on
+      spec["strategy"] — "permute_section" overwrites the entire
+      inner dict at spec["bundle"]; "permute_field" overwrites
+      perturbed[bundle][key]. Donor values also deep-copied to
+      prevent aliasing across multiple ablations of the same
+      donor.
+    * generate_deterministic_narrative(sliced_json): driver, same
+      signature and return tuple as before (callers unchanged).
+      Runs extract_fields once, writes baseline narrative, loops
+      ABLATIONS, per spec looks up donor_id from _PAIRINGS,
+      fetches donor bundles from _DONOR_POOL, applies ablation,
+      renders, writes to NARRATIVES_DIR/{spec_id}/{patient_id}.md.
+
+- ABLATION REGISTRY SCHEMA pivoted from narrative-domain
+  ({"field": "Race_Ethnicity"} / {"section": "### PSYCH HISTORY"})
+  to bundle-domain. Each spec now carries `bundle` (always),
+  optional `key` (field-level only), and explicit `strategy`. The
+  registry IS the routing table; apply_ablation needs zero
+  internal mapping logic. Same five locked ids; the new routing:
+    * swap_race          -> bundle=sociodemographics  key=Race_Ethnicity strategy=permute_field
+    * swap_psych_history -> bundle=psych_history                         strategy=permute_section
+    * swap_med_burden    -> bundle=medication_burden                     strategy=permute_section
+    * swap_safety        -> bundle=safety                                strategy=permute_section
+    * swap_sdoh          -> bundle=sociodemographics  key=SDOH           strategy=permute_field
+
+- DONOR-SELECTION STRATEGY UPGRADED from per-anchor seeded random
+  draw (which allowed donor REPEATS across the cohort and biased
+  the marginal distribution of the perturbed field) to COHORT-
+  WIDE PAIRING via Sattolo's algorithm:
+    * build_pairings(patient_ids) iterates ABLATIONS; per spec,
+      seeds an RNG on (spec_id, SEED) — NOT (anchor_id, spec_id,
+      SEED) — and runs Sattolo's algorithm on a copy of the
+      cohort ID list. Sattolo (rng.randrange(i), exclusive upper
+      bound) guarantees zero fixed points: every patient ends up
+      displaced, no anchor is paired with itself, every patient
+      is used as a donor exactly once.
+    * Returns Dict[str, Dict[str, str]] — outer keyed by spec id,
+      inner dict maps anchor_id -> donor_id. ONE derangement per
+      spec, used across the entire cohort.
+    * Marginal distribution preservation: because every patient
+      appears as a donor exactly once per spec, the multiset of
+      donor-supplied values for the perturbed field across the
+      cohort EXACTLY equals the cohort's original multiset of
+      that field, just permuted to different anchors. With-
+      replacement sampling cannot guarantee this.
+
+- ENV-VAR BRIDGE DESIGN (ABLATION_ID + suffixed dir env vars set
+  programmatically by an orchestrator) is DEAD. The previous
+  design bridged the orchestrator's loop across the registry into
+  the narrative generator's chokepoint via subprocess env.
+  Replaced by Python-level architecture:
+    * Per-spec narrative subdirectories live UNDER NARRATIVES_DIR
+      as NARRATIVES_DIR/{spec_id}/ — no new env var, no
+      orchestrator subprocess fanout, no per-spec sbatch
+      resubmission. The driver writes baseline to
+      NARRATIVES_DIR/{patient_id}.md AND every ablation to
+      NARRATIVES_DIR/{spec_id}/{patient_id}.md in a single
+      multiprocessing pool fan-out across patients.
+    * forge_embeddings / classical_ml still need to be pointed at
+      per-spec narrative subdirs for the ablation runs — that is
+      now Task #3 (orchestrator across narrative subdirs).
+
+- MODULE-LEVEL REGISTRATION HOOKS for parent-process
+  initialization before multiprocessing fork:
+    * _DONOR_POOL: Dict[str, Dict[str, Dict]] = {}  (patient_id ->
+      bundles), registered via set_donor_pool(pool).
+    * _PAIRINGS:   Dict[str, Dict[str, str]] = {}   (spec_id ->
+      {anchor_id -> donor_id}), registered via
+      set_pairings(pairings).
+    Both default to empty so a cold worker fails LOUD on
+    _DONOR_POOL[donor_id] / _PAIRINGS[spec_id][anchor_id]
+    KeyError if the runner forgets to register them. Footgun:
+    fully-cached partial reruns sail through without ever
+    touching the registries, so failures bite only on cold
+    patients — debugger be warned.
+
+- _CAST_TO_INT8 RELOCATED from classical_ml.py to
+  scripts/shared/utils.py (renamed to cast_to_int8 — leading
+  underscore dropped now that it's a public shared helper).
+  Motivation: prior runs were dying in feature_importance.py at
+  joblib.load with `Can't get attribute 'cast_to_int8' on
+  <module 'feature_importance'>`. Root cause is the
+  python -m + pickle + __main__ landmine: classical_ml was run
+  as `python -m scripts.digital_twins.predictions.classical_ml`,
+  so its __name__ became __main__; the function's __module__
+  also became __main__; FunctionTransformer wrapped it and
+  joblib.dump pickled (module='__main__', qualname='cast_to_int8').
+  Then feature_importance.py ran as `python -m
+  scripts.digital_twins.predictions.feature_importance`, its
+  __name__ became __main__, and joblib.load looked for
+  cast_to_int8 in __main__ — which is now feature_importance,
+  not classical_ml. Moving cast_to_int8 to a module that is
+  never the entry point pins __module__ to
+  'scripts.shared.utils' regardless of who runs as __main__.
+  classical_ml.py now does
+    from scripts.shared.utils import VectorSource, cast_to_int8
+  and references cast_to_int8 by bare name inside
+  make_classifier. Stale joblib caches under
+  ${RESULTS_DIR}/trained_models/ had to be wiped twice this
+  session — once for the cast_to_int8 relocation, again for the
+  feature_names_out fix below.
+
+- FUNCTIONTRANSFORMER ADDITIONAL KWARG: bool-branch
+  FunctionTransformer in classical_ml.py::make_classifier now
+  carries `feature_names_out="one-to-one"`. Motivation:
+  feature_importance.py calls preprocessor.get_feature_names_out()
+  to align importance arrays to feature names; ColumnTransformer
+  recursively asks each branch for output names;
+  FunctionTransformer raises AttributeError by default because
+  sklearn doesn't assume the function preserves shape/names.
+  cast_to_int8 only changes dtype, so "one-to-one" is correct
+  and idiomatic (output features identical to input features).
+
+- np.array vs np.ndarray TYPO fixed in
+  scripts/digital_twins/predictions/feature_importance.py
+  line 116 (parameter annotation) and line 124 (docstring).
+  np.array is a callable, NOT a class; the PEP 604 union
+  operator (X | Y) forces evaluation and `function | NoneType`
+  raises TypeError at import time. Standalone annotations
+  (x: np.array, no |) silently store the function as the
+  annotation and never crash — the | operator is the only
+  thing that exposes the type-vs-callable distinction. Without
+  `from __future__ import annotations` (which is absent in this
+  file), the crash is unavoidable on the union form.
+
 DECISIONS MADE THIS SESSION (2026-05-12):
 ------------------------------------------
 - FITTED-MODEL CACHING LANDED end-to-end across the classical-ML and
@@ -911,7 +1058,7 @@ NEXT UP (IMPLEMENTATION ORDER):
       and KNN. Done 2026-05-12 — plot returns (score, ci_low,
       ci_high); callers persist bounds into results.txt blocks and
       KNN summary.csv between roc_score and auprc.
-- [ ] Semantic-feature ablation study for the embedding-ML pipeline
+- [~] Semantic-feature ablation study for the embedding-ML pipeline
       (advisor + mentor ask). Question the existing pipeline cannot
       answer: when a *named* feature is perturbed in the narrative,
       how does the embedding-source classical_ml score shift? This
@@ -920,77 +1067,97 @@ NEXT UP (IMPLEMENTATION ORDER):
       feature_importance.py, which answers "how many dims" not
       "which named concept".
 
-      Architecture (list-based registry, single orchestrator loop,
-      env-var-bridged chokepoint). PIVOT 2026-05-12: from
-      env-var-keyed dict + per-sbatch resubmission to a plain Python
-      LIST + one orchestrator that fans out across the slate in a
-      single job. .env no longer selects which ablation runs.
-        * scripts/data_loading/ablation_registry.py [CREATED
-          2026-05-12]: exports ABLATIONS, a Python list of
-          override-spec dicts. The list IS the configuration. No
-          baseline sentinel inside the list; baseline is "ABLATIONS
-          not consulted" (ABLATION_ID env var unset).
-        * Spec dict shape (one of two):
+      ARCHITECTURE PIVOTED 2026-05-13: env-var bridge is DEAD.
+      Registry-driven Python-level call, single pool fan-out
+      across patients writes baseline + every ablation per
+      iteration. No subprocess fanout, no per-spec sbatch
+      resubmission.
+        * scripts/data_loading/ablation_registry.py [SCHEMA
+          UPDATED 2026-05-13]: exports ABLATIONS as a Python list
+          of bundle-domain spec dicts. Each spec carries `bundle`
+          (always), optional `key` (field-level only), and
+          explicit `strategy`. The registry IS the routing table;
+          apply_ablation needs zero internal mapping logic. Spec
+          shapes:
             - field-level:   {"id": "<short>",
-                              "field":   "<field_name>",
-                              "strategy": "permute"}
+                              "bundle": "<bundle_slug>",
+                              "key":    "<field_name>",
+                              "strategy": "permute_field"}
             - section-level: {"id": "<short>",
-                              "section": "<section_header>",
+                              "bundle": "<bundle_slug>",
                               "strategy": "permute_section"}
-          The "id" key is mandatory — orchestrator suffixes
-          NARRATIVES_DIR / EMBEDDINGS_DIR / RESULTS_DIR with it per
-          iteration so each ablation lands in a sibling directory
-          tree. Filesystem-safe: lowercase, underscores, no
+          Filesystem-safe id: lowercase, underscores, no
           whitespace, no '#'.
-        * ABLATION_ID env var still exists, but is set
-          programmatically by the orchestrator per iteration — NEVER
-          a manual .env knob. forge_embeddings.py and classical_ml.py
-          require zero code changes (they already read NARRATIVES_DIR
-          / EMBEDDINGS_DIR / RESULTS_DIR from env).
-        * deterministic_narrative.py chokepoint reads ABLATION_ID
-          once, looks up the matching spec in ABLATIONS by id, and
-          dispatches on spec["strategy"] (NOT on spec["id"]). Adding
-          a 6th, 50th, 500th ablation = one new dict entry. Zero
-          chokepoint edits. Only inventing a brand-new strategy
-          (e.g. "redact") requires a new dispatch branch.
-        * Per-ablation embedding cache: each ablation's
-          embeddings.db lives under its own sibling EMBEDDINGS_DIR.
-          PatientEmbedder's existing row-level cache handles re-use
-          automatically across re-runs. Wipe one ablation =
-          `rm -rf` its sibling dir. No schema change to the base
-          embeddings table.
-        * Permutation strategy (mentor 2026-05-08): for each anchor
-          patient, draw a random DONOR patient from the cohort
-          (excluding self) and copy the donor's value(s) for the
-          perturbed field/section into the anchor's narrative. The
-          embedder sees an in-distribution real value; the field's
-          correlation with the anchor's outcome is severed; the
-          field's marginal distribution is preserved exactly. RNG
-          seeded on (anchor_id, ABLATION_ID, SEED) for
-          reproducibility. Section-level: ONE donor per anchor,
-          all section fields copied jointly (intra-section
-          coherence preserved).
-        * Run order per iteration of the orchestrator's loop over
-          ABLATIONS: set env vars (ABLATION_ID + the three suffixed
-          dirs) -> narrative regen -> full re-embed of cohort ->
-          classical_ml.py (EMBEDDED source only). KNN and LLM
-          judging are OUT OF SCOPE.
+        * NO ABLATION_ID env var. NO suffixed env-var dirs. The
+          driver writes baseline to NARRATIVES_DIR/{patient_id}.md
+          AND every ablation to
+          NARRATIVES_DIR/{spec_id}/{patient_id}.md in the same
+          pool fan-out.
+        * deterministic_narrative.py [CHOKEPOINT SURGERY DONE
+          2026-05-13]: three pure primitives plus a driver.
+          - extract_fields: pure data extraction returning a
+            nine-key bundle dict.
+          - render_narrative: pure inverse — stamps bundles into
+            the nine-section markdown.
+          - apply_ablation(anchor, donor, spec): deep-copies
+            anchor_bundles, dispatches on spec["strategy"].
+            "permute_section" overwrites the inner dict at
+            spec["bundle"]; "permute_field" overwrites
+            perturbed[bundle][key]. Adding a 6th, 50th, 500th
+            ablation = one new dict entry in ABLATIONS, zero
+            chokepoint edits. Inventing a brand-new strategy
+            requires a new dispatch branch.
+          - generate_deterministic_narrative driver: same
+            signature as before; extracts once, writes baseline,
+            loops ABLATIONS using the pairing dict for donor
+            lookup.
+        * Per-spec embedding cache: each ablation's embeddings
+          will live under its own sibling dir keyed by spec id
+          (mechanism TBD in Task #3 orchestrator — likely
+          EMBEDDINGS_DIR/{spec_id}/ paralleling the narrative
+          layout). PatientEmbedder's row-level cache handles
+          re-use automatically. Wipe one ablation = `rm -rf` its
+          sibling dir. No schema change to base embeddings table.
+        * Permutation strategy UPGRADED 2026-05-13 from per-
+          anchor seeded random draw to COHORT-WIDE PAIRING via
+          Sattolo's algorithm. build_pairings(patient_ids)
+          iterates ABLATIONS; per spec, seeds an RNG on
+          (spec_id, SEED) and runs Sattolo's algorithm
+          (rng.randrange(i), exclusive upper bound) on a copy of
+          the cohort ID list. Sattolo guarantees zero fixed
+          points — every patient ends up displaced, no anchor is
+          paired with itself, every patient is used as a donor
+          exactly once. Returns Dict[str, Dict[str, str]]
+          (spec_id -> {anchor_id -> donor_id}). Marginal
+          distribution preservation: because every patient
+          appears as a donor exactly once per spec, the multiset
+          of donor-supplied values for the perturbed field across
+          the cohort EXACTLY equals the cohort's original
+          multiset of that field, just permuted to different
+          anchors. With-replacement sampling cannot guarantee
+          this; the old (anchor_id, spec_id, SEED) per-anchor RNG
+          design did allow donor REPEATS and was abandoned.
+        * Run order per orchestrator iteration over ABLATIONS:
+          narrative regen (single pool fan-out writes baseline +
+          all ablations) -> full re-embed of cohort PER SPEC
+          (Task #3) -> classical_ml.py PER SPEC (EMBEDDED source
+          only). KNN and LLM judging OUT OF SCOPE.
         * Reporting: tabulate ROC/AUPRC/Brier/calibration deltas
           (each ablation vs baseline) per classifier in a single
           ablation_summary.csv. Significant delta => the named
           feature carries embedding-side predictive signal.
 
-      LOCKED SLATE OF FIVE (2026-05-12, populated into ABLATIONS):
-        * swap_race          - field:   Race_Ethnicity
-        * swap_psych_history - section: ### PSYCH HISTORY
-        * swap_med_burden    - section: ### MEDICATION BURDEN
-        * swap_safety        - section: ### SAFETY
-        * swap_sdoh          - field:   SDOH  (special-cased: not a
-                               JSON demographics key, but a single
-                               rendered line in the narrative; the
-                               chokepoint must treat the "SDOH:"
-                               line as a single-line replacement
-                               target rather than a dict lookup)
+      LOCKED SLATE OF FIVE (2026-05-12, reshaped 2026-05-13):
+        * swap_race          - bundle=sociodemographics  key=Race_Ethnicity strategy=permute_field
+        * swap_psych_history - bundle=psych_history                         strategy=permute_section
+        * swap_med_burden    - bundle=medication_burden                     strategy=permute_section
+        * swap_safety        - bundle=safety                                strategy=permute_section
+        * swap_sdoh          - bundle=sociodemographics  key=SDOH           strategy=permute_field
+        Note: SDOH special case is GONE under the bundle-domain
+        schema. SDOH is now just a regular key inside the
+        sociodemographics bundle (the bundle stores it as a list
+        of categories; the renderer joins with ' | '). No
+        chokepoint-side special-casing.
 
       Rationale notes:
         * ### TREATMENT EXPOSURE intentionally excluded — prior
@@ -1005,12 +1172,30 @@ NEXT UP (IMPLEMENTATION ORDER):
       ablating across all 4 embedders: 20 re-embeds. Decide
       embedder scope (winner-only vs all four) before launching.
 
-      Open work (chokepoint surgery + donor sampler + orchestrator
-      script): NOT YET STARTED. Donor pool needs to be loaded once
-      in the narratives generator's parent process before the
-      multiprocessing pool opens (copy-on-write inheritance avoids
-      9725 JSONs being re-loaded per worker). Donor sampler signature
-      TBD; chokepoint dispatch TBD; orchestrator script TBD.
+      Open work (chokepoint surgery [DONE 2026-05-13]; runner-
+      side wiring + orchestrator script REMAIN):
+        * Runner-side wiring (Task #2): in the narratives runner's
+          parent process, iterate all sliced JSONs and build a
+          donor_pool dict mapping patient_id -> extract_fields
+          output. Then call build_pairings(list(donor_pool.keys()))
+          to get the cohort-wide derangements per spec. Then
+          call set_donor_pool(pool) and set_pairings(pairings)
+          BEFORE the multiprocessing.Pool forks workers — copy-on-
+          write inheritance means workers see both globals at
+          zero pickle cost. _DONOR_POOL and _PAIRINGS default to
+          empty dicts so a cold worker fails LOUD on missing
+          registration; partial-rerun footgun: a fully-cached
+          patient sails through without ever touching the
+          registries, so registration bugs bite only on cold
+          patients.
+        * Orchestrator (Task #3): runs forge_embeddings +
+          classical_ml across each per-spec narrative subdir on
+          the EMBEDDED side only. Mechanism likely a Python
+          driver that overrides NARRATIVES_DIR / EMBEDDINGS_DIR /
+          RESULTS_DIR per iteration (the three downstream
+          consumers still read those from env). Emits
+          ablation_summary.csv diffing each spec against
+          baseline.
 
 LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):
 -------------------------------------------------------
@@ -1056,7 +1241,7 @@ COMPLETED:
 - [x] deterministic_vector.py: MDD recurrence and severity one-hot encoding
 - [x] deterministic_vector.py: mdd_within_window binary flag added
 - [x] deterministic_vector.py: Refactored ATTRIBUTE_INDICES to module-level with initialize_attribute_indices() and JSON caching
-- [x] deterministic_vector.py: Save as .npy, return np.array, load cached vector on re-run
+- [x] deterministic_vector.py: Save as .npy, return np.ndarray, load cached vector on re-run
 - [x] fit_to_anchor.py: Fixed "2 day window" typo
 - [x] Added DETERMINISTIC_VECTORS_DIR and SCRUB_DETERMINISTIC_VECTORS to .env
 - [x] Built vectors/generator.py and vectors/runner.py (parallel to narratives/) with multiprocessing and sanity check report
