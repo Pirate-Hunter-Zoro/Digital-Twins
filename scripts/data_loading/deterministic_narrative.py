@@ -240,7 +240,7 @@ NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingr
     UTILIZATION = f"### UTILIZATION\nPsych inpatient days: {util['psych_inpatient_days']} ({YEARS_BACK}y) | ED psych visits: {util['ed_psych_visits']} ({YEARS_BACK}y)\n"
 
     safety = bundles["safety"]
-    SAFETY = f"### SAFETY\n{' | '.join([f'{safety_arm}: {get_bool_str(safety['comorbidities'][safety_arm])}' for safety_arm in safety['comorbidities'].keys()])}\n"
+    SAFETY = "### SAFETY\n"+' | '.join([safety_arm + ": " + get_bool_str(safety['comorbidities'][safety_arm]) for safety_arm in safety['comorbidities'].keys()]) + '\n'
 
     return "\n".join([HEADER, DEMOGRAPHICS, VITALS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, UTILIZATION, SAFETY])
 

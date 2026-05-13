@@ -189,6 +189,48 @@ DECISIONS MADE THIS SESSION (2026-05-13):
   `from __future__ import annotations` (which is absent in this
   file), the crash is unavoidable on the union form.
 
+- ABLATION SHAKEDOWN SBATCH LANDED at
+  slurm_jobs/quick_runs/narratives_only.sbatch. CPU-only
+  c3_short, 1h cap, 16 cpus to match NUM_WORKERS_NON_LLM_TASK,
+  16G mem, NO --gres=gpu. Sources .env, exports
+  SCRUB_NARRATIVES=1, runs
+  `python -m scripts.digital_twins.narratives.forge_narratives`
+  and nothing else. Submit from repo root so SLURM_SUBMIT_DIR
+  resolves the .env path AND the `python -m` package root.
+  Purpose: force every patient through the cold-write branch
+  in deterministic_narrative.py (lines 287, 297) so every
+  _PAIRINGS[spec_id][patient_id] and _DONOR_POOL[donor_id]
+  lookup fires for every cohort patient. With scrub on, the
+  partial-rerun footgun (fully-cached patients short-circuiting
+  the existence guard before any registry lookup) cannot hide
+  registration bugs.
+
+- PYTHON 3.11 F-STRING NESTING BUG fixed at
+  scripts/data_loading/deterministic_narrative.py:243 (SAFETY
+  section in render_narrative). Original code wrapped an inner
+  single-quoted f-string `f'{safety_arm}: {get_bool_str(safety[
+  'comorbidities'][safety_arm])}'` inside an outer
+  double-quoted f-string. The inner f-string's expression
+  contained `safety['comorbidities']` — single quotes nested
+  inside a single-quoted f-string. Python 3.12+ allows this via
+  PEP 701; ehr_env runs Python 3.11.13 and does NOT. SyntaxError
+  raised at import time, before the worker pool was ever
+  instantiated, so the first shakedown submission (job 1911833)
+  died before exercising any registration logic. Fix: dropped
+  the f-string entirely, used string concatenation inside a
+  list-comprehension element —
+    [safety_arm + ": " + get_bool_str(safety['comorbidities'][safety_arm])
+     for safety_arm in safety['comorbidities'].keys()]
+  — joined with ' | ' and bracketed by the section header and
+  trailing newline. No nested f-strings; Python 3.11 parses
+  cleanly. Resubmitted as job 1911841 (pending validation on
+  next session — verify
+  slurm_jobs/quick_runs/logs/narratives_only_err.txt is silent
+  AND all five spec subdirs under NARRATIVES_DIR/{swap_race,
+  swap_psych_history, swap_med_burden, swap_safety, swap_sdoh}/
+  are populated with one .md per cohort patient before closing
+  Task #1).
+
 DECISIONS MADE THIS SESSION (2026-05-12):
 ------------------------------------------
 - FITTED-MODEL CACHING LANDED end-to-end across the classical-ML and
@@ -1213,8 +1255,9 @@ NEXT UP (IMPLEMENTATION ORDER):
       ablating across all 4 embedders: 20 re-embeds. Decide
       embedder scope (winner-only vs all four) before launching.
 
-      Open work (chokepoint surgery + runner-side wiring [DONE
-      2026-05-13]; orchestrator script REMAINS):
+      Open work (chokepoint surgery + runner-side wiring +
+      shakedown sbatch [DONE 2026-05-13]; orchestrator script
+      REMAINS):
         * Runner-side wiring (Task #2) [DONE 2026-05-13]: landed
           inside scripts/digital_twins/narratives/generator.py.
           generate_deterministic_narratives() now (a) materializes
@@ -1234,8 +1277,27 @@ NEXT UP (IMPLEMENTATION ORDER):
           LOUD on missing registration; partial-rerun footgun
           stands: a fully-cached patient sails through without
           ever touching the registries, so registration bugs
-          bite only on cold patients. Validate with a
-          SCRUB_NARRATIVES=1 shakedown before declaring victory.
+          bite only on cold patients. Validation harness
+          (sub-bullet below) forces every patient cold via
+          SCRUB_NARRATIVES=1.
+        * Shakedown sbatch [DONE 2026-05-13]:
+          slurm_jobs/quick_runs/narratives_only.sbatch.
+          CPU-only c3_short, 1h cap, no GPU. Sources .env,
+          exports SCRUB_NARRATIVES=1, runs forge_narratives
+          and nothing else. First submission (job 1911833) hit
+          a Python 3.11 f-string SyntaxError at
+          deterministic_narrative.py:243 (nested same-quote
+          f-string, PEP 701 not available in 3.11) — fix
+          documented in the top-of-file 2026-05-13 decisions
+          block. Resubmitted as job 1911841; verify in the
+          NEXT session that
+          slurm_jobs/quick_runs/logs/narratives_only_err.txt
+          is silent AND all five spec subdirs
+          (NARRATIVES_DIR/{swap_race, swap_psych_history,
+          swap_med_burden, swap_safety, swap_sdoh}/) are
+          populated with one .md per cohort patient. Silence +
+          populated subdirs = Task #1 closed and the chokepoint
+          surgery stands.
         * Orchestrator (Task #3): runs forge_embeddings +
           classical_ml across each per-spec narrative subdir on
           the EMBEDDED side only. Mechanism likely a Python
