@@ -1541,8 +1541,10 @@ NEXT UP (IMPLEMENTATION ORDER):
 
       Open work (chokepoint surgery + runner-side wiring +
       shakedown sbatch + orchestrator Steps 1-3 [DONE
-      2026-05-13]; classical_ml integration + summary CSV
-      REMAIN):
+      2026-05-13]; Steps 4-5 [DONE 2026-05-14]. Smoke test
+      of ablation_only.sbatch against the new inlined
+      pipeline still pending — see "POST-INLINING SMOKE
+      TEST" below):
         * Runner-side wiring (Task #2) [DONE 2026-05-13]: landed
           inside scripts/digital_twins/narratives/generator.py.
           generate_deterministic_narratives() now (a) materializes
@@ -1594,10 +1596,10 @@ NEXT UP (IMPLEMENTATION ORDER):
           reruns. Job 1912002 currently running the first
           end-to-end 5x embed pass.
         * Step 4 — inline EMBEDDED ML in ablation_runner
-          (PENDING, ARCHITECTURE REVISED 2026-05-14): the
-          per-spec ML pass is INLINED directly inside the
-          spec loop of ablation_runner.py, NOT shelled out
-          via subprocess.run to classical_ml. Rationale:
+          [DONE 2026-05-14]: the per-spec ML pass is
+          INLINED directly inside the spec loop of
+          ablation_runner.py, NOT shelled out via
+          subprocess.run to classical_ml. Rationale:
           classical_ml.main() loops over BOTH VectorSource
           values; running it as a subprocess per spec would
           either (a) waste five full GridSearchCV passes on
@@ -1666,25 +1668,56 @@ NEXT UP (IMPLEMENTATION ORDER):
               accidentally iterated VectorSource; if
               results.txt shows up the migration to JSON
               backslid.
-        * Step 5 — ablation_summary.csv (PENDING): after the
-          spec loop completes, walk each per-spec
-          RESULTS_DIR / classical_ml_results_EMBEDDED.json,
-          json.load each one, then json.load the baseline
-          classical_ml_results_EMBEDDED.json at the parent
-          RESULTS_DIR, and emit a single
-          ablation_summary.csv into the baseline RESULTS_DIR.
-          Columns: spec_id, classifier, roc_score,
-          roc_score_ci_low, roc_score_ci_high, auprc,
-          brier_score, weighted_calibration_error,
-          calibration_slope, calibration_intercept, plus
-          delta-from-baseline columns for each metric.
-          Single-shot diff against the baseline metric dict
-          on disk at ARTIFACTS_DIR/{EMBEDDER}/{VLLM}/
-          classical_ml_results_EMBEDDED.json. Emission
-          point: bottom of ablation_runner.main(), after
-          the spec loop exits cleanly. No subprocess, no
-          regex parsing — pure json.load + nested-dict
-          subtraction + csv.DictWriter.
+        * Step 5 — ablation_summary.csv [DONE 2026-05-14]:
+          implemented as emit_ablation_summary(baseline_
+          results_dir) in ablation_runner.py, called once
+          at the bottom of main() after the spec loop
+          exits. Loads baseline classical_ml_results_
+          EMBEDDED.json + each per-spec
+          classical_ml_results_EMBEDDED.json, builds 20
+          rows (5 specs x 4 classifiers) with 18 columns
+          each — 2 ID (spec_id, classifier) + 8 raw
+          metric keys spread from the per-spec dict +
+          8 delta_<metric_name> keys computed by simple
+          subtraction against baseline_metrics[
+          classifier_name]. Output:
+          ${baseline_RESULTS_DIR}/ablation_summary.csv.
+          Implementation uses stdlib csv.DictWriter,
+          newline='' on the file open, fieldnames pulled
+          from rows[0].keys() to preserve insertion
+          order. NO subprocess, NO regex parsing — pure
+          json.load + nested-dict subtraction +
+          csv.DictWriter. Delta-loop drives off
+          rows[0]'s metric keys (not a hardcoded list)
+          so the schema adapts automatically if
+          compute_metrics ever grows a ninth key.
+        * POST-INLINING SMOKE TEST (PENDING): submit
+          ablation_only.sbatch against the new
+          ablation_runner.py end-to-end. Verify per spec
+          subdir under RESULTS_DIR contains:
+            - classical_ml_results_EMBEDDED.json (4
+              lowercase classifier keys, 8 metric keys
+              each)
+            - grid_search_ml_results_EMBEDDED.json
+            - trained_models/{model_name}_EMBEDDED.joblib
+              (x4)
+            - ROC / PR / calibration / DCA / optimal-CM
+              plot PNGs (5 per classifier x 4 classifiers
+              = 20 plot files)
+            - NO FEATURE artifacts (presence indicates
+              the inlined loop accidentally iterated
+              VectorSource)
+            - NO results.txt (presence indicates the
+              JSON migration backslid OR feature_
+              importance ran with this RESULTS_DIR
+              pointed at the spec subdir — which it
+              should NOT, since feature_importance is
+              not part of ablation_runner)
+          Verify baseline RESULTS_DIR contains exactly
+          one ablation_summary.csv (1 header row + 20
+          data rows, 18 columns each). Open it; eyeball
+          that the delta_* columns are nonzero and sign-
+          coherent.
 
 LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):
 -------------------------------------------------------
