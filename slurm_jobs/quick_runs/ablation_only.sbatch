@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=embedding_pipeline
+#SBATCH --job-name=ablation_only
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/pipeline/logs/embedding_pipeline_out.txt
-#SBATCH -e slurm_jobs/pipeline/logs/embedding_pipeline_err.txt
+#SBATCH -o slurm_jobs/quick_runs/logs/ablation_only_out.txt
+#SBATCH -e slurm_jobs/quick_runs/logs/ablation_only_err.txt
 #SBATCH --gres=gpu:1
 
 # Exit immediately if command fails
@@ -14,7 +14,6 @@ set -e
 
 # ---- Conda configuration ----
 CONDA_ENV=ehr_env
-N_THREADS="${SLURM_CPUS_PER_TASK}"
 
 # ---- Boilerplate env/bootstrap ----
 module purge
@@ -32,7 +31,4 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-python -m scripts.digital_twins.narratives.forge_narratives
-python -m scripts.digital_twins.vectors.forge_vectors
-python -m scripts.digital_twins.embeddings.forge_embeddings
 python -m scripts.digital_twins.predictions.ablation_runner

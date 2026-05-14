@@ -3,6 +3,152 @@ PATIENT VECTOR & ML BASELINE — REMAINING WORK
 
 DECISIONS MADE THIS SESSION (2026-05-13):
 ------------------------------------------
+- NARRATIVE SET-ORDER NONDETERMINISM FIXED at three render
+  sites in scripts/data_loading/deterministic_narrative.py.
+  Three bundle values are typed `set[str]`
+  (medication_burden.active_meds returned by polypharmacy(),
+  medication_burden.nsaid_ingredients returned by
+  nsaid_burden(), treatment_exposure.hypnotics returned by
+  hypnotic_burden()). The renderer joined each with ', '
+  WITHOUT first sorting. copy.deepcopy(anchor_bundles) in
+  apply_ablation rebuilds these sets through fresh hash-table
+  growth, so the new set iterates in a different order than
+  the original. Symptom: for a SINGLE patient, the baseline
+  narrative rendered the active-meds list as e.g.
+  "(fluoxetine, aspirin, bupropion)" while ALL FOUR unrelated
+  ablations (swap_race, swap_safety, swap_psych_history,
+  swap_sdoh) rendered it as "(aspirin, fluoxetine, bupropion)"
+  — same drugs, different order. The four ablations agreed
+  with each other (they all use deepcopy'd bundles) but
+  disagreed with baseline (which uses the ORIGINAL bundle).
+  This silently inflated the byte-diff hit rate for every
+  spec by adding reorder-noise on top of the genuine swap
+  signal. Fix: wrap each iterable inside the f-string with
+  sorted(...). Lines 229, 236, 237. Sets are tiny (single-
+  digit counts); sort cost is irrelevant. Fix landed at
+  render time NOT at extractor time because the extractors
+  are also consumed by feature_vector.py, KNN scoring, and
+  classical_ml — changing their return type would ripple.
+  Sorting at the render boundary is the minimum-blast-radius
+  fix. Post-fix smoke verified byte-equality: baseline +
+  swap_race + swap_psych_history + swap_safety + swap_sdoh
+  all render the same med-list line for patients whose
+  donor's perturbed field happened to match the anchor.
+
+- TASK #1 (CHOKEPOINT + RUNNER WIRING + NARRATIVE SHAKEDOWN)
+  FULLY CLOSED 2026-05-13. Re-submitted narratives_only
+  sbatch after the set→sorted patch. Final smoke results:
+    * slurm_jobs/quick_runs/logs/narratives_only_err.txt: 0
+      lines. No SyntaxError, no KeyError on missing
+      registration, no f-string failure.
+    * NARRATIVES_DIR/{patient_id}.md baseline: 9725 files.
+    * NARRATIVES_DIR/{swap_race, swap_psych_history,
+      swap_med_burden, swap_safety, swap_sdoh}/: 9725 files
+      each, matching baseline 1:1.
+    * Surgical scope verified per spec on hand-picked
+      patients with non-blank target fields:
+        - swap_race: only Race_Ethnicity token on the
+          sociodemographics line changes (White → Black or
+          African American). Other tokens preserved. SDOH
+          line untouched.
+        - swap_sdoh: only the `SDOH: ...` line changes (e.g.
+          Social Environment → None Recorded). Sociodemo line
+          untouched.
+        - swap_safety: only the SAFETY line changes
+          (UNCONTROLLED_HTN Present → Absent).
+        - swap_psych_history / swap_med_burden: whole
+          section swapped as designed.
+    * Hit rates (fraction of 200 random patients whose
+      baseline vs spec narrative differs byte-for-byte): race
+      34%, psych 86%, med_burden 99%, safety 55%, sdoh 13%.
+      Hit rates track the marginal distribution of each
+      perturbed field in the cohort, not a pipeline bug.
+      sdoh hits only 13% because most patients have "None
+      Recorded" so most Sattolo-paired donors carry the same
+      blank value. Same logic explains the dominant-class
+      collisions on race (mostly White) and safety (mostly
+      all-Absent). The pre-fix hit rates (race 45%, sdoh 33%,
+      etc.) were ARTIFICIALLY INFLATED by the med-list set-
+      order churn — those numbers counted reorder-noise as
+      real swap signal. Post-fix numbers are the true
+      marginal-collision rates and define the ceiling on
+      observable embedding-side ablation deltas.
+
+- TASK #3 ORCHESTRATOR (Steps 1-3) LANDED 2026-05-13.
+    * Step 1 — env-mutation scaffold:
+      scripts/digital_twins/predictions/ablation_runner.py.
+      main() reads baseline NARRATIVES_DIR / EMBEDDINGS_DIR /
+      RESULTS_DIR from os.environ, then iterates ABLATIONS;
+      per spec, derives the per-spec suffix subdir, mutates
+      os.environ['NARRATIVES_DIR'] / ['EMBEDDINGS_DIR'] /
+      ['RESULTS_DIR'] to the str-cast Path, mkdir(parents=
+      True, exist_ok=True) on the embeddings + results
+      subdirs (narrative subdirs already exist from Task #1
+      generation). One print-block per spec dumps all three
+      resolved paths for audit.
+    * Step 2 — forge_embeddings subprocess:
+      subprocess.run(["python", "-m",
+      "scripts.digital_twins.embeddings.forge_embeddings"],
+      check=True) inside the spec loop after the print block.
+      No env= argument — child inherits the parent's mutated
+      os.environ at fork time. PatientEmbedder.__init__
+      snapshots EMBEDDINGS_DIR on instantiation, which is why
+      a subprocess (fresh interpreter) is required rather
+      than in-process imports. check=True so a failure on
+      spec N aborts the loop before specs N+1..5 produce
+      orphaned half-states.
+    * Step 3 — sbatch wrapper:
+      slurm_jobs/quick_runs/ablation_only.sbatch. Mirrors
+      run_embedding_pipeline.sbatch resource shape: c3_accel,
+      7-00:00:00, 8 cpus, 64G, --gres=gpu:1. Sources .env,
+      no SCRUB flags exported, single `python -m
+      scripts.digital_twins.predictions.ablation_runner` at
+      the bottom. Log paths split at slurm_jobs/quick_runs/
+      logs/ablation_only_{out,err}.txt to preserve the
+      err-stream-grep convention from narratives_only.
+    * First submission: job 1912002 (currently running on
+      c3_accel). 5 sequential embed passes over 9725
+      narratives each.
+    * Confirmed safe: forge_embeddings.py:19 uses
+      narratives_dir.glob("*.md") — NON-recursive — so the
+      baseline embedder will not accidentally walk into
+      NARRATIVES_DIR/{spec_id}/ and embed 6x the cohort
+      under the baseline embeddings.db. Spec subdirs are
+      ignored by baseline globbing.
+
+- ABLATION PATH LAYOUT LOCKED 2026-05-13: suffix per
+  spec_id, no interior "ablations/" dir. Per-spec
+  EMBEDDINGS_DIR = ARTIFACTS_DIR/{EMBEDDER}/{spec_id}.
+  Per-spec RESULTS_DIR =
+  ARTIFACTS_DIR/{EMBEDDER}/{VLLM}/{spec_id}. Per-spec
+  NARRATIVES_DIR = ARTIFACTS_DIR/deterministic_narratives/
+  {spec_id} (set by Task #1 narrative generation, consumed
+  by Task #3 via env override). Baseline outputs sit at the
+  same nesting depth as spec outputs but are keyed by the
+  un-suffixed name (`embeddings.db`, `results.txt`) at the
+  parent level; per-spec subdirs live as siblings of those
+  files. Removing one ablation = `rm -rf` the matching spec
+  subdir in each of the three trees.
+
+- ABLATION_RUNNER LOCATION LOCKED at
+  scripts/digital_twins/predictions/ablation_runner.py
+  (sibling of classical_ml.py and feature_importance.py).
+  Rationale: ablation_runner DRIVES classical_ml inside its
+  loop (Step 4, pending). Living under data_loading would
+  miscategorize it as ETL when its actual responsibility is
+  downstream-pipeline orchestration.
+
+- run_embedding_pipeline.sbatch APPENDED 2026-05-13 with a
+  trailing `python -m
+  scripts.digital_twins.predictions.ablation_runner` line
+  (line 38). Means every full pipeline rerun now does
+  baseline narratives + vectors + baseline embed + 5x spec
+  embeds. Trade-off accepted: convenience of single-sbatch
+  full rebuild vs the coupling cost that routine pipeline
+  reruns now pay the 5x ablation budget. For ablation-only
+  reruns (baseline already done), use ablation_only.sbatch
+  instead.
+
 - ABLATION CHOKEPOINT SURGERY LANDED end-to-end inside
   scripts/data_loading/deterministic_narrative.py. The prior
   monolithic generate_deterministic_narrative has been factored
@@ -1256,8 +1402,9 @@ NEXT UP (IMPLEMENTATION ORDER):
       embedder scope (winner-only vs all four) before launching.
 
       Open work (chokepoint surgery + runner-side wiring +
-      shakedown sbatch [DONE 2026-05-13]; orchestrator script
-      REMAINS):
+      shakedown sbatch + orchestrator Steps 1-3 [DONE
+      2026-05-13]; classical_ml integration + summary CSV
+      REMAIN):
         * Runner-side wiring (Task #2) [DONE 2026-05-13]: landed
           inside scripts/digital_twins/narratives/generator.py.
           generate_deterministic_narratives() now (a) materializes
@@ -1298,14 +1445,42 @@ NEXT UP (IMPLEMENTATION ORDER):
           populated with one .md per cohort patient. Silence +
           populated subdirs = Task #1 closed and the chokepoint
           surgery stands.
-        * Orchestrator (Task #3): runs forge_embeddings +
-          classical_ml across each per-spec narrative subdir on
-          the EMBEDDED side only. Mechanism likely a Python
-          driver that overrides NARRATIVES_DIR / EMBEDDINGS_DIR /
-          RESULTS_DIR per iteration (the three downstream
-          consumers still read those from env). Emits
-          ablation_summary.csv diffing each spec against
-          baseline.
+        * Orchestrator (Task #3) Steps 1-3 [DONE 2026-05-13]:
+          ablation_runner.py at scripts/digital_twins/
+          predictions/. Iterates ABLATIONS, mutates
+          NARRATIVES_DIR / EMBEDDINGS_DIR / RESULTS_DIR per
+          spec, calls subprocess.run on forge_embeddings with
+          check=True. Wrapped by ablation_only.sbatch
+          (c3_accel, GPU, 7d) and additionally appended to
+          run_embedding_pipeline.sbatch for full-pipeline
+          reruns. Job 1912002 currently running the first
+          end-to-end 5x embed pass.
+        * Step 4 — classical_ml integration (PENDING): add a
+          second subprocess.run inside the loop calling
+          `python -m
+          scripts.digital_twins.predictions.classical_ml`.
+          Constraints: must run AFTER forge_embeddings in the
+          same iteration so the per-spec embeddings.db
+          exists; must respect VectorSource.EMBEDDED only
+          (KNN and feature-vector paths are out of scope for
+          ablation). classical_ml already reads RESULTS_DIR
+          and EMBEDDINGS_DIR from env, so no flag plumbing
+          needed. Verify each spec's RESULTS_DIR ends with
+          its own results.txt + grid_search_ml_results_
+          EMBEDDED.json + trained_models/ subdir after a full
+          orchestrator run.
+        * Step 5 — ablation_summary.csv (PENDING): after the
+          spec loop completes, walk each per-spec RESULTS_DIR
+          / results.txt, parse the EMBEDDED metric blocks,
+          and emit a single ablation_summary.csv into the
+          baseline RESULTS_DIR. Columns: spec_id, classifier,
+          roc_score, roc_score_ci_low, roc_score_ci_high,
+          auprc, brier_score, weighted_calibration_error,
+          calibration_slope, calibration_intercept, plus
+          delta-from-baseline columns for each metric.
+          Single-shot diff against the baseline metric block
+          already on disk in
+          ARTIFACTS_DIR/{EMBEDDER}/{VLLM}/results.txt.
 
 LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):
 -------------------------------------------------------

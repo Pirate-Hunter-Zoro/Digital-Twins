@@ -226,15 +226,15 @@ MDD within window: {get_bool_str(cohort['mdd_within_window'])}\n"
     hypnotics_burden_set = treat["hypnotics"]
     TREAT_EXPOSURE = f"### TREATMENT EXPOSURE\nPrior adequate AD trials: {' | '.join([f'{arm}: {adequate_trials_count[arm]}' for arm in adequate_trials_count.keys()]) if len(adequate_trials_count) > 0 else 'Absent'}\n\
 Benzodiazepine days (90d): {treat['benzo_days']}\n\
-Hypnotics: {' | '.join([hypnotic for hypnotic in hypnotics_burden_set]) if len(hypnotics_burden_set) > 0 else 'Absent'}\n\
+Hypnotics: {' | '.join([hypnotic for hypnotic in sorted(hypnotics_burden_set)]) if len(hypnotics_burden_set) > 0 else 'Absent'}\n\
 Augmentation: {get_bool_str(treat['augmentation'])}\n\
 Somatic treatments: {get_bool_str(treat['somatic'])} | Psychotherapy visits ({YEARS_BACK}y): {treat['psychotherapy_count'] if treat['psychotherapy_count'] > 0 else 'Absent'}\n"
 
     medburden = bundles["medication_burden"]
     distinct_ingredients = medburden["active_meds"]
     distinct_nsaid_ingredients = medburden["nsaid_ingredients"]
-    MED_BURDEN = f"### MEDICATION BURDEN\nActive meds at baseline: {len(distinct_ingredients)} ({', '.join([ingredient for ingredient in distinct_ingredients]) if len(distinct_ingredients) > 0 else 'Absent'})\n\
-NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingredient in distinct_nsaid_ingredients]) if len(distinct_nsaid_ingredients) > 0 else 'Absent'})\n"
+    MED_BURDEN = f"### MEDICATION BURDEN\nActive meds at baseline: {len(distinct_ingredients)} ({', '.join([ingredient for ingredient in sorted(distinct_ingredients)]) if len(distinct_ingredients) > 0 else 'Absent'})\n\
+NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingredient in sorted(distinct_nsaid_ingredients)]) if len(distinct_nsaid_ingredients) > 0 else 'Absent'})\n"
 
     util = bundles["utilization"]
     UTILIZATION = f"### UTILIZATION\nPsych inpatient days: {util['psych_inpatient_days']} ({YEARS_BACK}y) | ED psych visits: {util['ed_psych_visits']} ({YEARS_BACK}y)\n"
