@@ -40,4 +40,4 @@ def generate_deterministic_narratives():
             narrative_lengths['days_of_history'].append(history_length)
             if (i + 1) % RECORD_EVERY == 0:
                 print(f"Created {i+1} deterministic narratives...", flush=True)
-    pd.DataFrame(narrative_lengths).to_csv(Path(os.environ['NARRATIVES_DIR']) / 'narrative_days_of_history.csv')
+    pd.DataFrame(narrative_lengths).to_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_days_of_history.csv')
