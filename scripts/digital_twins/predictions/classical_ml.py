@@ -195,7 +195,7 @@ def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataF
 def main():
     # Get training and test split
     (train_ids, test_ids) = create_train_test_split()
-    
+     
     for source in VectorSource:
         (train_X, train_y) = load_data_set(train_ids, source=source)
         (test_X, test_y) = load_data_set(test_ids, source=source)
@@ -203,7 +203,7 @@ def main():
         model_predictions, grid_search_results = evaluate_models(train_X, train_y, test_X, source)
         with open(Path(os.environ['RESULTS_DIR']) / f"grid_search_ml_results_{source.name}.json", 'w') as f:
             json.dump(grid_search_results, f, indent=4)
-        text_report = ""
+        results = {}
         for model_name, predictions in model_predictions.items():
             metrics = compute_metrics(y_true=test_y, y_prob=predictions)
             _, roc_score_ci_low, roc_score_ci_high = plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
@@ -212,19 +212,13 @@ def main():
             plot_decision_curve_analysis(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
             plot_optimal_confusion_matrix(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
         
-            text_report += f"{model_name.upper()}_{source.name} Metrics:\n\
-    'roc_score': {metrics['roc_score']}\n\
-    'roc_score_ci_low': {roc_score_ci_low}\n\
-    'roc_score_ci_high': {roc_score_ci_high}\n\
-    'auprc': {metrics['auprc']}\n\
-    'brier_score': {metrics['brier_score']}\n\
-    'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\
-    'calibration_slope': {metrics['calibration_slope']}\n\
-    'calibration_intercept': {metrics['calibration_intercept']}\n\n"
+            metrics['roc_score_ci_low'] = roc_score_ci_low
+            metrics['roc_score_ci_high'] = roc_score_ci_high
+            results[model_name.lower()] = metrics
         
-        results_txt_file = Path(os.environ['RESULTS_DIR']) / f'results.txt'
-        with open(results_txt_file, 'a') as f:
-            f.write(text_report)
+        results_json_file = Path(os.environ['RESULTS_DIR']) / f'classical_ml_results_{source.name}.json'
+        with open(results_json_file, 'w') as f:
+            json.dump(results, f, indent=4)
         
 if __name__=="__main__":
     main()

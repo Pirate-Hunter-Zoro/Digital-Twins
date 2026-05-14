@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import json
 
 from sklearn.metrics import (
     roc_auc_score, 
@@ -152,9 +153,6 @@ def run_trd_prediction_computation():
         for patient_id in anchor_ids
     }
     
-    # Create a report to put in a text file
-    text_report = "Prediction Analysis Report\n\n"
-    
     # Run the battle
     results = {}
     # Store for each mode and strategy the TRD predictions of each anchor patient
@@ -186,28 +184,13 @@ def run_trd_prediction_computation():
             plot_decision_curve_analysis(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
             plot_effective_sample_size_distribution(ess_values=np.array(ess_values), mode=f'{scheme.name}_{strat.name}')
             plot_optimal_confusion_matrix(y_true=np.array(labels), y_prob=np.array(risks), mode=f'{scheme.name}_{strat.name}')
-            # Add to text report
-            text_report += f"{scheme.name}_{strat.name} Metrics:\n\
-    'roc_score': {metrics['roc_score']}\n\
-    'roc_score_ci_low': {roc_score_ci_low}\n\
-    'roc_score_ci_high': {roc_score_ci_high}\n\
-    'auprc': {metrics['auprc']}\n\
-    'brier_score': {metrics['brier_score']}\n\
-    'weighted_calibration_error': {metrics['weighted_calibration_error']}\n\
-    'mean_ESS': {np.mean(np.array(ess_values))}\n\n"
-            results[f"{scheme.name}_{strat.name}"] = {
-                'roc_score': metrics['roc_score'],
-                'roc_score_ci_low': roc_score_ci_low,
-                'roc_score_ci_high': roc_score_ci_high,
-                'auprc': metrics['auprc'],
-                'brier_score': metrics['brier_score'],
-                'weighted_calibration_error': metrics['weighted_calibration_error'],
-                'Mean_ESS': np.mean(np.array(ess_values))
-            }
+            metrics['roc_score_ci_low'] = roc_score_ci_low
+            metrics['roc_score_ci_high'] = roc_score_ci_high
+            metrics['mean_ESS'] = np.mean(np.array(ess_values))
+            results[f"{scheme.name}_{strat.name}"] = metrics
     
-    results_txt_file = Path(os.environ['RESULTS_DIR']) / f'results.txt'
-    with open(results_txt_file, 'w') as f:
-        f.write(text_report)
+    with open(Path(os.environ['RESULTS_DIR']) / 'knn_results.json', 'w') as f:
+        json.dump(results, f, indent=4)
     
     # Turn results into a pandas data frame and save the .csv
     results_df = pd.DataFrame(results)

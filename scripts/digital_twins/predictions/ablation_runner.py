@@ -1,13 +1,26 @@
 import os
 from pathlib import Path
 import subprocess
+import json
 
 from scripts.data_loading.ablation_registry import ABLATIONS
+from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
+from scripts.digital_twins.predictions.classical_ml import load_data_set, evaluate_models
+from scripts.shared.utils import VectorSource
+from scripts.shared.plots import (
+    plot_receiving_operator_characteristic,
+    plot_precision_recall,
+    plot_calibration,
+    plot_decision_curve_analysis,
+    plot_optimal_confusion_matrix
+)
+from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
 
 def main():
     baseline_narratives_dir = Path(os.environ['NARRATIVES_DIR'])
     baseline_embeddings_dir = Path(os.environ['EMBEDDINGS_DIR'])
     baseline_results_dir = Path(os.environ['RESULTS_DIR'])
+    (train_ids, test_ids) = create_train_test_split()
     for spec in ABLATIONS:
         spec_id = spec["id"]
         ablation_narrative_dir = baseline_narratives_dir / spec_id
@@ -27,6 +40,29 @@ def main():
             ["python", '-m', 'scripts.digital_twins.embeddings.forge_embeddings'],
             check=True,
         )
+        train_X, train_y = load_data_set(train_ids, source=VectorSource.EMBEDDED)
+        test_X, test_y = load_data_set(test_ids, source=VectorSource.EMBEDDED)
+        print(f"Running EMBEDDED ML on {spec_id}...", flush=True)
+        (model_predictions, grid_search_results) = evaluate_models(train_X, train_y, test_X, VectorSource.EMBEDDED)
+        with open(Path(os.environ['RESULTS_DIR']) / 'grid_search_ml_results_EMBEDDED.json', 'w') as f:
+            json.dump(grid_search_results, f, indent=4)
+       
+        results = {}
+        for model_name, predictions in model_predictions.items():
+            metrics = compute_metrics(y_true=test_y, y_prob=predictions)
+            _, roc_score_ci_low, roc_score_ci_high = plot_receiving_operator_characteristic(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{VectorSource.EMBEDDED.name}")
+            plot_precision_recall(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{VectorSource.EMBEDDED.name}")
+            plot_calibration(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{VectorSource.EMBEDDED.name}")
+            plot_decision_curve_analysis(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{VectorSource.EMBEDDED.name}")
+            plot_optimal_confusion_matrix(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{VectorSource.EMBEDDED.name}")
+        
+            metrics['roc_score_ci_low'] = roc_score_ci_low
+            metrics['roc_score_ci_high'] = roc_score_ci_high
+            results[model_name.lower()] = metrics
+        
+        results_json_file = Path(os.environ['RESULTS_DIR']) / f'classical_ml_results_{VectorSource.EMBEDDED.name}.json'
+        with open(results_json_file, 'w') as f:
+            json.dump(results, f, indent=4)
 
 if __name__=="__main__":
     main()

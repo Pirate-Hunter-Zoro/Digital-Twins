@@ -1,6 +1,144 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+DECISIONS MADE THIS SESSION (2026-05-14):
+------------------------------------------
+- METRICS REPORTING ARTIFACT FORMAT MIGRATED FROM
+  results.txt TO PER-PIPELINE JSON. Touches four
+  writers across the predictions package:
+    * classical_ml.py: replaces the eight-key text
+      block per (classifier, source) with a structured
+      json.dump to ${RESULTS_DIR}/classical_ml_results_
+      {source.name}.json — one file per VectorSource,
+      top-level keyed by lowercase classifier name,
+      values are eight-key inner metric dicts. The
+      text_report string-accumulation and the
+      results.txt append-mode write at the bottom of
+      classical_ml.main()'s per-source body are
+      removed entirely.
+    * ablation_runner.py: mirrors the new
+      classical_ml convention — emits classical_ml_
+      metrics_EMBEDDED.json per spec instead of
+      appending a text block. text_report and the
+      results.txt append are removed.
+    * trd_prediction_computation.py (KNN): replaces
+      the results.txt 'w'-mode write with a json.dump
+      of the already-existing per-(scheme, strategy)
+      results dict to ${RESULTS_DIR}/knn_results.json.
+      The text_report string accumulation is removed.
+      KNN JSON is a SUPERSET of the classical-ML inner
+      dict: same eight metric keys plus a ninth
+      mean_ess (lowercase). The earlier "calibration_
+      slope/intercept exclusive to classical_ml" claim
+      was an artifact of the retired text-report
+      writer's hand-curated key list, not a real
+      measurement constraint — both are well-defined
+      for any (y_true, y_prob) pair. Decision 2026-
+      05-14: include them in the KNN JSON as an
+      enrichment rather than carry a paring-down
+      literal that drifts whenever compute_metrics
+      gains a key.
+    * feature_importance.py: DEFERRED 2026-05-14, NOT
+      DONE. Still writes the LOGISTIC_REGRESSION_
+      EMBEDDED Sparsity block to results.txt in 'a'
+      mode (lines 357-362 of feature_importance.py).
+      The migration target — json.dump of a two-key
+      payload (nonzero_coefficients, total_
+      coefficients) to ${RESULTS_DIR}/feature_
+      importance_sparsity.json — is sketched but the
+      surgery was punted to a future session. Side
+      effect: results.txt CAN still appear under
+      RESULTS_DIR for pipeline runs that exercise the
+      feature_importance EMBEDDED branch (i.e., runs
+      where logistic_regression is one of the fit
+      classifiers, which is always). The other three
+      writers (classical_ml, trd_prediction_
+      computation, ablation_runner) DO NOT touch
+      results.txt anymore. So the file's mere
+      existence post-run is no longer an indicator
+      that the migration backslid — it just means
+      feature_importance hasn't been migrated yet.
+      Step 5 (ablation_summary.csv) ignores results.
+      txt entirely; consumes only the per-spec
+      classical_ml_results_EMBEDDED.json files.
+  Motivation: Step 5 (ablation_summary.csv) was about
+  to regex-parse a free-form text file the same
+  process wrote moments earlier. Parsing text we
+  ourselves emitted is a code smell — the writer
+  already owns the dict it stringified. Switching to
+  JSON eliminates the parse step entirely in Step 5
+  (single json.load per spec subdir) and dissolves
+  the prior ordering coupling between KNN and
+  classical_ml, which previously required KNN to run
+  first because results.txt was opened 'w' there and
+  'a' downstream. Each pipeline now owns its own
+  JSON namespace with no cross-writer file sharing.
+
+- ABLATION RUNNER ML INTEGRATION ARCHITECTURE
+  REVISED. Two designs considered and rejected before
+  landing on the third:
+    * REJECTED — subprocess.run on classical_ml per spec:
+      Earlier 2026-05-14 AM edit added a second
+      subprocess.run(["python", "-m",
+      "scripts.digital_twins.predictions.classical_ml"],
+      check=True) inside the spec loop of ablation_runner.
+      Problem: classical_ml.main() iterates over BOTH
+      VectorSource values; the FEATURE branch would re-fit
+      identical training data five times per ablation run.
+      Wall-clock waste plus FEATURE artifacts under
+      every spec subdir, polluting any downstream metric
+      diff that depends on parsing only EMBEDDED blocks.
+      That subprocess.run line is now slated for removal
+      as part of the Step 4 implementation.
+    * REJECTED — ABLATION_MODE env-var gate on
+      classical_ml: would have classical_ml.main() read
+      os.environ.get("ABLATION_MODE", "0") and restrict
+      its iteration to [VectorSource.EMBEDDED] when set.
+      Cheap in lines of code but pollutes the baseline
+      pipeline's primary entry point with a flag whose
+      sole consumer is the ablation runner. Reviewer-
+      hostile and couples the baseline pipeline to its
+      caller. Mentor instinct: a module's public surface
+      should not bend to a single caller's edge case.
+    * ACCEPTED — inline EMBEDDED-only ML inside
+      ablation_runner: ablation_runner imports
+      load_data_set, evaluate_models, compute_metrics,
+      and the plot helpers, and runs the EMBEDDED-only
+      pipeline directly inside the spec loop after
+      forge_embeddings. EMBEDDED-only by construction
+      (no VectorSource loop, no flag). classical_ml.py
+      stays untouched. The ablation pipeline becomes a
+      self-contained module: one file owns narrative-dir
+      env-mutation → per-spec re-embed → per-spec
+      EMBEDDED ML training+eval+plots+results.txt write.
+      Cost: ~30-40 lines of orchestration in
+      ablation_runner mirroring classical_ml.main()'s
+      EMBEDDED branch. Considered acceptable; the
+      duplication is shallow (imports + linear call
+      sequence, no business logic) and isolates ablation
+      orchestration cleanly.
+
+- WHY ABLATION ONLY RUNS ON EMBEDDED: the perturbation
+  surface is the deterministic narrative. FEATURE
+  vectors are built directly from the structured JSON,
+  bypassing the narrative entirely (see Stage 1b in
+  README). Ablating a narrative field has zero effect on
+  the FEATURE branch's parquet rows — same data in, same
+  GridSearchCV result out. KNN + LLM judging also out of
+  scope: KNN is a retrieval scheme over embedded vectors
+  with no notion of perturbation deltas, and LLM judging
+  is expensive per-pair scoring that the ablation
+  pipeline doesn't need. Only the embedded ML branch
+  reads ablation-sensitive inputs.
+
+- README ABLATION SECTION updated to reflect the inlined
+  architecture and the EMBEDDED-only scope. The phrase
+  "re-fits classical_ml.py on EMBEDDED only per spec" in
+  the Planned Extensions block now reads as "inlines the
+  EMBEDDED-only ML pipeline inside ablation_runner"; the
+  run-order arrow points at ablation_runner.main(), not
+  at classical_ml as a subprocess.
+
 DECISIONS MADE THIS SESSION (2026-05-13):
 ------------------------------------------
 - NARRATIVE SET-ORDER NONDETERMINISM FIXED at three render
@@ -1455,32 +1593,98 @@ NEXT UP (IMPLEMENTATION ORDER):
           run_embedding_pipeline.sbatch for full-pipeline
           reruns. Job 1912002 currently running the first
           end-to-end 5x embed pass.
-        * Step 4 — classical_ml integration (PENDING): add a
-          second subprocess.run inside the loop calling
-          `python -m
-          scripts.digital_twins.predictions.classical_ml`.
-          Constraints: must run AFTER forge_embeddings in the
-          same iteration so the per-spec embeddings.db
-          exists; must respect VectorSource.EMBEDDED only
-          (KNN and feature-vector paths are out of scope for
-          ablation). classical_ml already reads RESULTS_DIR
-          and EMBEDDINGS_DIR from env, so no flag plumbing
-          needed. Verify each spec's RESULTS_DIR ends with
-          its own results.txt + grid_search_ml_results_
-          EMBEDDED.json + trained_models/ subdir after a full
-          orchestrator run.
+        * Step 4 — inline EMBEDDED ML in ablation_runner
+          (PENDING, ARCHITECTURE REVISED 2026-05-14): the
+          per-spec ML pass is INLINED directly inside the
+          spec loop of ablation_runner.py, NOT shelled out
+          via subprocess.run to classical_ml. Rationale:
+          classical_ml.main() loops over BOTH VectorSource
+          values; running it as a subprocess per spec would
+          either (a) waste five full GridSearchCV passes on
+          the unchanged FEATURE branch per ablation, or (b)
+          require gating classical_ml on an ABLATION_MODE
+          env var that pollutes the baseline pipeline for
+          one caller's needs. Both rejected. Instead,
+          ablation_runner imports the EMBEDDED-only
+          primitives from classical_ml and shared/plots and
+          runs them inline, EMBEDDED only by construction —
+          no flag to forget, no subprocess to fork, no
+          FEATURE waste. The earlier subprocess.run for
+          classical_ml that was briefly added inside the
+          spec loop (commit window 2026-05-14 AM) must be
+          REMOVED as part of this step; that edit was made
+          under the now-rejected subprocess design.
+            - Imports to lift into ablation_runner:
+              load_data_set, evaluate_models,
+              compute_metrics (from classical_ml +
+              trd_prediction_computation), the four
+              plot_* helpers from scripts.shared.plots
+              that classical_ml.main() invokes, and
+              VectorSource from scripts.shared.utils.
+            - Per-spec body inside the existing loop,
+              after forge_embeddings.subprocess.run
+              returns:
+                · create_train_test_split() to get the
+                  same train/test IDs used everywhere else.
+                · load_data_set(train_ids,
+                  VectorSource.EMBEDDED) + load_data_set(
+                  test_ids, VectorSource.EMBEDDED) — these
+                  read the per-spec embeddings.db that
+                  forge_embeddings just populated, because
+                  EMBEDDINGS_DIR was env-mutated upstream
+                  in the loop.
+                · evaluate_models(X_train, y_train, X_test,
+                  VectorSource.EMBEDDED) — joblib cache
+                  lands in the per-spec
+                  RESULTS_DIR/trained_models/ because
+                  RESULTS_DIR was also env-mutated upstream.
+                · compute_metrics + five plot calls (ROC,
+                  PR, calibration, DCA, optimal CM) +
+                  json.dump of the accumulated per-
+                  classifier metric dict to
+                  ${RESULTS_DIR}/classical_ml_results_
+                  EMBEDDED.json. Schema: top-level keyed
+                  by lowercase classifier name (matching
+                  evaluate_models' internal naming),
+                  values are eight-key inner metric dicts
+                  (roc_score, roc_score_ci_low,
+                  roc_score_ci_high, auprc, brier_score,
+                  weighted_calibration_error,
+                  calibration_slope,
+                  calibration_intercept). NO text_report
+                  string accumulation, NO results.txt
+                  append (those were removed across the
+                  predictions package on 2026-05-14 —
+                  see top-of-file decisions block).
+            - Verify each spec's RESULTS_DIR ends with its
+              own classical_ml_results_EMBEDDED.json +
+              grid_search_ml_results_EMBEDDED.json +
+              trained_models/{model}_EMBEDDED.joblib (x4).
+              NO FEATURE artifacts in spec subdirs and NO
+              results.txt anywhere. If FEATURE shows up
+              under a spec subdir the inlined code
+              accidentally iterated VectorSource; if
+              results.txt shows up the migration to JSON
+              backslid.
         * Step 5 — ablation_summary.csv (PENDING): after the
-          spec loop completes, walk each per-spec RESULTS_DIR
-          / results.txt, parse the EMBEDDED metric blocks,
-          and emit a single ablation_summary.csv into the
-          baseline RESULTS_DIR. Columns: spec_id, classifier,
-          roc_score, roc_score_ci_low, roc_score_ci_high,
-          auprc, brier_score, weighted_calibration_error,
+          spec loop completes, walk each per-spec
+          RESULTS_DIR / classical_ml_results_EMBEDDED.json,
+          json.load each one, then json.load the baseline
+          classical_ml_results_EMBEDDED.json at the parent
+          RESULTS_DIR, and emit a single
+          ablation_summary.csv into the baseline RESULTS_DIR.
+          Columns: spec_id, classifier, roc_score,
+          roc_score_ci_low, roc_score_ci_high, auprc,
+          brier_score, weighted_calibration_error,
           calibration_slope, calibration_intercept, plus
           delta-from-baseline columns for each metric.
-          Single-shot diff against the baseline metric block
-          already on disk in
-          ARTIFACTS_DIR/{EMBEDDER}/{VLLM}/results.txt.
+          Single-shot diff against the baseline metric dict
+          on disk at ARTIFACTS_DIR/{EMBEDDER}/{VLLM}/
+          classical_ml_results_EMBEDDED.json. Emission
+          point: bottom of ablation_runner.main(), after
+          the spec loop exits cleanly. No subprocess, no
+          regex parsing — pure json.load + nested-dict
+          subtraction + csv.DictWriter.
 
 LOWER PRIORITY (DEFERRED UNTIL MAIN PIPELINE IS GREEN):
 -------------------------------------------------------
