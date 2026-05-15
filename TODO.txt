@@ -33,11 +33,6 @@ ACTIVE / IMMEDIATE
       JSON so a reader can distinguish "small importance" from "no
       variability to learn from".
 
-- [ ] Investigate bge-small's bimodal cosine-similarity distribution in
-      test_data/bge-small.png. Every other embedder's pair-cosine
-      distribution is unimodal/normal; bge-small has two clear modes.
-      Confirm on a fresh sample; identify the geometric cause.
-
 - [ ] POST-INLINING SMOKE TEST: submit slurm_jobs/quick_runs/ablation_only.sbatch
       end-to-end against the inlined ablation_runner.py. Verify per spec
       subdir under RESULTS_DIR contains:
@@ -74,6 +69,11 @@ ACTIVE / IMMEDIATE
 
 LOWER PRIORITY — DEFERRED UNTIL MAIN PIPELINE IS GREEN
 ------------------------------------------------------
+- [ ] Investigate bge-small's bimodal cosine-similarity distribution in
+      test_data/bge-small.png. Every other embedder's pair-cosine
+      distribution is unimodal/normal; bge-small has two clear modes.
+      Confirm on a fresh sample; identify the geometric cause.
+
 - [ ] Causal Random Forest + Treatment Heterogeneity notebook
       (causal_forest_analysis.ipynb). Estimates CATE per candidate
       treatment (augmentation, polypharmacy, somatic/ECT, adequate
