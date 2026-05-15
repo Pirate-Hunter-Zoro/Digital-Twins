@@ -212,8 +212,8 @@ def main():
             plot_decision_curve_analysis(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
             plot_optimal_confusion_matrix(y_true=test_y, y_prob=predictions, mode=f"{model_name}_{source.name}")
         
-            metrics['roc_score_ci_low'] = roc_score_ci_low
-            metrics['roc_score_ci_high'] = roc_score_ci_high
+            metrics['roc_score_ci_low'] = float(roc_score_ci_low)
+            metrics['roc_score_ci_high'] = float(roc_score_ci_high)
             results[model_name.lower()] = metrics
         
         results_json_file = Path(os.environ['RESULTS_DIR']) / f'classical_ml_results_{source.name}.json'
