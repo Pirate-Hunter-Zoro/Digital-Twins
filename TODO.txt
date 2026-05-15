@@ -1,43 +1,7 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
-ACTIVE — IMMEDIATE
-------------------
-- [ ] POST-INLINING SMOKE TEST: submit slurm_jobs/quick_runs/ablation_only.sbatch
-      end-to-end against the inlined ablation_runner.py. Verify per spec
-      subdir under RESULTS_DIR contains:
-        * classical_ml_results_EMBEDDED.json (4 lowercase classifier keys,
-          8 metric keys each)
-        * grid_search_ml_results_EMBEDDED.json
-        * trained_models/{model_name}_EMBEDDED.joblib  (x4)
-        * ROC / PR / calibration / DCA / optimal-CM plot PNGs
-          (5 per classifier x 4 classifiers = 20 plot files)
-        * NO FEATURE artifacts (presence indicates the inlined loop
-          accidentally iterated VectorSource)
-        * NO results.txt (presence indicates the JSON migration backslid)
-      Verify baseline RESULTS_DIR contains exactly one ablation_summary.csv
-      (1 header row + 20 data rows, 18 columns each). Open it; eyeball
-      that delta_* columns are nonzero and sign-coherent.
-
-- [ ] Backfill analysis_only.sbatch for ALL FOUR embedders so the FEATURE
-      outputs use the categorical-cast fix AND the feature_importance.py
-      artifacts land for every embedder:
-        * bge-en-icl
-        * bge-small-en-v1.5
-        * Qwen-Qwen3-Embedding-4B
-        * Qwen-Qwen3-Embedding-8B
-      Update .env's EMBEDDER_MODEL_NAME between sequential runs. DO NOT
-      parallelize (shared log paths). Smoke test Qwen-Qwen3-Embedding-8B
-      first to validate the feature_importance integration before fanning
-      out to the other three.
-
-- [ ] Migrate feature_importance.py's last results.txt writer
-      (lines 357-362, LOGISTIC_REGRESSION_EMBEDDED Sparsity block) to
-      json.dump of {nonzero_coefficients, total_coefficients} ->
-      ${RESULTS_DIR}/feature_importance_sparsity.json. Only remaining
-      results.txt appender across the predictions package.
-
-INVESTIGATIONS — ADVISOR / MENTOR ASKS
+ACTIVE / IMMEDIATE
 --------------------------------------
 - [ ] Label history days more explicitly as "history days before anchor
       date" wherever it surfaces (narratives, code comments, plot labels,
@@ -73,6 +37,40 @@ INVESTIGATIONS — ADVISOR / MENTOR ASKS
       test_data/bge-small.png. Every other embedder's pair-cosine
       distribution is unimodal/normal; bge-small has two clear modes.
       Confirm on a fresh sample; identify the geometric cause.
+
+- [ ] POST-INLINING SMOKE TEST: submit slurm_jobs/quick_runs/ablation_only.sbatch
+      end-to-end against the inlined ablation_runner.py. Verify per spec
+      subdir under RESULTS_DIR contains:
+        * classical_ml_results_EMBEDDED.json (4 lowercase classifier keys,
+          8 metric keys each)
+        * grid_search_ml_results_EMBEDDED.json
+        * trained_models/{model_name}_EMBEDDED.joblib  (x4)
+        * ROC / PR / calibration / DCA / optimal-CM plot PNGs
+          (5 per classifier x 4 classifiers = 20 plot files)
+        * NO FEATURE artifacts (presence indicates the inlined loop
+          accidentally iterated VectorSource)
+        * NO results.txt (presence indicates the JSON migration backslid)
+      Verify baseline RESULTS_DIR contains exactly one ablation_summary.csv
+      (1 header row + 20 data rows, 18 columns each). Open it; eyeball
+      that delta_* columns are nonzero and sign-coherent.
+
+- [ ] Backfill analysis_only.sbatch for ALL FOUR embedders so the FEATURE
+      outputs use the categorical-cast fix AND the feature_importance.py
+      artifacts land for every embedder:
+        * bge-en-icl
+        * bge-small-en-v1.5
+        * Qwen-Qwen3-Embedding-4B
+        * Qwen-Qwen3-Embedding-8B
+      Update .env's EMBEDDER_MODEL_NAME between sequential runs. DO NOT
+      parallelize (shared log paths). Smoke test Qwen-Qwen3-Embedding-8B
+      first to validate the feature_importance integration before fanning
+      out to the other three.
+
+- [ ] Migrate feature_importance.py's last results.txt writer
+      (lines 357-362, LOGISTIC_REGRESSION_EMBEDDED Sparsity block) to
+      json.dump of {nonzero_coefficients, total_coefficients} ->
+      ${RESULTS_DIR}/feature_importance_sparsity.json. Only remaining
+      results.txt appender across the predictions package.
 
 LOWER PRIORITY — DEFERRED UNTIL MAIN PIPELINE IS GREEN
 ------------------------------------------------------
