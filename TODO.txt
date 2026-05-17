@@ -3,6 +3,47 @@ PATIENT VECTOR & ML BASELINE — REMAINING WORK
 
 ACTIVE / IMMEDIATE
 --------------------------------------
+- [ ] CRITICAL: ablation_runner.py retrains classifiers per spec
+      instead of freezing the baseline. evaluate_models() reads the
+      ABLATED train_X (because EMBEDDINGS_DIR was just swapped to the
+      per-spec dir) and runs full GridSearchCV (44 LR + 12 RF + 9 GB
+      + 18 XGB fits at 5-fold CV) on every spec whose per-spec
+      trained_models/ cache is empty. Wall-clock ~16.5h per spec,
+      ~3.5 days for the locked 5-spec slate. Worse, it answers the
+      WRONG question — "could the model route around the ablation?"
+      rather than the input-perturbation attribution the README
+      claims ("does the embedder's encoding of concept X drive
+      predictions?"). Retraining lets the classifier find
+      compensating signal and under-reports importance.
+      Fix:
+        1. Produce baseline EMBEDDED artifacts in the baseline
+           RESULTS_DIR (no spec subdir) by running classical_ml.py
+           once on the baseline embeddings. Required outputs:
+             * trained_models/{logistic_regression, random_forest,
+               gradient_boosting, xgboost}_EMBEDDED.joblib
+             * classical_ml_results_EMBEDDED.json
+           The JSON is also required by emit_ablation_summary —
+           without it the summary emit crashes with
+           FileNotFoundError on baseline_metrics_path.
+        2. Refactor ablation_runner.main() per-spec ML pass:
+             * Drop the load_data_set(train_ids, ...) call — the
+               training set is no longer needed once models are
+               frozen.
+             * Hoist baseline joblib loads outside the spec loop
+               (one joblib.load per classifier, against the baseline
+               RESULTS_DIR/trained_models/{model}_EMBEDDED.joblib).
+             * Inside the spec loop: only load_data_set(test_ids,
+               source=EMBEDDED) against the ablated EMBEDDINGS_DIR,
+               then searcher.predict_proba(test_X) per baseline
+               model, feed compute_metrics + plots +
+               classical_ml_results_EMBEDDED.json emit.
+           Per-spec wall-clock collapses from ~16h to under a minute.
+        3. Delete the stale per-spec trained_models/ directories
+           under swap_race, swap_psych_history, swap_med_burden,
+           swap_safety before rerunning — they encode the
+           wrong-question fits and will mislead any reader who finds
+           them on disk.
+
 - [ ] Label history days more explicitly as "history days before anchor
       date" wherever it surfaces (narratives, code comments, plot labels,
       README).
@@ -33,21 +74,31 @@ ACTIVE / IMMEDIATE
       JSON so a reader can distinguish "small importance" from "no
       variability to learn from".
 
-- [ ] POST-INLINING SMOKE TEST: submit slurm_jobs/quick_runs/ablation_only.sbatch
-      end-to-end against the inlined ablation_runner.py. Verify per spec
-      subdir under RESULTS_DIR contains:
-        * classical_ml_results_EMBEDDED.json (4 lowercase classifier keys,
-          8 metric keys each)
-        * grid_search_ml_results_EMBEDDED.json
-        * trained_models/{model_name}_EMBEDDED.joblib  (x4)
+- [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/ablation_only.sbatch
+      end-to-end against the frozen-baseline ablation_runner.py. Verify
+      baseline RESULTS_DIR contains:
+        * trained_models/{logistic_regression, random_forest,
+          gradient_boosting, xgboost}_EMBEDDED.joblib  (from the
+          one-shot baseline classical_ml.py pass — NOT re-emitted
+          by the ablation runner)
+        * classical_ml_results_EMBEDDED.json (baseline metrics —
+          required by emit_ablation_summary)
+        * exactly one ablation_summary.csv (1 header row + 20 data
+          rows, 18 columns each); open it and eyeball that delta_*
+          columns are nonzero and sign-coherent.
+      Verify each per-spec subdir under RESULTS_DIR contains:
+        * classical_ml_results_EMBEDDED.json (4 lowercase classifier
+          keys, 8 metric keys each)
         * ROC / PR / calibration / DCA / optimal-CM plot PNGs
           (5 per classifier x 4 classifiers = 20 plot files)
+        * NO trained_models/ subdir (presence indicates the frozen
+          baseline refactor backslid into per-spec GridSearchCV)
+        * NO grid_search_ml_results_EMBEDDED.json (same — no per-spec
+          grid search runs)
         * NO FEATURE artifacts (presence indicates the inlined loop
           accidentally iterated VectorSource)
-        * NO results.txt (presence indicates the JSON migration backslid)
-      Verify baseline RESULTS_DIR contains exactly one ablation_summary.csv
-      (1 header row + 20 data rows, 18 columns each). Open it; eyeball
-      that delta_* columns are nonzero and sign-coherent.
+        * NO results.txt (presence indicates the JSON migration
+          backslid)
 
 - [ ] Backfill analysis_only.sbatch for ALL FOUR embedders so the FEATURE
       outputs use the categorical-cast fix AND the feature_importance.py
