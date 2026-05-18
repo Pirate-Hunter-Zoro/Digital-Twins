@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 import subprocess
 import csv
+import joblib
 
 from scripts.data_loading.ablation_registry import ABLATIONS
 from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
@@ -15,10 +16,7 @@ from scripts.shared.plots import (
     plot_optimal_confusion_matrix
 )
 from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
-from scripts.digital_twins.predictions.classical_ml import (
-    load_data_set,
-    evaluate_models
-)
+from scripts.digital_twins.predictions.classical_ml import load_data_set
 
 def emit_ablation_summary(baseline_results_dir: Path):
     """Given the embedded ML results directory, write the ablation results in the same location
@@ -62,7 +60,13 @@ def main():
     baseline_narratives_dir = Path(os.environ['NARRATIVES_DIR'])
     baseline_embeddings_dir = Path(os.environ['EMBEDDINGS_DIR'])
     baseline_results_dir = Path(os.environ['RESULTS_DIR'])
-    (train_ids, test_ids) = create_train_test_split()
+    (_, test_ids) = create_train_test_split()
+    
+    models = ["logistic_regression", "random_forest", "gradient_boosting", "xgboost"]
+    baseline_searchers = {
+        model: joblib.load(baseline_results_dir / "trained_models" / f"{model}_EMBEDDED.joblib")
+        for model in models
+    }
     for spec in ABLATIONS:
         spec_id = spec["id"]
         ablation_narrative_dir = baseline_narratives_dir / spec_id
@@ -85,13 +89,13 @@ def main():
             check=True,
         )
         
-        train_X, train_y = load_data_set(train_ids, source=VectorSource.EMBEDDED)
         test_X, test_y = load_data_set(test_ids, source=VectorSource.EMBEDDED)
         print(f"Running EMBEDDED ML on {spec_id}...", flush=True)
-        (model_predictions, grid_search_results) = evaluate_models(train_X, train_y, test_X, VectorSource.EMBEDDED)
-        with open(Path(os.environ['RESULTS_DIR']) / 'grid_search_ml_results_EMBEDDED.json', 'w') as f:
-            json.dump(grid_search_results, f, indent=4)
-       
+        
+        model_predictions = {
+            model_name: searcher.predict_proba(X=test_X)[:, 1] # Second column is positive class probability, first is negative
+            for model_name, searcher in baseline_searchers.items()
+        }
         results = {}
         for model_name, predictions in model_predictions.items():
             metrics = compute_metrics(y_true=test_y, y_prob=predictions)

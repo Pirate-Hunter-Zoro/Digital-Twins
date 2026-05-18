@@ -1,49 +1,14 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+NOTE TO FUTURE EDITORS (INCLUDING CLAUDE): When work is completed, DELETE the
+corresponding entry from this file. Do not leave checkmarks, "DONE" tags,
+struck-through items, or "(completed YYYY-MM-DD)" annotations. This file
+tracks what's LEFT to do, never what's been finished. Git history records
+completion. Preserve this NOTE block on every edit.
+
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] CRITICAL: ablation_runner.py retrains classifiers per spec
-      instead of freezing the baseline. evaluate_models() reads the
-      ABLATED train_X (because EMBEDDINGS_DIR was just swapped to the
-      per-spec dir) and runs full GridSearchCV (44 LR + 12 RF + 9 GB
-      + 18 XGB fits at 5-fold CV) on every spec whose per-spec
-      trained_models/ cache is empty. Wall-clock ~16.5h per spec,
-      ~3.5 days for the locked 5-spec slate. Worse, it answers the
-      WRONG question — "could the model route around the ablation?"
-      rather than the input-perturbation attribution the README
-      claims ("does the embedder's encoding of concept X drive
-      predictions?"). Retraining lets the classifier find
-      compensating signal and under-reports importance.
-      Fix:
-        1. Produce baseline EMBEDDED artifacts in the baseline
-           RESULTS_DIR (no spec subdir) by running classical_ml.py
-           once on the baseline embeddings. Required outputs:
-             * trained_models/{logistic_regression, random_forest,
-               gradient_boosting, xgboost}_EMBEDDED.joblib
-             * classical_ml_results_EMBEDDED.json
-           The JSON is also required by emit_ablation_summary —
-           without it the summary emit crashes with
-           FileNotFoundError on baseline_metrics_path.
-        2. Refactor ablation_runner.main() per-spec ML pass:
-             * Drop the load_data_set(train_ids, ...) call — the
-               training set is no longer needed once models are
-               frozen.
-             * Hoist baseline joblib loads outside the spec loop
-               (one joblib.load per classifier, against the baseline
-               RESULTS_DIR/trained_models/{model}_EMBEDDED.joblib).
-             * Inside the spec loop: only load_data_set(test_ids,
-               source=EMBEDDED) against the ablated EMBEDDINGS_DIR,
-               then searcher.predict_proba(test_X) per baseline
-               model, feed compute_metrics + plots +
-               classical_ml_results_EMBEDDED.json emit.
-           Per-spec wall-clock collapses from ~16h to under a minute.
-        3. Delete the stale per-spec trained_models/ directories
-           under swap_race, swap_psych_history, swap_med_burden,
-           swap_safety before rerunning — they encode the
-           wrong-question fits and will mislead any reader who finds
-           them on disk.
-
 - [ ] Label history days more explicitly as "history days before anchor
       date" wherever it surfaces (narratives, code comments, plot labels,
       README).
