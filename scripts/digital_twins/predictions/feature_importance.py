@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-PCA_K_VALUES = (16, 32, 64, 128, 256, 512, 1024)
+PCA_K_VALUES = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
 MODEL_NAMES = ("logistic_regression", "random_forest", "gradient_boosting", "xgboost")
 TOP_K = 20
 
@@ -197,35 +197,34 @@ def count_nonzero_lr_coefficients(pipeline: Pipeline) -> tuple[int,int]:
     nonzero = len(feature_coefficients[np.abs(feature_coefficients) > 1e-10])
     return (nonzero, total)
        
-def plot_cumulative_correlation_curve(correlations: np.ndarray, model_name: str):
-    """Plot of cumulative fraction of spearman correlations against risk scores for each dimension
+def plot_cumulative_correlation_overlay(correlations_by_label: dict[str, np.ndarray]):
+    """Plot of overlapping results of cumulative fraction of spearman correlations against risk scores for each dimension over all the given model (or baseline) results
 
     Args:
-        correlations (np.ndarray): Univariate spearman correlations of each feature of the input vectors
-        model_name (str): Model this pertains to
+        correlations_by_label (dict[str, np.ndarray]): Correlation results for each model risk score and for the actual labels
     """
-    # Sort by decreasing magnitude
-    sorted_magnitudes = np.sort(np.abs(correlations))[::-1]
-    cumulative = np.cumsum(sorted_magnitudes) # Last rank holds total mass
-    # Normalize to fraction of mass
-    fraction = cumulative / cumulative[-1]
-    # Create plot of increasing 'rank-1' on the x-axis, farther to the left is where we have added the highest remaining magnitude correlation
-    ranks = np.arange(1, len(fraction)+1)
-    knee_80 = np.searchsorted(fraction, 0.8) + 1
-    knee_90 = np.searchsorted(fraction, 0.9) + 1
     fig, ax = plt.subplots(figsize=(10,6))
-    ax.plot(ranks, fraction, color='steelblue', linewidth=2)
     ax.axhline(0.8, linestyle='--', color='gray', alpha=0.5)
-    ax.axvline(knee_80, linestyle='--', color='gray', alpha=0.5)
-    ax.text(knee_80, 0.8, f"K={knee_80} (80%)")
     ax.axhline(0.9, linestyle='--', color='gray', alpha=0.5)
-    ax.axvline(knee_90, linestyle='--', color='gray', alpha=0.5)
-    ax.text(knee_90, 0.9, f"K={knee_90} (90%)")
+    
+    # Plot each model's correlation output
+    for label, correlations in correlations_by_label.items():
+        # Sort by decreasing magnitude
+        sorted_magnitudes = np.sort(np.abs(correlations))[::-1]
+        cumulative = np.cumsum(sorted_magnitudes) # Last rank holds total mass
+        # Normalize to fraction of mass
+        fraction = cumulative / cumulative[-1]
+        # Create plot of increasing 'rank-1' on the x-axis, farther to the left is where we have added the highest remaining magnitude correlation
+        ranks = np.arange(1, len(fraction)+1)
+        knee_80 = np.searchsorted(fraction, 0.8) + 1
+        knee_90 = np.searchsorted(fraction, 0.9) + 1
+        ax.plot(ranks, fraction, linewidth=2, label=f"{label} (K₈₀={knee_80}, K₉₀={knee_90})")
+    ax.legend(loc='lower right', fontsize=9)
     ax.set_xlabel("Embedding dimension rank (by |Spearman ρ|, descending)")
     ax.set_ylabel("Cumulative |Spearman ρ| fraction")
-    ax.set_title(f"Cumulative correlation curve — {model_name} (EMBEDDED)")
+    ax.set_title(f"Cumulative correlation curve (EMBEDDED)")
     fig.tight_layout()
-    save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" / f"feature_importance_cumulative_{model_name}_EMBEDDED.png"
+    save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" / f"feature_importance_cumulative_EMBEDDED.png"
     os.makedirs(save_path.parent, exist_ok=True)
     fig.savefig(str(save_path), dpi=120)
     plt.close(fig)
@@ -251,7 +250,7 @@ def plot_pca_k_vs_roc(
     y_train: np.ndarray,
     y_test: np.ndarray,
 ):
-    """For each K in {16, 32, 64, 128, 256, 512, 1024}, refit one of the four classifiers on the embedded
+    """For each K in a pre-set list of values, refit one of the four classifiers on the embedded
   vectors projected to K principal components, score it on the held-out test set, and plot ROC AUC
   versus K
 
@@ -330,6 +329,14 @@ def main():
         print(f"Feature importance pass: {source.name} running...", flush=True)
         (X_train, y_train) = load_data_set(train_ids, source)
         (X_test, y_test) = load_data_set(test_ids, source)
+        
+        if source == VectorSource.EMBEDDED:
+            # Grab the feature labels, which are essentially embedding dimension indices
+            correlations_by_label: dict[str, np.ndarray] = {}
+            feature_name_dims = [str(col) for col in X_test.columns]
+            label_correlations = compute_univariate_spearman(X_test, y_test, feature_name_dims)
+            correlations_by_label['TRD label (model-agnostic)'] = label_correlations
+            
         for model_name in MODEL_NAMES:
             print(f"Running {model_name} feature importance under {source.name} vectors...")
             model_pipeline = refit_best_model(model_name, source, X_train, y_train)
@@ -354,17 +361,23 @@ def main():
             else:
                 if model_name == "logistic_regression":
                     (nonzero_count, total_count) = count_nonzero_lr_coefficients(model_pipeline)
-                    results_txt_path = Path(os.environ['RESULTS_DIR']) / "results.txt"
-                    os.makedirs(results_txt_path.parent, exist_ok=True)
-                    with open(results_txt_path, 'a') as f:
-                        f.write("LOGISTIC_REGRESSION_EMBEDDED Sparsity:\n")
-                        f.write(f"  'nonzero_coefficients': {nonzero_count}\n")
-                        f.write(f"  'total_coefficients': {total_count}\n\n")
+                    sparsity_path = Path(os.environ['RESULTS_DIR']) / "feature_importance_sparsity.json"
+                    os.makedirs(sparsity_path.parent, exist_ok=True)
+                    with open(sparsity_path, 'w') as f:
+                        json.dump({
+                            "nonzero_coefficients": nonzero_count,
+                            "total_coefficients": total_count
+                        }, f, indent=4)
+                    
                 risk_scores = model_pipeline.predict_proba(X_test)[:, 1]
                 feature_names = [str(col) for col in X_test.columns]
                 correlations = compute_univariate_spearman(X_test, risk_scores, feature_names)
-                plot_cumulative_correlation_curve(correlations, model_name)
+                correlations_by_label[model_name] = correlations
+                
                 plot_pca_k_vs_roc(model_name, X_train, X_test, y_train, y_test)
+    
+        if source == VectorSource.EMBEDDED:
+            plot_cumulative_correlation_overlay(correlations_by_label)
     
     write_feature_importance_summary(summary)
     

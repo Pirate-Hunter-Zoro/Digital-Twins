@@ -53,11 +53,8 @@ def build_pairings(patient_ids: list[str]) -> Dict[str, Dict[str, str]]:
         # Create pairings for this spec
         rng = random.Random(f"{spec['id']}|{SEED}")
         shuffled = list(patient_ids)
-        for i in range(len(shuffled) - 1, 0, -1):
-            # Sattolo's algorithm guarantees EVERY element will be displaced
-            j = rng.randrange(i)
-            shuffled[i], shuffled[j] = shuffled[j], shuffled[i] 
-        # Because every element got displaced, we just created pairs
+        rng.shuffle(shuffled)
+        # The permutation created pairs (allowing one patient to be their own donor)
         pairings[spec["id"]] = dict(zip(patient_ids, shuffled))
     
     return pairings

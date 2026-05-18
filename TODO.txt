@@ -13,21 +13,6 @@ ACTIVE / IMMEDIATE
       date" wherever it surfaces (narratives, code comments, plot labels,
       README).
 
-- [ ] Model-agnostic per-dim |Spearman rho| importance on the 4096-D
-      embedded features:
-        * |rho| for each of the 4096 dims vs TRD flag.
-        * Sum total |rho|, normalize on total, sort descending,
-          cumulative sum.
-        * Identical |rho| -> 90% of cumulative importance arrives at 90%
-          of dimensions.
-        * Curve is model-agnostic by construction — but compare against
-          the per-classifier feature_importance curves currently emitted
-          and explain divergence.
-
-- [ ] PCA-K sweep starting lower: K in {1..16} before stepping into the
-      existing powers of 2 (32, 64, 128, 256, 512, 1024). Catches any
-      low-rank plateau the current 16-onwards grid hides.
-
 - [ ] Simplify donor pairing: a self-pair is acceptable. Drop Sattolo's
       no-fixed-point guarantee in favor of a plain permutation. Decide
       whether the marginal-distribution savings justify rebuilding
@@ -76,12 +61,6 @@ ACTIVE / IMMEDIATE
       parallelize (shared log paths). Smoke test Qwen-Qwen3-Embedding-8B
       first to validate the feature_importance integration before fanning
       out to the other three.
-
-- [ ] Migrate feature_importance.py's last results.txt writer
-      (lines 357-362, LOGISTIC_REGRESSION_EMBEDDED Sparsity block) to
-      json.dump of {nonzero_coefficients, total_coefficients} ->
-      ${RESULTS_DIR}/feature_importance_sparsity.json. Only remaining
-      results.txt appender across the predictions package.
 
 LOWER PRIORITY — DEFERRED UNTIL MAIN PIPELINE IS GREEN
 ------------------------------------------------------
