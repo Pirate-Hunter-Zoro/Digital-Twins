@@ -197,20 +197,30 @@ def count_nonzero_lr_coefficients(pipeline: Pipeline) -> tuple[int,int]:
     nonzero = len(feature_coefficients[np.abs(feature_coefficients) > 1e-10])
     return (nonzero, total)
        
-def plot_cumulative_correlation_overlay(correlations_by_label: dict[str, np.ndarray]):
-    """Plot of overlapping results of cumulative fraction of spearman correlations against risk scores for each dimension over all the given model (or baseline) results
+def plot_cumulative_magnitude_overlay(
+    magnitudes_by_label: dict[str, np.ndarray],
+    xlabel: str,
+    ylabel: str,
+    title: str,
+    filename: str,
+):
+    """Plot of overlapping results of cumulative fraction of magnitude against output for each dimension over all the given model (or baseline) results
 
     Args:
-        correlations_by_label (dict[str, np.ndarray]): Correlation results for each model risk score and for the actual labels
+        magnitudes_by_label (dict[str, np.ndarray]): Magnitude results for various models/schemes
+        xlabel (str): x-axis text
+        ylabel (str): y-axis text
+        title (str): plot title text
+        filename (str): final segment of save path
     """
     fig, ax = plt.subplots(figsize=(10,6))
     ax.axhline(0.8, linestyle='--', color='gray', alpha=0.5)
     ax.axhline(0.9, linestyle='--', color='gray', alpha=0.5)
     
     # Plot each model's correlation output
-    for label, correlations in correlations_by_label.items():
+    for label, magnitudes in magnitudes_by_label.items():
         # Sort by decreasing magnitude
-        sorted_magnitudes = np.sort(np.abs(correlations))[::-1]
+        sorted_magnitudes = np.sort(np.abs(magnitudes))[::-1]
         cumulative = np.cumsum(sorted_magnitudes) # Last rank holds total mass
         # Normalize to fraction of mass
         fraction = cumulative / cumulative[-1]
@@ -220,11 +230,11 @@ def plot_cumulative_correlation_overlay(correlations_by_label: dict[str, np.ndar
         knee_90 = np.searchsorted(fraction, 0.9) + 1
         ax.plot(ranks, fraction, linewidth=2, label=f"{label} (K₈₀={knee_80}, K₉₀={knee_90})")
     ax.legend(loc='lower right', fontsize=9)
-    ax.set_xlabel("Embedding dimension rank (by |Spearman ρ|, descending)")
-    ax.set_ylabel("Cumulative |Spearman ρ| fraction")
-    ax.set_title(f"Cumulative correlation curve (EMBEDDED)")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
     fig.tight_layout()
-    save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" / f"feature_importance_cumulative_EMBEDDED.png"
+    save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" / filename
     os.makedirs(save_path.parent, exist_ok=True)
     fig.savefig(str(save_path), dpi=120)
     plt.close(fig)
@@ -377,7 +387,13 @@ def main():
                 plot_pca_k_vs_roc(model_name, X_train, X_test, y_train, y_test)
     
         if source == VectorSource.EMBEDDED:
-            plot_cumulative_correlation_overlay(correlations_by_label)
+            plot_cumulative_magnitude_overlay(
+                magnitudes_by_label = correlations_by_label,
+                xlabel = "Embedding dimension rank (by |Spearman ρ|, descending)",
+                ylabel = f"Cumulative |Spearman ρ| fraction",
+                title = f"Cumulative correlation curve ({VectorSource.EMBEDDED.name})",
+                filename = f"feature_correlation_cumulative_{VectorSource.EMBEDDED.name}.png",
+            )
     
     write_feature_importance_summary(summary)
     
