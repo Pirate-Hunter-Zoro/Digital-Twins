@@ -4,6 +4,8 @@ import json
 import subprocess
 import csv
 import joblib
+import numpy as np
+import matplotlib.pyplot as plt
 
 from scripts.data_loading.ablation_registry import ABLATIONS
 from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
@@ -17,6 +19,54 @@ from scripts.shared.plots import (
 )
 from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
 from scripts.digital_twins.predictions.classical_ml import load_data_set
+
+def plot_ablation_deltas(rows: list[dict], baseline_results_dir: Path):
+    """Write one bar-chart PNG per delta metric into baseline_results_dir, x-axis = ablation specs, hue = classifiers.
+
+    Args:
+        rows (list[dict]): Deltas over all the metrics
+        baseline_results_dir (Path): Specify where to build ablation delta results files from
+    """
+    spec_order = [abl["id"] for abl in ABLATIONS]
+    classifier_order = ["logistic_regression", "random_forest", "gradient_boosting", "xgboost"]
+    metrics_to_plot = ["roc_score", "auprc", "brier_score", "weighted_calibration_error", "calibration_slope", "calibration_intercept"]
+    row_lookup = {
+        (row["spec_id"], row["classifier"]): row
+        for row in rows
+    }
+    n_classifiers = len(classifier_order)
+    bar_width = 0.8 / n_classifiers # Leave 20% as gutter so all bars together take up 80% of total room
+    x_base = np.arange(len(spec_order))
+    for metric in metrics_to_plot:
+        fig, ax = plt.subplots(figsize=(12,6))
+        for i, classifier in enumerate(classifier_order):
+            # X positions of the bars for this classifier's errors
+            x_positions = x_base + bar_width * (i - (n_classifiers - 1) / 2)
+            heights = [row_lookup[(spec_id, classifier)][f"delta_{metric}"] for spec_id in spec_order]
+            if metric == "roc_score":
+                # Error bands
+                yerr_lower = [row_lookup[(spec_id, classifier)]["delta_roc_score"] - row_lookup[(spec_id, classifier)]["delta_roc_score_ci_low"] for spec_id in spec_order]
+                yerr_upper = [row_lookup[(spec_id, classifier)]["delta_roc_score_ci_high"] - row_lookup[(spec_id, classifier)]["delta_roc_score"] for spec_id in spec_order]
+                yerr = np.array([yerr_lower, yerr_upper])
+            else:
+                yerr = None
+            ax.bar(
+                x_positions,
+                heights,
+                width=bar_width,
+                label=classifier,
+                yerr=yerr,
+            )
+        ax.axhline(0, color="black", linewidth=0.8, linestyle="--") # y-coordinate of horizontal line is 0
+        ax.set_xticks(x_base)
+        ax.set_xticklabels(spec_order, rotation=15, ha="right")
+        ax.set_xlabel("Ablation Spec")
+        ax.set_ylabel(f"Delta {metric}")
+        ax.set_title(f"Ablation Delta — {metric}")
+        ax.legend(title="Classifier") # The classifier is what the legend labels
+        fig.tight_layout()
+        fig.savefig(baseline_results_dir / f"ablation_delta_{metric}.png")
+        plt.close(fig)
 
 def emit_ablation_summary(baseline_results_dir: Path):
     """Given the embedded ML results directory, write the ablation results in the same location
@@ -55,6 +105,7 @@ def emit_ablation_summary(baseline_results_dir: Path):
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+    plot_ablation_deltas(rows, baseline_results_dir)
 
 def main():
     baseline_narratives_dir = Path(os.environ['NARRATIVES_DIR'])

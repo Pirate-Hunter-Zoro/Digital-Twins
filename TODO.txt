@@ -9,33 +9,6 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] Bar charts of ablation deltas. Add plot_ablation_deltas(rows,
-      baseline_results_dir) -> None to ablation_runner.py, called from
-      emit_ablation_summary after the CSV write (consume the same `rows`
-      list — no CSV re-parse). Emit one PNG per delta metric into
-      baseline_results_dir as ablation_delta_{metric_name}.png:
-        * ablation_delta_roc_score.png        (with asymmetric error
-                                               bars from delta_roc_score_ci_low
-                                               / delta_roc_score_ci_high —
-                                               no standalone PNGs for the
-                                               CI delta columns)
-        * ablation_delta_auprc.png
-        * ablation_delta_brier_score.png
-        * ablation_delta_weighted_calibration_error.png
-        * ablation_delta_calibration_slope.png
-        * ablation_delta_calibration_intercept.png
-      Layout (LOCKED): x-axis = 5 ablation specs (swap_race,
-      swap_psych_history, swap_med_burden, swap_safety, swap_sdoh),
-      hue = 4 classifiers (logistic_regression, random_forest,
-      gradient_boosting, xgboost), y-axis = delta value centered at 0.
-      Read as "per concept, which model is most sensitive?". Needs
-      `import numpy as np` and `import matplotlib.pyplot as plt` added
-      to the existing third-party import block in ablation_runner.py
-      (currently absent). Run AFTER the post-freeze smoke test below
-      validates the baseline pipeline; this is pure post-CSV
-      visualization and won't affect the smoke test's verification
-      checklist.
-
 - [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/ablation_only.sbatch
       end-to-end against the frozen-baseline ablation_runner.py. Verify
       baseline RESULTS_DIR contains:
@@ -48,6 +21,12 @@ ACTIVE / IMMEDIATE
         * exactly one ablation_summary.csv (1 header row + 20 data
           rows, 18 columns each); open it and eyeball that delta_*
           columns are nonzero and sign-coherent.
+        * exactly six ablation_delta_*.png files (one per metric:
+          roc_score, auprc, brier_score, weighted_calibration_error,
+          calibration_slope, calibration_intercept) emitted by
+          plot_ablation_deltas. Open the roc_score PNG and confirm
+          asymmetric CI whiskers render on every bar; open at least
+          one of the other five and confirm bars only (no whiskers).
       Verify each per-spec subdir under RESULTS_DIR contains:
         * classical_ml_results_EMBEDDED.json (4 lowercase classifier
           keys, 8 metric keys each)
