@@ -343,6 +343,7 @@ def main():
         if source == VectorSource.EMBEDDED:
             # Grab the feature labels, which are essentially embedding dimension indices
             correlations_by_label: dict[str, np.ndarray] = {}
+            importances_by_label: dict[str, np.ndarray] = {}
             feature_name_dims = [str(col) for col in X_test.columns]
             label_correlations = compute_univariate_spearman(X_test, y_test, feature_name_dims)
             correlations_by_label['TRD label (model-agnostic)'] = label_correlations
@@ -369,6 +370,10 @@ def main():
                 } for i in sorted_indices.tolist()]
                 summary[model_name] = classifier_top_rows
             else:
+                # EMBEDDED VectorSource
+                (feature_importances, _) = extract_feature_importances(model_pipeline, model_name)
+                importances_by_label[model_name] = feature_importances
+                
                 if model_name == "logistic_regression":
                     (nonzero_count, total_count) = count_nonzero_lr_coefficients(model_pipeline)
                     sparsity_path = Path(os.environ['RESULTS_DIR']) / "feature_importance_sparsity.json"
@@ -387,12 +392,21 @@ def main():
                 plot_pca_k_vs_roc(model_name, X_train, X_test, y_train, y_test)
     
         if source == VectorSource.EMBEDDED:
+            # Plot feature correlations
             plot_cumulative_magnitude_overlay(
                 magnitudes_by_label = correlations_by_label,
                 xlabel = "Embedding dimension rank (by |Spearman ρ|, descending)",
                 ylabel = f"Cumulative |Spearman ρ| fraction",
                 title = f"Cumulative correlation curve ({VectorSource.EMBEDDED.name})",
                 filename = f"feature_correlation_cumulative_{VectorSource.EMBEDDED.name}.png",
+            )
+            # Plot feature importances
+            plot_cumulative_magnitude_overlay(
+                magnitudes_by_label = importances_by_label,
+                xlabel = "Embedding dimension rank (by importance, descending)",
+                ylabel = f"Cumulative importance fraction",
+                title = f"Cumulative importance curve ({VectorSource.EMBEDDED.name})",
+                filename = f"feature_importance_cumulative_{VectorSource.EMBEDDED.name}.png",
             )
     
     write_feature_importance_summary(summary)

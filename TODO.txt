@@ -9,37 +9,9 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] Finish the built-in feature-importance cumulative overlay in
-      scripts/digital_twins/predictions/feature_importance.py. The
-      Spearman correlation overlay was renamed on disk to
-      feature_correlation_cumulative_EMBEDDED.png and the call site
-      was rewired to the generalized plot_cumulative_magnitude_overlay
-      helper; the parallel built-in-importance overlay (target
-      filename feature_importance_cumulative_EMBEDDED.png) is
-      unfinished.
-        * Inside the EMBEDDED branch of main()'s classifier loop,
-          extract per-dim built-in importances (model.coef_[0] for
-          logistic_regression, model.feature_importances_ for the
-          three tree models) and stash them in a new
-          importances_by_label dict keyed by lowercase model_name.
-          The existing extract_feature_importances helper already
-          returns the importance array and works on the EMBEDDED
-          pipeline unchanged.
-        * After the EMBEDDED classifier loop (alongside the existing
-          plot_cumulative_magnitude_overlay call that emits the
-          correlation overlay), call plot_cumulative_magnitude_overlay
-          a second time with importances_by_label and
-          importance-flavored xlabel/ylabel/title plus filename
-          feature_importance_cumulative_EMBEDDED.png.
-
 - [ ] Label history days more explicitly as "history days before anchor
       date" wherever it surfaces (narratives, code comments, plot labels,
       README).
-
-- [ ] Simplify donor pairing: a self-pair is acceptable. Drop Sattolo's
-      no-fixed-point guarantee in favor of a plain permutation. Decide
-      whether the marginal-distribution savings justify rebuilding
-      build_pairings.
 
 - [ ] Track per-feature variance alongside importance. Low-variance
       features look unimportant under every classifier even when
