@@ -222,7 +222,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     processed_sliced_patient['encounters'].sort(key=lambda x: -x['details']['start_visit'])
     processed_sliced_patient['active_medications'].sort(key=lambda x: -x['MedStartInstant'])
     
-    # Total chronological length
+    # Total pre-anchor history length
     timespan_sliced = (anchor_date - earliest_sliced_encounter_date).days + 1
     # We still want to record the actual length of history observed
     processed_sliced_patient['days_of_history'] = timespan_sliced

@@ -100,7 +100,7 @@ def stratify_by_chronology(
     n_bins: int = 5
 ) -> pd.DataFrame:
     """
-    Bins the dataframe into quintiles based on the chronological history length in days.
+    Bins the dataframe into quintiles based on the pre-anchor history length in days.
     
     Adds a 'chronological_bin' column.
     

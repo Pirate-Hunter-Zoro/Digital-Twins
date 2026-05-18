@@ -38,7 +38,7 @@ SELECT patient_id, embedding, chronological_length FROM embeddings
                 self.ids.append(row[0])
                 # Load the vector by deserializing from the BLOB column
                 vectors.append(np.frombuffer(row[1], dtype=np.float32))
-            # Regardless, we'd still like to see all of our chronological lengths for our histogram of such things
+            # Regardless, we'd still like to see all of our pre-anchor history lengths for our histogram of such things
             self.chronological_lengths.append(row[2])
         self.ids_to_index = {id: i for i, id in enumerate(self.ids)}
         self.vectors = np.vstack(vectors)
@@ -46,13 +46,13 @@ SELECT patient_id, embedding, chronological_length FROM embeddings
         norms = np.linalg.norm(self.vectors, axis=1, keepdims=True)
         self.vectors /= norms
         
-        # Create histogram of chronological lengths
+        # Create histogram of pre-anchor history lengths
         plt.figure(figsize=(10,6))
         plt.hist(np.array([l for l in self.chronological_lengths if l < int(os.environ['HISTORY_LENGTH_CUTOFF'])]), bins=100)
-        plt.xlabel("Chronological Length (Days)")
+        plt.xlabel("Pre-Anchor History (Days)")
         plt.ylabel("Frequency")
-        plt.title("Histogram of Patient Chronological History Lengths")
-        plt.savefig(Path(os.environ['RESULTS_DIR']) / 'history_length_histogram.png')
+        plt.title("Histogram of Pre-Anchor Patient History")
+        plt.savefig(Path(os.environ['RESULTS_DIR']) / 'pre_anchor_history_histogram.png')
         plt.close()
         
     def get_narrative(self, id: str) -> str:
@@ -89,7 +89,7 @@ SELECT embedding FROM embeddings WHERE patient_id=?
         
     def get_chronological_length(self, id: str) -> int:
         """
-        Helper method to return the chronological length in days of the corresponding with the narrative of the patient with the corresponding ID
+        Helper method to return the pre-anchor history length in days of the corresponding with the narrative of the patient with the corresponding ID
         
         :param id: ID of patient
         :type id: str

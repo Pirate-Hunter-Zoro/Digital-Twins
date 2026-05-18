@@ -14,12 +14,12 @@ load_dotenv()
 
 def run_chonology_check():
     """
-    Helper function to evaluate TRD prediction performance over varying chronological lengths of patient history
+    Helper function to evaluate TRD prediction performance over varying pre-anchor patient history lengths
     """
     # Load the actual prediction risk scores
     risk_scores_df = pd.read_csv(Path(os.environ['RESULTS_DIR']) / f'summary_predictions.csv')
     
-    # Load patient chronological lengths
+    # Load patient pre-anchor history lengths
     retriever = Retriever()
     lengths_df = pd.DataFrame({
         'id': retriever.ids,
@@ -39,9 +39,9 @@ def run_chonology_check():
         # Create scatter plot
         plt.figure(figsize=(10,6))
         plt.scatter(chronological_lengths, prediction_error)
-        plt.xlabel('Chronological Length (Days) of Patient History')
+        plt.xlabel('Pre-Anchor History (Days)')
         plt.ylabel('TRD Probability Prediction Error')
-        plt.title(f'Error vs. History Length: {neighbor_scheme}_{weighting_strat}')
+        plt.title(f'Error vs. Pre-Anchor History: {neighbor_scheme}_{weighting_strat}')
         save_path = Path(os.environ['RESULTS_DIR']) / 'chronology_checks' / f'chronology_check_{neighbor_scheme}_{weighting_strat}.png'
         os.makedirs(save_path.parent, exist_ok=True)
         plt.savefig(str(save_path))

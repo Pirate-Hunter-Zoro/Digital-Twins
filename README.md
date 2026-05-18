@@ -37,7 +37,7 @@ graph LR
 
 All evaluation pipelines share a single stratified 80/20 train/test split (`create_train_test_split.py`) to ensure fair comparison across the full evaluation matrix. The split preserves the natural class imbalance and persists test patient IDs to `test_patient_ids.txt` for reproducibility.
 
-**Test Set Isolation**: In the neighbor-weighted pipeline, test patients are excluded from each other's neighbor pools at retrieval time. The `Retriever` filters out all test patient IDs from its in-memory search arrays during initialization, preventing data leakage while still allowing test patients to serve as query anchors. Narrative and chronological length lookups remain available for all patients via direct SQLite queries.
+**Test Set Isolation**: In the neighbor-weighted pipeline, test patients are excluded from each other's neighbor pools at retrieval time. The `Retriever` filters out all test patient IDs from its in-memory search arrays during initialization, preventing data leakage while still allowing test patients to serve as query anchors. Narrative and pre-anchor history length lookups remain available for all patients via direct SQLite queries.
 
 **Dual Vector Source (classical ML only)**: The `VectorSource` enum (`EMBEDDED`, `FEATURE`) parameterizes the classical ML pipeline, which runs the full classifier lineup against both vector representations. The neighbor-weighted KNN pipeline runs on `EMBEDDED` only — cosine similarity is not defined over mixed quantitative/categorical features, so `Retriever`, `TRDPredictor`, the neighborhood constructor, and the four neighbor-based analysis scripts accept only embedded vectors.
 
@@ -101,7 +101,7 @@ Finds and scores patient similarity on the embedded vectors.
 
 * **`retriever.py`**:
   * Accepts an `exclude_ids` set at initialization. Embedded-only — cosine similarity is not defined over mixed categorical/numeric features, so the feature-vector retrieval path has been removed.
-  * Loads patient IDs, embeddings, and chronological lengths from `embeddings.db`.
+  * Loads patient IDs, embeddings, and pre-anchor history lengths from `embeddings.db`.
   * Patients in `exclude_ids` are filtered out of the in-memory search arrays during initialization, ensuring test patients never appear as neighbors.
   * Performs fast cosine similarity search to find candidates using four distinct retrieval modes:
     * **Nearest**: Finds the top-K closest vectors by cosine similarity.
@@ -184,13 +184,13 @@ graph TD
 * **`trd_sanity_checks.py`**:
   * **Deep Diagnostics & Validity.**
   * **Embedding Validity**: Validates that retrieved neighbors are statistically distinct from random noise. Computes the $N \times N$ similarity matrix of the anchor cohort to generate a "Random Pair" distribution and overlays it against the "Neighbor" distribution.
-  * **Chronology Confounding**: Tests if the model is cheating by using "Data Richness" as a proxy for risk. Merges prediction errors with patient history lengths ($L_i$) and calculates the **Spearman Correlation** ($\rho$) for each weighting strategy.
+  * **Chronology Confounding**: Tests if the model is cheating by using "Data Richness" as a proxy for risk. Merges prediction errors with patient pre-anchor history lengths ($L_i$) and calculates the **Spearman Correlation** ($\rho$) for each weighting strategy.
   * **Output**: `cosine_score_random_vs_neighbor.png`, `chronology_check.csv`, and per-strategy scatter plots.
 
 * **`trd_binning_analysis.py`**:
   * **Environmental Diagnostics (Density & Chronology).** Investigates how the structural environment of the vector space and data richness impact model reliability.
   * **Density Stratification**: Bins patients into quintiles based on their **kNN Radius** (mean distance of top-$k$ neighbors, i.e. $1 - \text{mean}(\text{cos\_sims})$) to evaluate if sparse neighborhoods degrade model discrimination (AUC) or calibration (Brier Score).
-  * **Chronology Confounding**: Bins patients into quintiles based on their **Chronological Length** (days of patient history) to test if the model is inappropriately leveraging data volume as a proxy for clinical risk.
+  * **Chronology Confounding**: Bins patients into quintiles based on their **Pre-Anchor History Length** (days) to test if the model is inappropriately leveraging data volume as a proxy for clinical risk.
   * **Metrics**: Calculates AUC, Brier Score, and Patient Count per bin across all weighting strategies (Uniform, Cosine, LLM, Combined). Computes Spearman Rank Correlation ($\rho$) and p-values to evaluate the statistical significance of monotonic performance trends across bins.
   * **Output**: Dual-axis performance plots (`scores_by_{bin_type}_{scheme}_{strategy}.png`) with statistical correlation metrics embedded in the titles.
 
@@ -297,7 +297,7 @@ Stores the raw embeddings and associated patient data.
 | `patient_id` | `TEXT (PK)` | Patient ID of the corresponding narrative. |
 | `embedding` | `BLOB` | The numpy array (`float32`) serialized to bytes. |
 | `text` | `TEXT` | The raw narrative text (for audit/retrieval). |
-| `chronological_length` | `INTEGER` | Chronological length in days of the patient's pre-anchor history. |
+| `chronological_length` | `INTEGER` | Pre-anchor history length in days. |
 
 ### Judgement Storage (`judgements.db`)
 

@@ -274,7 +274,7 @@ def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
     Args:
         sliced_json (Dict): Anchor date going back a certain number of years
     Returns:
-        tuple[str, int]: Patient id and chronologic length of the patient
+        tuple[str, int]: Patient id and pre-anchor history length in days
     """
     patient_id = sliced_json["patient_id"]
     baseline_dir = Path(os.environ['NARRATIVES_DIR'])
