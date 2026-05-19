@@ -7,7 +7,7 @@
 #SBATCH --mem=64G
 #SBATCH -o slurm_jobs/quick_runs/logs/ablation_only_out.txt
 #SBATCH -e slurm_jobs/quick_runs/logs/ablation_only_err.txt
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 
 # Exit immediately if command fails
 set -e
@@ -30,5 +30,12 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 11
 fi
 set -a; source "${ENV_FILE}"; set +a
+
+# Pin to the GPU with the most free memory (works around bare-metal squatters slurm cannot see)
+FREE_GPU=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits \
+           | sort -t, -k2 -n -r | head -1 | awk -F, '{print $1}' | tr -d ' ')
+export CUDA_VISIBLE_DEVICES="${FREE_GPU}"
+echo "Pinning to GPU ${CUDA_VISIBLE_DEVICES} on $(hostname)"
+nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
 
 python -m scripts.digital_twins.predictions.ablation_runner
