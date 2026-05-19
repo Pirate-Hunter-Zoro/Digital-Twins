@@ -225,7 +225,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
     # Total pre-anchor history length
     timespan_sliced = (anchor_date - earliest_sliced_encounter_date).days + 1
     # We still want to record the actual length of history observed
-    processed_sliced_patient['days_of_history'] = timespan_sliced
+    processed_sliced_patient['pre_anchor_history_days'] = timespan_sliced
     # We also want the number of visits within the time window
     processed_sliced_patient['num_encounters'] = len(processed_sliced_patient['encounters'])
     

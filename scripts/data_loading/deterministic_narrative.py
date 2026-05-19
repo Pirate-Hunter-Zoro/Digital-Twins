@@ -301,7 +301,7 @@ def generate_deterministic_narrative(sliced_json: Dict) -> tuple[str, int]:
             os.makedirs(spec_dir, exist_ok=True)
             with open(spec_path, 'w') as f:
                 f.write(perturbed_text)
-    return (patient_id, sliced_json['days_of_history'])
+    return (patient_id, sliced_json['pre_anchor_history_days'])
 
 if __name__=="__main__":
     # Take a sample of produced narratives and put them in the local test_data directory

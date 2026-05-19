@@ -38,8 +38,8 @@ class PatientEmbedder:
         self.embeddings_path = Path(os.environ['EMBEDDINGS_DIR'])
         os.makedirs(self.embeddings_path, exist_ok=True)
         self.narrative_chronological_lengths = {}
-        for _, row in pd.read_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_days_of_history.csv').iterrows():
-            self.narrative_chronological_lengths[row['patient_id']] = row['days_of_history']
+        for _, row in pd.read_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_pre_anchor_history_days.csv').iterrows():
+            self.narrative_chronological_lengths[row['patient_id']] = row['pre_anchor_history_days']
         
         # Make connection to database
         self.connection = sqlite3.connect(self.embeddings_path / 'embeddings.db')

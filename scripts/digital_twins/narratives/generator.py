@@ -33,11 +33,11 @@ def generate_deterministic_narratives():
     pairings = build_pairings(list(donor_pool.keys()))
     set_donor_pool(donor_pool)
     set_pairings(pairings)
-    narrative_lengths = {'patient_id': [], 'days_of_history': []}
+    narrative_lengths = {'patient_id': [], 'pre_anchor_history_days': []}
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as thread_pool:
         for i, (patient_id, history_length) in enumerate(thread_pool.imap_unordered(generate_deterministic_narrative, sliced_jsons)):
             narrative_lengths['patient_id'].append(patient_id)
-            narrative_lengths['days_of_history'].append(history_length)
+            narrative_lengths['pre_anchor_history_days'].append(history_length)
             if (i + 1) % RECORD_EVERY == 0:
                 print(f"Created {i+1} deterministic narratives...", flush=True)
-    pd.DataFrame(narrative_lengths).to_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_days_of_history.csv')
+    pd.DataFrame(narrative_lengths).to_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_pre_anchor_history_days.csv')

@@ -211,7 +211,7 @@ def generate_feature_vector(sliced_json: Dict) -> pd.Series:
     row = {
         "mdd_to_anchor_days": float(sliced_json['mdd_to_anchor_days']),
         "num_encounters": float(sliced_json["num_encounters"]),
-        "days_of_history": float(sliced_json["days_of_history"]),
+        "pre_anchor_history_days": float(sliced_json["pre_anchor_history_days"]),
         "AgeInYears": float(sliced_json["demographics"]["AgeInYears"]),
         "bmi": bmi,
         "bp_sys": bps,
