@@ -9,6 +9,77 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
+- [ ] FEATURE feature_importance PNG display-name cleanup. The current
+      bars render raw ColumnTransformer.get_feature_names_out() strings,
+      which compound three layers of ugliness:
+        * Transformer-name prefixes `num__` / `cat__` / `bool__` from
+          the named branches in classical_ml.py:70,78,83.
+        * Raw parquet column names from feature_vector.py:
+          `bp_sys`, `bp_dias`, `mdd_to_anchor_days`, `psych_ANXIETY`,
+          `sud_Sedative/Hypnotic`, `medical_CHRONIC_PAIN`,
+          `safety_UNCONTROLLED_HTN`, `sdoh_*`, `trials_BUPROPION`, etc.
+        * One-hot suffixes appended verbatim:
+          `cat__Race_Ethnicity_Black or African American`,
+          `cat__mdd_severity_Unspecified`, `cat__MaritalStatus_Never Married`.
+      Patch surface: a display-name mapper applied INSIDE
+      `plot_feature_importance` (feature_importance.py:111) immediately
+      before `set_yticklabels` at line 147 — do NOT touch the raw
+      parquet column names or rewire the ColumnTransformer branches.
+      Mapping table lives in scripts/shared/ so the same labels can be
+      reused downstream (e.g. ablation summary plots, future
+      manuscript figures). Covers all four classifier PNGs
+      (logistic_regression, random_forest, gradient_boosting, xgboost).
+
+- [ ] Vitals missingness investigation + asymmetric imputation refactor.
+      All four FEATURE feature_importance PNGs show `num__bmi` (and
+      `num__bp_sys` in random_forest) painted RED — i.e. the model
+      learned that rising BMI / systolic BP LOWERS predicted TRD risk.
+      Literature flatly disagrees: higher BMI and metabolic burden
+      trend toward worse depression outcomes, not better. Suspected
+      confound: SimpleImputer(strategy="median") at classical_ml.py:72
+      slams every missing vital onto the cohort median, conflating
+      "no recorded vital" (a data-richness signal) with "patient is at
+      the cohort-typical value" (a clinical signal). Work proceeds in
+      three steps and MUST run in order:
+        * Step 1 — Vitals missingness diagnostic in
+          notebooks/cohort_investigation.ipynb. The notebook already
+          carries the vital_keys list (SystolicBloodPressure,
+          DiastolicBloodPressure, PulseRate, RespirationRate,
+          WeightInGrams, HeightInInches, TemperatureInFahrenheit,
+          BodyMassIndex) and a per-patient encounter-scan skeleton
+          whose inner loop body is currently `pass`. Compute the
+          percent of patients missing each vital across the cohort,
+          and cross-tab missingness against the TRD label so we know
+          whether the missingness pattern itself carries outcome
+          signal — that determines whether LR-side imputation is
+          salvageable as-is or needs a MissingIndicator augmentation.
+        * Step 2 — Asymmetric refactor of `make_classifier` in
+          classical_ml.py. Tree-based learners can handle NaN
+          natively, so the median imputer should be DROPPED from
+          their preprocessing branches:
+            - RandomForestClassifier: native NaN support landed in
+              sklearn 1.4; confirm ehr_env version before dropping.
+            - GradientBoostingClassifier: does NOT handle NaN. Either
+              swap to HistGradientBoostingClassifier (NaN-aware) or
+              leave the imputer in place — pick after Step 1.
+            - XGBClassifier: native NaN, drop the imputer.
+            - LogisticRegression: still needs imputation. Strategy
+              choice (plain median vs median + MissingIndicator vs
+              something else entirely) is contingent on Step 1 — do
+              NOT pick until the missingness rates and TRD-stratified
+              cross-tab are in hand.
+          Easiest implementation path is to parameterize
+          `make_classifier` by classifier flavor (imputer-yes vs
+          imputer-no) rather than maintaining four hand-tuned
+          pipelines — but that's an implementation detail; either
+          works.
+        * Step 3 — Re-run analysis_only.sbatch end-to-end against the
+          refactored pipeline. Re-inspect the four
+          feature_importance PNGs and confirm `num__bmi` / `num__bp_sys`
+          no longer carry the literature-incoherent red direction.
+          If they still do, the confound was somewhere else and the
+          investigation continues.
+
 - [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/analysis_only.sbatch
       end-to-end against the frozen-baseline ablation_runner.py. Verify
       baseline RESULTS_DIR contains:
