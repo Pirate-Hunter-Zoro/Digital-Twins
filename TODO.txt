@@ -9,7 +9,7 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/ablation_only.sbatch
+- [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/analysis_only.sbatch
       end-to-end against the frozen-baseline ablation_runner.py. Verify
       baseline RESULTS_DIR contains:
         * trained_models/{logistic_regression, random_forest,
@@ -41,7 +41,7 @@ ACTIVE / IMMEDIATE
         * NO results.txt (presence indicates the JSON migration
           backslid)
 
-- [ ] Revert ablation_only.sbatch to `--gres=gpu:1` and DELETE the
+- [ ] Revert analysis_only.sbatch to `--gres=gpu:1` and DELETE the
       FREE_GPU / CUDA_VISIBLE_DEVICES pin block (added 2026-05-18) once
       dpeasley's bare-metal vLLM on compute306 (PID 474121, started
       2026-05-18 ~16:23, holding 42 GiB of GPU 0) clears. The pin block

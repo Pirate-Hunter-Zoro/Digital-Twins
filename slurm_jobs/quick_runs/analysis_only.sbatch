@@ -7,13 +7,13 @@
 #SBATCH --mem=192G
 #SBATCH -o slurm_jobs/quick_runs/logs/analysis_only_out.txt
 #SBATCH -e slurm_jobs/quick_runs/logs/analysis_only_err.txt
+#SBATCH --gres=gpu:2
 
 # Exit immediately if command fails
 set -e
 
 # ---- Conda configuration ----
 CONDA_ENV=ehr_env
-N_THREADS="${SLURM_CPUS_PER_TASK}"
 
 # ---- Boilerplate env/bootstrap ----
 module purge
@@ -31,9 +31,17 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
+# Pin to the GPU with the most free memory (works around bare-metal squatters slurm cannot see)
+FREE_GPU=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits \
+           | sort -t, -k2 -n -r | head -1 | awk -F, '{print $1}' | tr -d ' ')
+export CUDA_VISIBLE_DEVICES="${FREE_GPU}"
+echo "Pinning to GPU ${CUDA_VISIBLE_DEVICES} on $(hostname)"
+nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
+
 # python -m scripts.digital_twins.predictions.analyze_trd_prediction
 python -m scripts.digital_twins.predictions.classical_ml
 python -m scripts.digital_twins.predictions.feature_importance
+python -m scripts.digital_twins.predictions.ablation_runner
 
 # Copy all files from the RESULTS_DIR to the local results/ directory for easier access
 LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
