@@ -41,6 +41,15 @@ ACTIVE / IMMEDIATE
         * NO results.txt (presence indicates the JSON migration
           backslid)
 
+- [ ] Revert ablation_only.sbatch to `--gres=gpu:1` and DELETE the
+      FREE_GPU / CUDA_VISIBLE_DEVICES pin block (added 2026-05-18) once
+      dpeasley's bare-metal vLLM on compute306 (PID 474121, started
+      2026-05-18 ~16:23, holding 42 GiB of GPU 0) clears. The pin block
+      works around a slurm-invisible GPU squatter on the single-node
+      c3_accel partition; with the squatter gone, the hack costs an
+      extra GPU slot per run for zero benefit and blocks other slurm
+      users from compute306's remaining GPUs.
+
 - [ ] Backfill analysis_only.sbatch for ALL FOUR embedders so the FEATURE
       outputs use the categorical-cast fix AND the feature_importance.py
       artifacts land for every embedder:
