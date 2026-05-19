@@ -45,8 +45,8 @@ def plot_ablation_deltas(rows: list[dict], baseline_results_dir: Path):
             heights = [row_lookup[(spec_id, classifier)][f"delta_{metric}"] for spec_id in spec_order]
             if metric == "roc_score":
                 # Error bands
-                yerr_lower = [row_lookup[(spec_id, classifier)]["delta_roc_score"] - row_lookup[(spec_id, classifier)]["delta_roc_score_ci_low"] for spec_id in spec_order]
-                yerr_upper = [row_lookup[(spec_id, classifier)]["delta_roc_score_ci_high"] - row_lookup[(spec_id, classifier)]["delta_roc_score"] for spec_id in spec_order]
+                yerr_lower = [row_lookup[(spec_id, classifier)]["roc_score"] - row_lookup[(spec_id, classifier)]["roc_score_ci_low"] for spec_id in spec_order]
+                yerr_upper = [row_lookup[(spec_id, classifier)]["roc_score_ci_high"] - row_lookup[(spec_id, classifier)]["roc_score"] for spec_id in spec_order]
                 yerr = np.array([yerr_lower, yerr_upper])
             else:
                 yerr = None
@@ -95,8 +95,9 @@ def emit_ablation_summary(baseline_results_dir: Path):
             # Find this model's achieved metrics with no ablation
             baseline_classifier_metrics = baseline_metrics[classifier_name]
             for metric_name in metrics:
-                # Record the difference
-                row[f"delta_{metric_name}"] = metrics[metric_name] - baseline_classifier_metrics[metric_name] 
+                if metric_name != "roc_score_ci_low" and metric_name != "roc_score_ci_high":
+                    # Record the difference
+                    row[f"delta_{metric_name}"] = metrics[metric_name] - baseline_classifier_metrics[metric_name] 
             rows.append(row)
     # Write the .csv
     summary_csv_path = baseline_results_dir / "ablation_summary.csv"

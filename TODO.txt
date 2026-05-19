@@ -19,7 +19,7 @@ ACTIVE / IMMEDIATE
         * classical_ml_results_EMBEDDED.json (baseline metrics —
           required by emit_ablation_summary)
         * exactly one ablation_summary.csv (1 header row + 20 data
-          rows, 18 columns each); open it and eyeball that delta_*
+          rows, 16 columns each); open it and eyeball that delta_*
           columns are nonzero and sign-coherent.
         * exactly six ablation_delta_*.png files (one per metric:
           roc_score, auprc, brier_score, weighted_calibration_error,

@@ -31,7 +31,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-python -m scripts.digital_twins.predictions.analyze_trd_prediction
+# python -m scripts.digital_twins.predictions.analyze_trd_prediction
 python -m scripts.digital_twins.predictions.classical_ml
 python -m scripts.digital_twins.predictions.feature_importance
 
