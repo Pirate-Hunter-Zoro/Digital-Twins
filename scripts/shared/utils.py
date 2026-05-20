@@ -10,6 +10,13 @@ load_dotenv()
 class VectorSource(Enum):
     EMBEDDED = 0
     FEATURE = 1
+    
+class VitalsStrategy(Enum):
+    DROP = 0
+    INDICATOR = 1
+    ASYMMETRIC = 2
+
+VITAL_COLUMNS = ("bmi", "bp_sys", "bp_dias",)
 
 def load_neighborhood_data() -> pd.DataFrame:
     """Helper method to load all of the TRD risk prediction neighborhood data

@@ -37,7 +37,7 @@ ACTIVE / IMMEDIATE
       8-10 percentage points more likely to be missing every vital
       than TRD-negative patients (diagnostic + cross-tab live in
       notebooks/cohort_investigation.ipynb). Median imputation at
-      classical_ml.py:72 was therefore squashing the engagement-
+      classical_ml.py:84 was therefore squashing the engagement-
       disparity signal onto the cohort median, and the LR was learning
       "patient with cohort-median BMI = TRD proxy" — producing the
       literature-incoherent protective-BMI red bar across all four
@@ -61,9 +61,34 @@ ACTIVE / IMMEDIATE
         * ASYMMETRIC — LR sees vital-stripped columns (identical to
           DROP's LR matrix). Trees see vitals with NaN-native
           handling (identical to INDICATOR's tree matrix).
-      Architecture:
-        * Add a `VitalsStrategy` enum (DROP / INDICATOR / ASYMMETRIC)
-          to scripts/shared/utils.py alongside `VectorSource`.
+      Landed so far:
+        * `VitalsStrategy` enum + `VITAL_COLUMNS` constant live in
+          scripts/shared/utils.py.
+        * `GradientBoostingClassifier` swapped for
+          `HistGradientBoostingClassifier` across classical_ml.py;
+          its `HYPERPARAMETERS` grid is rewritten to HistGB's API
+          (`learning_rate` / `max_iter` / `max_leaf_nodes` /
+          `l2_regularization`).
+        * `load_data_set` carries `vitals_strategy: Optional[VitalsStrategy]
+          = None`. The DROP arm strips VITAL_COLUMNS at parquet-load
+          time; INDICATOR and ASYMMETRIC currently return the full
+          (vital-retained) matrix from `load_data_set`. EMBEDDED
+          ignores the parameter. `main()` still calls
+          `load_data_set` without the third argument — strategy
+          plumbing into the main loop is the next piece.
+      Remaining architecture:
+        * LR-side vital stripping for INDICATOR / ASYMMETRIC. Two
+          shapes possible: (a) extend `load_data_set` with a
+          classifier-family hint so the LR call-site receives a
+          vital-stripped matrix under INDICATOR/ASYMMETRIC, or
+          (b) keep `load_data_set` strategy-only and strip vitals
+          one layer up inside `evaluate_models` for the LR fit only.
+          Pick one before threading strategy into `main()`.
+        * LR pipeline-builder variant for INDICATOR: the numeric
+          branch's SimpleImputer needs `add_indicator=True` so three
+          `missingindicator_*` boolean columns get appended. Tree
+          pipelines under INDICATOR / ASYMMETRIC drop the imputer
+          entirely and rely on NaN-native splits.
         * `classical_ml.py::main()` iterates strategies inside the
           FEATURE branch of its existing VectorSource loop:
           `for source in VectorSource: if source == EMBEDDED:
@@ -71,12 +96,6 @@ ACTIVE / IMMEDIATE
           VitalsStrategy: fit_evaluate(source, strategy)`. 12 FEATURE
           fits per run (4 classifiers x 3 strategies) + 4 EMBEDDED
           fits = 16 total.
-        * `load_data_set` accepts an optional `vitals_strategy`
-          parameter. For source=FEATURE: drops the three vital
-          columns when strategy=DROP, or (for INDICATOR /
-          ASYMMETRIC's LR branch only) drops them when building
-          the LR feature matrix. For source=EMBEDDED: parameter
-          ignored.
         * Trained-model cache + results JSON + plot PNG filenames
           extend the existing `{model}_{source}` suffix to
           `{model}_{source}_{strategy}` when strategy is set.
@@ -85,17 +104,6 @@ ACTIVE / IMMEDIATE
           iteration axis, not an environment knob. The only `.env`
           variable that changes between submissions remains
           EMBEDDER_MODEL_NAME.
-      Global classifier change (required for clean sensitivity):
-        * Swap GradientBoostingClassifier for
-          HistGradientBoostingClassifier across both sources and all
-          arms. Classic GB does not handle NaN and would force
-          per-arm classifier identity, polluting the comparison.
-          HistGB handles dense and sparse-NaN inputs identically and
-          is sklearn's recommended boosting estimator. Rewrite the
-          `HYPERPARAMETERS["gradient_boosting"]` grid — HistGB's API
-          is `learning_rate` / `max_iter` / `max_leaf_nodes` /
-          `l2_regularization` rather than GB's `n_estimators` /
-          `max_depth` / etc. Update before retrain.
       Comparison surface:
         * vitals_sensitivity.csv in RESULTS_DIR root — 12 rows
           (3 strategies x 4 classifiers), columns: strategy,

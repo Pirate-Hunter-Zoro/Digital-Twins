@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Optional
 from pathlib import Path
 import os
 import json
@@ -13,7 +13,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder, FunctionTransfo
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import (
     RandomForestClassifier,
-    GradientBoostingClassifier
+    HistGradientBoostingClassifier
 )
 from sklearn.model_selection import GridSearchCV
 from sklearn.compose import ColumnTransformer, make_column_selector
@@ -28,14 +28,24 @@ from scripts.shared.plots import (
     plot_decision_curve_analysis,
     plot_optimal_confusion_matrix
 )
-from scripts.shared.utils import VectorSource, cast_to_int8
+from scripts.shared.utils import (
+    VectorSource,
+    VitalsStrategy,
+    VITAL_COLUMNS, 
+    cast_to_int8
+)
 from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
 
-def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATURE) -> Tuple[pd.DataFrame, np.ndarray]:
+def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATURE, vitals_strategy: Optional[VitalsStrategy]=None) -> Tuple[pd.DataFrame, np.ndarray]:
     """Load all the patient vectors and find their labels
 
+    Args:
+        patient_ids (set[str]): Set of all patient IDs whose information is to be loaded
+        source (VectorSource, optional): Specifier for feature vectors of embedded vectors. Defaults to VectorSource.FEATURE.
+        vitals_strategy (Optional[VitalsStrategy], optional): Specifier for how to handle missing vitals. Defaults to None. Not applicable when using embedded vectors
+
     Returns:
-        Tuple[pd.DataFrame, np.ndarray]: vectors and labels
+        Tuple[pd.DataFrame, np.ndarray]: Features paired with labels
     """
     predictor = TRDPredictor() # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
     if source == VectorSource.FEATURE:
@@ -44,6 +54,8 @@ def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATU
         obj_cols = cohort_df.select_dtypes(include='object').columns
         cohort_df[obj_cols] = cohort_df[obj_cols].astype('category')
         X = cohort_df.loc[sorted(list(patient_ids))]
+        if vitals_strategy == VitalsStrategy.DROP:
+            X = X.drop(columns=list(VITAL_COLUMNS))
     else:
         embeddings_db_path = Path(os.environ['EMBEDDINGS_DIR']) / 'embeddings.db'
         connection = sqlite3.connect(embeddings_db_path)
@@ -121,9 +133,10 @@ HYPERPARAMETERS = {
         'model__min_samples_leaf': [2, 10]
     },
     'gradient_boosting': {
-        'model__n_estimators': [300],
         'model__learning_rate': [0.01, 0.1, 0.3],
-        'model__max_depth': [3, 5, 8],
+        'model__max_iter': [300],
+        'model__max_leaf_nodes': [15, 31, 63],
+        'model__l2_regularization': [0.0, 1.0]
     },
     'xgboost': {
         'model__n_estimators': [300],
@@ -162,7 +175,7 @@ def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataF
     classifiers = {
         "logistic_regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
         "random_forest": make_classifier(RandomForestClassifier(random_state=int(os.environ['SEED']))),
-        "gradient_boosting": make_classifier(GradientBoostingClassifier(random_state=int(os.environ['SEED']))),
+        "gradient_boosting": make_classifier(HistGradientBoostingClassifier(random_state=int(os.environ['SEED']))),
         "xgboost": make_classifier(XGBClassifier(random_state=int(os.environ['SEED']), eval_metric='logloss'))
     }
     # Fit each classifier on the training data
