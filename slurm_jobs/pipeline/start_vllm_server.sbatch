@@ -7,7 +7,7 @@
 #SBATCH --mem=64G
 #SBATCH -o slurm_jobs/pipeline/logs/vllm_out.txt
 #SBATCH -e slurm_jobs/pipeline/logs/vllm_err.txt
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:3
   
 GPUS=2                      
 CONDA_ENV=ehr_env
@@ -38,6 +38,13 @@ else
     echo "ERROR: .env file missing at ${ENV_FILE}"
     exit 1
 fi
+
+# Pin to the GPUs with the most free memory (works around bare-metal squatters slurm cannot see)
+PICKED_GPUS=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits \
+           | sort -t, -k2 -n -r | head -2 | awk -F, '{print $1}' | paste -sd,)
+export CUDA_VISIBLE_DEVICES="${PICKED_GPUS}"
+echo "Pinning CUDA_VISIBLE_DEVICES to ${CUDA_VISIBLE_DEVICES} on $(hostname)"
+nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
 
 # ---- Start the server ----
 export VLLM_USE_V1=0
