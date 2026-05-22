@@ -30,90 +30,130 @@ ACTIVE / IMMEDIATE
       manuscript figures). Covers all four classifier PNGs
       (logistic_regression, random_forest, gradient_boosting, xgboost).
 
-- [ ] FEATURE-side vitals sensitivity — comparison-surface aggregator.
-      Pipeline plumbing for the three-arm sensitivity loop
-      (DROP / INDICATOR / ASYMMETRIC) is end-to-end in classical_ml.py
-      and feature_importance.py: `VitalsStrategy` + `ClassifierFamily`
-      enums in scripts/shared/utils.py, `load_data_set` strips per
-      (strategy, family), `make_numeric_transformer` dispatches LR
-      `add_indicator`-flavored / tree-`passthrough` / baseline numeric
-      branches, `classical_ml.py::main()` iterates strategies inside
-      the FEATURE branch (12 FEATURE fits + 4 EMBEDDED fits = 16
-      total per run), and trained-model cache / results JSON / plot
-      PNG filenames carry `_{strategy.name}` suffixes under FEATURE
-      only. ASYMMETRIC dual-loads via `only_classifier_family` filter
-      so LR fits on the stripped matrix and trees fit on the
-      retained matrix in two `evaluate_models` calls whose result
-      dicts are merged. feature_importance.py mirrors the same
-      strategy + family threading; per-strategy summary JSONs and
-      per-strategy `feature_importance_{classifier}_{strategy}.png`
-      bar charts land in RESULTS_DIR/feature_importance.
+- [ ] VITALS STEP 1 — REFACTOR FEATURE-side vitals sensitivity to a
+      per-classifier legal-arm sweep with median IMPUTE as the
+      baseline imputation arm. Step 2 (advanced KNN / MICE imputation
+      arms) is parked under LOWER PRIORITY and depends on Step 1
+      landing first plus a packaging diagnostic from
+      cohort_investigation.ipynb. Current implementation iterates
+      three global
+      strategies (DROP / INDICATOR / ASYMMETRIC) across all four
+      classifiers under a `ClassifierFamily` coordination shim with
+      an ASYMMETRIC dual-load. The design forces a single "strategy"
+      axis onto classifiers with different NaN tolerances, and
+      ASYMMETRIC is just "let each classifier eat the matrix shape it
+      prefers" with a result-dict merge. Replace with a per-classifier
+      legal-arm matrix where each classifier sweeps only the
+      strategies it can actually run.
 
-      Remaining work:
-        * Aggregator emits vitals_sensitivity.csv at RESULTS_DIR root
-          — 12 rows (3 strategies x 4 classifiers), columns: strategy,
+      Lineup change: swap `HistGradientBoostingClassifier` back to
+      plain `GradientBoostingClassifier`. HistGB was adopted to feed
+      NaN-bearing matrices to the tree branch under INDICATOR /
+      ASYMMETRIC; with the new design only XGBoost runs the NaN arm,
+      so the HistGB-required path disappears. Plain GB also restores
+      native `feature_importances_`, eliminating the AttributeError
+      that currently kills feature_importance.py mid-run
+      (slurm_jobs/quick_runs/logs/analysis_only_err.txt:1184).
+
+      Legal-arm matrix (9 FEATURE fits + 4 EMBEDDED = 13 total per run):
+        * LR:  DROP, IMPUTE
+        * RF:  DROP, IMPUTE
+        * GB:  DROP, IMPUTE
+        * XGB: DROP, IMPUTE, NaN
+
+      Refactor surface:
+        * scripts/shared/utils.py: rename `VitalsStrategy` values to
+          DROP / IMPUTE / NAN. Delete `ClassifierFamily` entirely.
+          Add a per-classifier `LEGAL_STRATEGIES` map keyed by model
+          name.
+        * classical_ml.py: replace `HistGradientBoostingClassifier`
+          with `GradientBoostingClassifier` in `HYPERPARAMETERS`.
+          Rewrite `make_numeric_transformer` dispatch on strategy:
+          DROP = baseline numeric branch over the stripped matrix,
+          IMPUTE = `SimpleImputer(median)` + `StandardScaler`
+          (`add_indicator=True` for LR only), NAN = passthrough
+          numeric branch (XGB only). `main()` runs the EMBEDDED pass
+          unchanged, then iterates the FEATURE branch as a nested
+          (classifier, strategy) loop emitting only legal cells per
+          `LEGAL_STRATEGIES`. Delete the ASYMMETRIC dual-load and the
+          `only_classifier_family` filter on `evaluate_models`.
+        * `load_data_set`: drop `classifier_family` parameter; keep
+          `vitals_strategy`. Strip `VITAL_COLUMNS` when strategy=DROP.
+        * feature_importance.py: mirror the same per-classifier
+          per-strategy iteration. Swap `HistGradientBoostingClassifier`
+          for `GradientBoostingClassifier` in the refit fallback and
+          in `plot_pca_k_vs_roc`. `feature_importances_` extraction
+          returns to native attribute access.
+        * Cache filenames keep `{model}_{source}_{strategy}.joblib`
+          naming. Stale HistGB and INDICATOR/ASYMMETRIC artifacts
+          under `trained_models/` purged by hand before first run.
+
+      Aggregator (scripts/digital_twins/predictions/vitals_sensitivity.py):
+        * Reads three
+          classical_ml_results_FEATURE_{DROP,IMPUTE,NAN}.json files.
+          Cell coverage is ragged: DROP and IMPUTE files carry all
+          four classifiers; NAN file carries XGB only.
+        * vitals_sensitivity.csv at RESULTS_DIR root — 9 rows
+          (4 DROP + 4 IMPUTE + 1 NAN), 10 columns: strategy,
           classifier, plus the eight metric keys (roc_score,
           roc_score_ci_low, roc_score_ci_high, auprc, brier_score,
           weighted_calibration_error, calibration_slope,
-          calibration_intercept). Reads the three
-          classical_ml_results_FEATURE_{DROP,INDICATOR,ASYMMETRIC}.json
-          files produced by classical_ml.py.
-        * Six vitals_delta_*.png grouped-bar charts (one per metric:
-          roc_score, auprc, brier_score, weighted_calibration_error,
-          calibration_slope, calibration_intercept), mirroring the
-          ablation_delta plot pattern. The roc_score PNG carries
-          asymmetric CI whiskers; the other five carry bars only.
-          Deltas computed relative to one strategy chosen as
-          reference (likely DROP since it's the literature-aligned
-          baseline that triggered this investigation).
-        * Wire the aggregator into analysis_only.sbatch after
-          classical_ml.py + feature_importance.py and before
-          ablation_runner.py. Likely sibling module
-          scripts/digital_twins/predictions/vitals_sensitivity.py.
+          calibration_intercept).
+        * Six vitals_delta_*.png grouped-bar charts (one per metric).
+          Delta baseline is per-classifier DROP. NAN cell exists only
+          for XGB so the NAN group has a single bar; the IMPUTE group
+          has four; DROP cells are the zero reference. The
+          roc_score PNG carries asymmetric CI whiskers; the other
+          five carry bars only.
+        * Wire after feature_importance.py and before
+          ablation_runner.py in analysis_only.sbatch.
 
-      Latent caveat to address while the aggregator lands:
-        * Under INDICATOR and ASYMMETRIC, tree models train on
-          NaN-bearing matrices. `compute_univariate_spearman` in
-          feature_importance.py returns NaN correlations for vital
-          columns under those strategies; `np.sign(NaN) = NaN` then
-          fails `>= 0` and the tree direction colors all degrade to
-          firebrick. LR is unaffected (DROP strips, INDICATOR's
-          imputer fills, ASYMMETRIC strips). Fix candidates:
-          (a) `spearmanr(..., nan_policy='omit')` and skip-color
-          for NaN-sign entries, or (b) suppress direction coloring
-          on tree models under INDICATOR/ASYMMETRIC. Pick one;
-          neither blocks the aggregator itself.
+      Latent caveat: under the XGB-NAN cell,
+      `compute_univariate_spearman` returns NaN correlations for
+      vital columns; `np.sign(NaN) >= 0` then fails and degrades
+      XGB's direction-of-effect coloring on that one cell. LR / GB /
+      RF under IMPUTE are unaffected (the imputer fills NaN before
+      correlation). Fix candidates: `spearmanr(..., nan_policy='omit')`
+      plus skip-color on NaN-sign entries, or suppress direction
+      coloring on the single XGB-NAN cell. Neither blocks the
+      refactor.
 
       Verification (post-implementation):
         * Submit slurm_jobs/quick_runs/analysis_only.sbatch.
-        * Confirm 16 .joblib cache files land in
-          RESULTS_DIR/trained_models/ (4 EMBEDDED + 12 FEATURE
-          across DROP/INDICATOR/ASYMMETRIC suffixes).
+        * Confirm 13 .joblib cache files land in trained_models/:
+          4 EMBEDDED + 9 FEATURE (lr_DROP, lr_IMPUTE, rf_DROP,
+          rf_IMPUTE, gb_DROP, gb_IMPUTE, xgb_DROP, xgb_IMPUTE,
+          xgb_NAN).
         * Confirm three classical_ml_results_FEATURE_*.json files
-          plus the existing classical_ml_results_EMBEDDED.json.
-        * Confirm vitals_sensitivity.csv has 12 rows with non-empty
+          (DROP / IMPUTE / NAN) plus the existing
+          classical_ml_results_EMBEDDED.json. NAN file's top-level
+          dict contains only the `xgboost` key.
+        * Confirm feature_importance.py completes without an
+          AttributeError on `feature_importances_`.
+        * Confirm vitals_sensitivity.csv has 9 rows with non-empty
           metric columns.
         * Open vitals_delta_roc_score.png — bars should cluster
           near zero if vitals handling doesn't materially affect
           predictions; large bars indicate sensitivity worth
-          investigating further.
+          investigating further. NAN group should show a single XGB
+          bar.
         * Inspect feature_importance/feature_importance_*.png for
-          each (classifier, strategy) pair (12 PNGs). Confirm
-          DROP's plots are vital-free, INDICATOR's LR plot
-          includes the three `missingindicator_*` columns,
-          ASYMMETRIC matches DROP for LR and INDICATOR for trees.
+          each legal (classifier, strategy) pair (9 PNGs). DROP
+          plots are vital-free; IMPUTE plots include vital columns
+          with values filled at the median (LR also shows three
+          `missingindicator_*` columns); XGB-NAN plot includes
+          vital columns under native NaN handling.
 
       Out of scope:
-        * EMBEDDED side is unaffected by all three arms. The
+        * EMBEDDED side is unaffected by the strategy refactor. The
           deterministic narrative writes vital sections with a
-          `"Missing"` sentinel, so the embedder already learned its
-          own representation of the missingness pattern independent
-          of the FEATURE column set. Existing embeddings and the
-          embedded classifier fits remain valid; the strategy loop
-          is gated to skip when source == EMBEDDED.
-        * feature_vector.py output is unchanged — vitals are stripped
-          downstream in `load_data_set` per strategy, not at the
-          parquet level. No SCRUB_FEATURE_VECTORS regeneration
+          `"Missing"` sentinel, so the embedder learned its own
+          representation of the missingness pattern independent of
+          the FEATURE column set. Existing embeddings and embedded
+          classifier fits remain valid.
+        * feature_vector.py output is unchanged — vitals are
+          stripped downstream in `load_data_set` per strategy, not
+          at the parquet level. No SCRUB_FEATURE_VECTORS regeneration
           needed.
 
 - [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/analysis_only.sbatch
@@ -193,11 +233,57 @@ LOWER PRIORITY — DEFERRED UNTIL MAIN PIPELINE IS GREEN
 - [ ] cohort_investigation.ipynb — diagnostic questions, in decreasing
       priority:
         * What percentage of patients are missing each vital?
+          Stratify by TRD vs non-TRD — hypothesis: TRD patients
+          carry more encounters, so more opportunities for vital
+          captures, so lower missingness on the TRD side. If true,
+          missingness itself is partially confounded with outcome.
+        * Are vitals missing in packages (all three of bmi /
+          bp_sys / bp_dias missing together) or independently? If
+          packaged, row-wise multivariate imputation (KNN / MICE)
+          is unlikely to help — a patient missing one vital is
+          likely missing all three, and there is no within-row
+          signal to interpolate from.
         * What percentage of patients have their MDD diagnosis within
           the 2-year window?
-        * Histogram of mdd_to_anchor_days.
-        * Histogram of num_encounters.
+        * Histogram of mdd_to_anchor_days, stratified by TRD.
+        * Histogram of num_encounters, stratified by TRD.
+        * Histogram of pre-anchor history length (days), stratified
+          by TRD.
         * Correlations between those metrics and TRD diagnosis.
+
+- [ ] VITALS STEP 2 — Advanced vitals imputation arms. Sibling
+      sensitivity strategies to the Step 1 median-IMPUTE arm; extends
+      the IMPUTE family with multivariate imputers rather than
+      adding a new top-level strategy. Median imputation collapses
+      every missing vital onto the cohort median; multivariate
+      imputers can in principle extract more signal by interpolating
+      each missing cell from its row's other features. Candidates:
+        * KNN imputation (`sklearn.impute.KNNImputer`) — uses the
+          k nearest patient rows in feature space to interpolate
+          missing vital values.
+        * MICE — Multivariate Imputation by Chained Equations
+          (`sklearn.experimental.IterativeImputer` or the `mice` R
+          port). Iteratively regresses each missing column on the
+          others until convergence.
+      Both presume within-row correlation between the missing vital
+      and the patient's other features.
+
+      Prerequisites (both required before Step 2 work begins):
+        * Step 1 landed and green — the per-classifier legal-arm
+          sweep with median IMPUTE must already be merged and
+          producing the 9-row vitals_sensitivity.csv. Step 2 plugs
+          into the same aggregator and JSON-emit conventions Step 1
+          establishes.
+        * cohort_investigation.ipynb packaging diagnostic confirms
+          vitals are NOT missing in packages (all three at once).
+          If the packaged-missingness hypothesis holds, row-wise
+          multivariate imputation cannot recover the missing values
+          and these arms degenerate to median-IMPUTE — abandon Step 2
+          and stop at the Step 1 surface.
+
+      Together Step 1 and Step 2 are the only two real steps for the
+      vitals-handling story. Everything else (cohort diagnostics,
+      JMIR reformat, etc.) is either prerequisite or downstream.
 
 - [ ] When this work becomes a paper, format to JMIR Mental Health's
       submission template (TRIPOD-AI prediction-model reporting
