@@ -15,6 +15,10 @@ class VitalsStrategy(Enum):
     DROP = 0
     INDICATOR = 1
     ASYMMETRIC = 2
+    
+class ClassifierFamily(Enum):
+    LINEAR = 0
+    TREE = 1
 
 VITAL_COLUMNS = ("bmi", "bp_sys", "bp_dias",)
 

@@ -30,92 +30,79 @@ ACTIVE / IMMEDIATE
       manuscript figures). Covers all four classifier PNGs
       (logistic_regression, random_forest, gradient_boosting, xgboost).
 
-- [ ] FEATURE-side vitals-handling sensitivity analysis. The three
-      vital columns currently emitted by feature_vector.py
-      (`bmi`, `bp_sys`, `bp_dias`) sit at 63-69% missingness across
-      the n=9725 cohort, with TRD-positive patients an additional
-      8-10 percentage points more likely to be missing every vital
-      than TRD-negative patients (diagnostic + cross-tab live in
-      notebooks/cohort_investigation.ipynb). Median imputation at
-      classical_ml.py:84 was therefore squashing the engagement-
-      disparity signal onto the cohort median, and the LR was learning
-      "patient with cohort-median BMI = TRD proxy" — producing the
-      literature-incoherent protective-BMI red bar across all four
-      FEATURE feature_importance PNGs. Rather than commit to a single
-      handling strategy on first-principles grounds, the FEATURE
-      pipeline iterates a three-arm sensitivity comparison; the
-      primary arm is reported in the manuscript and the secondary
-      two are reported as sensitivity analyses.
-      Arms:
-        * DROP — strip `bmi` / `bp_sys` / `bp_dias` from the FEATURE
-          matrix at `load_data_set` time. All four classifiers see
-          the same vital-stripped columns. SimpleImputer is a no-op
-          on the resulting numeric block.
-        * INDICATOR — vitals retained. LR's numeric branch uses
-          `SimpleImputer(strategy='median', add_indicator=True)`,
-          which appends a `MissingIndicator` column per imputed
-          feature (three new boolean columns:
-          `missingindicator_bmi` / `_bp_sys` / `_bp_dias`). Tree
-          models drop the imputer entirely and rely on NaN-native
-          splits.
-        * ASYMMETRIC — LR sees vital-stripped columns (identical to
-          DROP's LR matrix). Trees see vitals with NaN-native
-          handling (identical to INDICATOR's tree matrix).
-      Landed so far:
-        * `VitalsStrategy` enum + `VITAL_COLUMNS` constant live in
-          scripts/shared/utils.py.
-        * `GradientBoostingClassifier` swapped for
-          `HistGradientBoostingClassifier` across classical_ml.py;
-          its `HYPERPARAMETERS` grid is rewritten to HistGB's API
-          (`learning_rate` / `max_iter` / `max_leaf_nodes` /
-          `l2_regularization`).
-        * `load_data_set` carries `vitals_strategy: Optional[VitalsStrategy]
-          = None`. The DROP arm strips VITAL_COLUMNS at parquet-load
-          time; INDICATOR and ASYMMETRIC currently return the full
-          (vital-retained) matrix from `load_data_set`. EMBEDDED
-          ignores the parameter. `main()` still calls
-          `load_data_set` without the third argument — strategy
-          plumbing into the main loop is the next piece.
-      Remaining architecture:
-        * LR-side vital stripping for INDICATOR / ASYMMETRIC. Two
-          shapes possible: (a) extend `load_data_set` with a
-          classifier-family hint so the LR call-site receives a
-          vital-stripped matrix under INDICATOR/ASYMMETRIC, or
-          (b) keep `load_data_set` strategy-only and strip vitals
-          one layer up inside `evaluate_models` for the LR fit only.
-          Pick one before threading strategy into `main()`.
-        * LR pipeline-builder variant for INDICATOR: the numeric
-          branch's SimpleImputer needs `add_indicator=True` so three
-          `missingindicator_*` boolean columns get appended. Tree
-          pipelines under INDICATOR / ASYMMETRIC drop the imputer
-          entirely and rely on NaN-native splits.
-        * `classical_ml.py::main()` iterates strategies inside the
-          FEATURE branch of its existing VectorSource loop:
-          `for source in VectorSource: if source == EMBEDDED:
-          fit_evaluate(source, strategy=None) else: for strategy in
-          VitalsStrategy: fit_evaluate(source, strategy)`. 12 FEATURE
-          fits per run (4 classifiers x 3 strategies) + 4 EMBEDDED
-          fits = 16 total.
-        * Trained-model cache + results JSON + plot PNG filenames
-          extend the existing `{model}_{source}` suffix to
-          `{model}_{source}_{strategy}` when strategy is set.
-          EMBEDDED artifacts retain the old shorter suffix.
-        * NOT an .env addition — VitalsStrategy is a pipeline-internal
-          iteration axis, not an environment knob. The only `.env`
-          variable that changes between submissions remains
-          EMBEDDER_MODEL_NAME.
-      Comparison surface:
-        * vitals_sensitivity.csv in RESULTS_DIR root — 12 rows
-          (3 strategies x 4 classifiers), columns: strategy,
+- [ ] FEATURE-side vitals sensitivity — comparison-surface aggregator.
+      Pipeline plumbing for the three-arm sensitivity loop
+      (DROP / INDICATOR / ASYMMETRIC) is end-to-end in classical_ml.py
+      and feature_importance.py: `VitalsStrategy` + `ClassifierFamily`
+      enums in scripts/shared/utils.py, `load_data_set` strips per
+      (strategy, family), `make_numeric_transformer` dispatches LR
+      `add_indicator`-flavored / tree-`passthrough` / baseline numeric
+      branches, `classical_ml.py::main()` iterates strategies inside
+      the FEATURE branch (12 FEATURE fits + 4 EMBEDDED fits = 16
+      total per run), and trained-model cache / results JSON / plot
+      PNG filenames carry `_{strategy.name}` suffixes under FEATURE
+      only. ASYMMETRIC dual-loads via `only_classifier_family` filter
+      so LR fits on the stripped matrix and trees fit on the
+      retained matrix in two `evaluate_models` calls whose result
+      dicts are merged. feature_importance.py mirrors the same
+      strategy + family threading; per-strategy summary JSONs and
+      per-strategy `feature_importance_{classifier}_{strategy}.png`
+      bar charts land in RESULTS_DIR/feature_importance.
+
+      Remaining work:
+        * Aggregator emits vitals_sensitivity.csv at RESULTS_DIR root
+          — 12 rows (3 strategies x 4 classifiers), columns: strategy,
           classifier, plus the eight metric keys (roc_score,
           roc_score_ci_low, roc_score_ci_high, auprc, brier_score,
           weighted_calibration_error, calibration_slope,
-          calibration_intercept).
+          calibration_intercept). Reads the three
+          classical_ml_results_FEATURE_{DROP,INDICATOR,ASYMMETRIC}.json
+          files produced by classical_ml.py.
         * Six vitals_delta_*.png grouped-bar charts (one per metric:
           roc_score, auprc, brier_score, weighted_calibration_error,
           calibration_slope, calibration_intercept), mirroring the
           ablation_delta plot pattern. The roc_score PNG carries
           asymmetric CI whiskers; the other five carry bars only.
+          Deltas computed relative to one strategy chosen as
+          reference (likely DROP since it's the literature-aligned
+          baseline that triggered this investigation).
+        * Wire the aggregator into analysis_only.sbatch after
+          classical_ml.py + feature_importance.py and before
+          ablation_runner.py. Likely sibling module
+          scripts/digital_twins/predictions/vitals_sensitivity.py.
+
+      Latent caveat to address while the aggregator lands:
+        * Under INDICATOR and ASYMMETRIC, tree models train on
+          NaN-bearing matrices. `compute_univariate_spearman` in
+          feature_importance.py returns NaN correlations for vital
+          columns under those strategies; `np.sign(NaN) = NaN` then
+          fails `>= 0` and the tree direction colors all degrade to
+          firebrick. LR is unaffected (DROP strips, INDICATOR's
+          imputer fills, ASYMMETRIC strips). Fix candidates:
+          (a) `spearmanr(..., nan_policy='omit')` and skip-color
+          for NaN-sign entries, or (b) suppress direction coloring
+          on tree models under INDICATOR/ASYMMETRIC. Pick one;
+          neither blocks the aggregator itself.
+
+      Verification (post-implementation):
+        * Submit slurm_jobs/quick_runs/analysis_only.sbatch.
+        * Confirm 16 .joblib cache files land in
+          RESULTS_DIR/trained_models/ (4 EMBEDDED + 12 FEATURE
+          across DROP/INDICATOR/ASYMMETRIC suffixes).
+        * Confirm three classical_ml_results_FEATURE_*.json files
+          plus the existing classical_ml_results_EMBEDDED.json.
+        * Confirm vitals_sensitivity.csv has 12 rows with non-empty
+          metric columns.
+        * Open vitals_delta_roc_score.png — bars should cluster
+          near zero if vitals handling doesn't materially affect
+          predictions; large bars indicate sensitivity worth
+          investigating further.
+        * Inspect feature_importance/feature_importance_*.png for
+          each (classifier, strategy) pair (12 PNGs). Confirm
+          DROP's plots are vital-free, INDICATOR's LR plot
+          includes the three `missingindicator_*` columns,
+          ASYMMETRIC matches DROP for LR and INDICATOR for trees.
+
       Out of scope:
         * EMBEDDED side is unaffected by all three arms. The
           deterministic narrative writes vital sections with a
@@ -128,20 +115,6 @@ ACTIVE / IMMEDIATE
           downstream in `load_data_set` per strategy, not at the
           parquet level. No SCRUB_FEATURE_VECTORS regeneration
           needed.
-      Verification (post-implementation):
-        * Submit slurm_jobs/quick_runs/analysis_only.sbatch with
-          SCRUB_TRAINED_MODELS=1 (forces fresh fits across all arms).
-        * Confirm vitals_sensitivity.csv has 12 rows with non-empty
-          metric columns.
-        * Open vitals_delta_roc_score.png — bars should cluster near
-          zero if vitals handling doesn't materially affect
-          predictions; large bars indicate sensitivity worth
-          investigating further.
-        * Inspect feature_importance/feature_importance_*.png for
-          each (classifier, strategy) pair. Confirm DROP's plots are
-          vital-free, INDICATOR's LR plot includes the three
-          `missingindicator_*` columns, ASYMMETRIC matches DROP for
-          LR and INDICATOR for trees.
 
 - [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/analysis_only.sbatch
       end-to-end against the frozen-baseline ablation_runner.py. Verify
