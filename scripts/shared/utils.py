@@ -12,13 +12,16 @@ class VectorSource(Enum):
     FEATURE = 1
     
 class VitalsStrategy(Enum):
-    DROP = 0
-    INDICATOR = 1
-    ASYMMETRIC = 2
+    DROP = 0 # Completely drop vitals
+    INDICATOR = 2 # Indicator that vital is missing
+    NAN = 3 # Replace missing vitals with NaN
     
-class ClassifierFamily(Enum):
-    LINEAR = 0
-    TREE = 1
+LEGAL_STRATEGIES = {
+    'logistic_regression': [VitalsStrategy.DROP, VitalsStrategy.INDICATOR],
+    'random_forest': [VitalsStrategy.DROP, VitalsStrategy.INDICATOR],
+    'gradient_boosting': [VitalsStrategy.DROP, VitalsStrategy.INDICATOR],
+    'xgboost': [VitalsStrategy.DROP, VitalsStrategy.INDICATOR, VitalsStrategy.NAN],
+}
 
 VITAL_COLUMNS = ("bmi", "bp_sys", "bp_dias",)
 

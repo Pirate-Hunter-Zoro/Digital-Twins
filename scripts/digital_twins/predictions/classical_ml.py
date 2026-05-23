@@ -173,9 +173,9 @@ HYPERPARAMETERS = {
     },
     'gradient_boosting': {
         'model__learning_rate': [0.01, 0.1, 0.3],
-        'model__max_iter': [300],
-        'model__max_leaf_nodes': [15, 31, 63],
-        'model__l2_regularization': [0.0, 1.0]
+        'model__n_estimators': [300],
+        'model__max_depth': [3, 5, 8],
+        'model__min_samples_split': [2, 10]
     },
     'xgboost': {
         'model__n_estimators': [300],
