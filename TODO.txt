@@ -30,50 +30,37 @@ ACTIVE / IMMEDIATE
       manuscript figures). Covers all four classifier PNGs
       (logistic_regression, random_forest, gradient_boosting, xgboost).
 
-- [ ] VITALS STEP 1 — REFACTOR FEATURE-side vitals handling to a
-      per-classifier legal-arm sweep over three arms: DROP,
-      INDICATOR_ONLY, and NAN. No imputation. The packaging diagnostic
-      in notebooks/cohort_investigation.ipynb shows P(all 3 missing
-      | ≥1 missing) = 90.3% across the cohort, so vitals are missing
-      in packages and within-vital multivariate interpolation (MICE,
-      KNN) has no within-vital signal to chain — these imputers
-      degenerate to predicting BMI/BP from non-vital regressors,
-      which only reproduces the engagement-disparity signal already
-      encoded by the missingness flag itself. Median imputation is
-      also redundant under an indicator-bearing matrix: the filled
-      value is mathematically absorbed by the indicator coefficient
-      under LR and largely absorbed under tree splits when the tree
-      branches on the indicator first, so the placeholder adds no
-      scientific signal while injecting cohort-median-flavored
-      numbers into cells where the truth is "unknown". Current
-      implementation iterates three global strategies (DROP /
-      INDICATOR / ASYMMETRIC) across all four classifiers under a
-      `ClassifierFamily` coordination shim with an ASYMMETRIC
-      dual-load. Replace with a per-classifier legal-arm matrix
-      where each classifier sweeps only the strategies it can
-      actually run, with no imputer anywhere in the pipeline.
-
-      Three arms:
-        * DROP — strip VITAL_COLUMNS at load_data_set time. Vital
-          info is genuinely absent from the matrix. All four
-          classifiers can run.
-        * INDICATOR_ONLY — strip the vital VALUES (same matrix
-          shape as DROP for the value columns) and append three
-          pre-computed boolean indicator columns showing which
-          patients were missing each vital. No fabricated numbers
-          anywhere. All four classifiers can run.
-        * NAN — passthrough; vitals retained with NaN-bearing cells,
-          no imputer. Only XGBoost has native NaN-aware splits; LR /
-          RF / GB raise on NaN.
+- [ ] VITALS — DROP `VITAL_COLUMNS` at `load_data_set` time on the
+      FEATURE side. The three-tier diagnostic in
+      notebooks/cohort_investigation.ipynb establishes that
+      imputation is not defensible on this data:
+        * Production YEARS_BACK = 2: 63-69% of cohort missing each
+          vital.
+        * All pre-anchor history (extended window, no future
+          leakage): still ~50% missing BMI, ~57% missing BP.
+        * No time filter at all (any date ever, including
+          post-anchor leakage): still ~33% missing BMI, ~38%
+          missing BP.
+        * TRD-stratified missingness delta is 7-11pp at every time
+          filter and does NOT collapse as the window widens —
+          MAR is structurally violated, not artifactually.
+        * Of the 101,816 joinable vital rows, 62% are post-anchor
+          (future leakage, structurally irrelevant); widening
+          YEARS_BACK can never touch this bucket.
+      Decision: drop the vital VALUES. No imputation. No indicator
+      columns. No NAN-aware passthrough. No multi-arm sweep.
+      EMBEDDED-side narratives encode missingness via the
+      deterministic narrative's `"Missing"` sentinel — existing
+      embeddings and embedded classifier fits remain valid.
 
       Lineup change: swap `HistGradientBoostingClassifier` back to
       plain `GradientBoostingClassifier`. HistGB was adopted to feed
-      NaN-bearing matrices to the tree branch under the prior
-      INDICATOR / ASYMMETRIC design; with the new design only XGBoost
-      runs the NaN arm, so the HistGB-required path disappears. Plain
-      GB also restores native `feature_importances_`, eliminating the
-      AttributeError that currently kills feature_importance.py
-      mid-run (slurm_jobs/quick_runs/logs/analysis_only_err.txt:1184).
+      NaN-bearing matrices to the tree branch; with vitals dropped
+      no classifier sees NaN and the HistGB-required path
+      disappears. Plain GB also restores native
+      `feature_importances_`, eliminating the AttributeError that
+      currently kills feature_importance.py mid-run
+      (slurm_jobs/quick_runs/logs/analysis_only_err.txt:1184).
 
       Hyperparameter grid revert for `gradient_boosting`
       (classical_ml.py:174-179): drop the three HistGB-only keys
@@ -84,127 +71,66 @@ ACTIVE / IMMEDIATE
       ([2, 10]). New candidate count = 1 * 3 * 3 * 2 = 18, matching
       the xgboost block.
 
-      Legal-arm matrix (9 FEATURE fits + 4 EMBEDDED = 13 total per run):
-        * LR:  DROP, INDICATOR_ONLY
-        * RF:  DROP, INDICATOR_ONLY
-        * GB:  DROP, INDICATOR_ONLY
-        * XGB: DROP, INDICATOR_ONLY, NAN
-
       Refactor surface:
-        * scripts/shared/utils.py: `VitalsStrategy` values are
-          DROP / INDICATOR_ONLY / NAN. Delete `ClassifierFamily`
-          entirely. `LEGAL_STRATEGIES` module-level dict keyed by
-          lowercase classifier name with tuple values of legal
-          VitalsStrategy members per classifier.
+        * scripts/shared/utils.py: delete `VitalsStrategy` enum,
+          `LEGAL_STRATEGIES` dict, and `ClassifierFamily` shim
+          entirely. No strategy vocabulary remains.
         * classical_ml.py: replace `HistGradientBoostingClassifier`
-          with `GradientBoostingClassifier` in `HYPERPARAMETERS` and
-          in the classifier instantiation block. Apply the
-          hyperparameter grid revert above. Rewrite
-          `make_numeric_transformer` dispatch on strategy: DROP and
-          INDICATOR_ONLY both produce the same numeric branch
-          (baseline StandardScaler over the stripped vital-free
-          numeric block; INDICATOR_ONLY's three boolean indicator
-          columns are appended at load_data_set time and flow
-          through the bool branch); NAN = passthrough numeric branch
-          (XGB only). No imputer construct anywhere. `main()` runs
-          the EMBEDDED pass unchanged, then iterates the FEATURE
-          branch as a nested (classifier, strategy) loop emitting
-          only legal cells per `LEGAL_STRATEGIES`. Delete the
-          ASYMMETRIC dual-load and the `only_classifier_family`
-          filter on `evaluate_models`.
-        * `load_data_set`: drop `classifier_family` parameter; keep
-          `vitals_strategy`. Strip VITAL_COLUMNS when strategy=DROP.
-          When strategy=INDICATOR_ONLY, strip the vital VALUES AND
-          append three pre-computed boolean indicator columns
-          (`missing_bmi`, `missing_bp_sys`, `missing_bp_dias`)
-          derived from the original NaN positions before the strip.
-          When strategy=NAN, return the unmodified matrix with NaN
-          cells intact.
-        * feature_importance.py: mirror the same per-classifier
-          per-strategy iteration. Swap `HistGradientBoostingClassifier`
-          for `GradientBoostingClassifier` in the refit fallback and
-          in `plot_pca_k_vs_roc`. `feature_importances_` extraction
+          with `GradientBoostingClassifier` in `HYPERPARAMETERS`
+          and in the classifier instantiation block. Apply the
+          hyperparameter grid revert above. Collapse
+          `make_numeric_transformer` to a single
+          StandardScaler-only numeric branch — no strategy
+          dispatch, no passthrough variant. `main()` runs the
+          EMBEDDED pass unchanged, then a single FEATURE pass over
+          the four classifiers — no strategy axis. 8 total fits per
+          run (4 EMBEDDED + 4 FEATURE). Delete the ASYMMETRIC
+          dual-load and the `only_classifier_family` filter on
+          `evaluate_models`.
+        * `load_data_set`: drop both `classifier_family` and
+          `vitals_strategy` parameters. Always strip `VITAL_COLUMNS`
+          in FEATURE mode. No indicator columns appended.
+        * feature_importance.py: drop the (classifier, strategy)
+          loop; single FEATURE pass over the four classifiers
+          mirroring classical_ml.py. Swap
+          `HistGradientBoostingClassifier` for
+          `GradientBoostingClassifier` in the refit fallback and in
+          `plot_pca_k_vs_roc`. `feature_importances_` extraction
           returns to native attribute access.
-        * Cache filenames keep `{model}_{source}_{strategy}.joblib`
-          naming. Stale HistGB and INDICATOR / ASYMMETRIC / IMPUTE
+        * Cache filenames revert to `{model}_{source}.joblib` — no
+          strategy suffix. Stale HistGB and any
+          `_{DROP,INDICATOR_ONLY,NAN,ASYMMETRIC,IMPUTE}`-suffixed
           artifacts under `trained_models/` purged by hand before
           first run.
-
-      Aggregator (scripts/digital_twins/predictions/vitals_sensitivity.py):
-        * Reads three
-          classical_ml_results_FEATURE_{DROP,INDICATOR_ONLY,NAN}.json
-          files. Cell coverage is ragged: DROP and INDICATOR_ONLY
-          files carry all four classifiers; NAN file carries XGB only.
-        * vitals_sensitivity.csv at RESULTS_DIR root — 9 rows
-          (4 DROP + 4 INDICATOR_ONLY + 1 NAN), 10 columns: strategy,
-          classifier, plus the eight metric keys (roc_score,
-          roc_score_ci_low, roc_score_ci_high, auprc, brier_score,
-          weighted_calibration_error, calibration_slope,
-          calibration_intercept).
-        * Six vitals_delta_*.png grouped-bar charts (one per metric).
-          Delta baseline is per-classifier DROP. NAN cell exists only
-          for XGB so the NAN group has a single bar; the
-          INDICATOR_ONLY group has four; DROP cells are the zero
-          reference. The roc_score PNG carries asymmetric CI
-          whiskers; the other five carry bars only.
-        * Wire after feature_importance.py and before
-          ablation_runner.py in analysis_only.sbatch.
-
-      Latent caveat: under the XGB-NAN cell,
-      `compute_univariate_spearman` returns NaN correlations for
-      vital columns; `np.sign(NaN) >= 0` then fails and degrades
-      XGB's direction-of-effect coloring on that one cell. LR / RF /
-      GB under DROP and INDICATOR_ONLY are unaffected (no NaN ever
-      reaches the correlation helper — vital columns are stripped
-      before correlation). Fix candidates: `spearmanr(...,
-      nan_policy='omit')` plus skip-color on NaN-sign entries, or
-      suppress direction coloring on the single XGB-NAN cell.
-      Neither blocks the refactor.
+        * If `scripts/digital_twins/predictions/vitals_sensitivity.py`
+          exists, delete it. Remove any sbatch wiring for it in
+          analysis_only.sbatch.
 
       Verification (post-implementation):
         * Submit slurm_jobs/quick_runs/analysis_only.sbatch.
-        * Confirm 13 .joblib cache files land in trained_models/:
-          4 EMBEDDED + 9 FEATURE (lr_DROP, lr_INDICATOR_ONLY,
-          rf_DROP, rf_INDICATOR_ONLY, gb_DROP, gb_INDICATOR_ONLY,
-          xgb_DROP, xgb_INDICATOR_ONLY, xgb_NAN).
-        * Confirm three classical_ml_results_FEATURE_*.json files
-          (DROP / INDICATOR_ONLY / NAN) plus the existing
-          classical_ml_results_EMBEDDED.json. NAN file's top-level
-          dict contains only the `xgboost` key.
-        * Confirm feature_importance.py completes without an
+        * Confirm 8 .joblib cache files in trained_models/
+          (4 EMBEDDED + 4 FEATURE), no strategy suffixes.
+        * Confirm exactly two classical_ml_results_*.json files
+          (FEATURE + EMBEDDED), each top-level keyed by the four
+          lowercase classifier names.
+        * Confirm feature_importance.py completes without
           AttributeError on `feature_importances_`.
-        * Confirm vitals_sensitivity.csv has 9 rows with non-empty
-          metric columns.
-        * Open vitals_delta_roc_score.png — bars should cluster
-          near zero if vitals handling doesn't materially affect
-          predictions; large bars indicate sensitivity worth
-          investigating further. NAN group should show a single XGB
-          bar.
-        * Inspect feature_importance/feature_importance_*.png for
-          each legal (classifier, strategy) pair (9 PNGs). DROP
-          plots are vital-free; INDICATOR_ONLY plots include three
-          `missing_*` indicator boolean columns but NOT the vital
-          values; XGB-NAN plot includes vital columns under native
-          NaN handling.
+        * Confirm feature_importance/ contains 8 PNGs
+          (4 EMBEDDED + 4 FEATURE) and FEATURE plots include no
+          `missing_bmi` / `missing_bp_sys` / `missing_bp_dias`
+          indicator columns and no `bmi` / `bp_sys` / `bp_dias`
+          value columns.
 
       Out of scope:
-        * EMBEDDED side is unaffected by the strategy refactor. The
-          deterministic narrative writes vital sections with a
-          `"Missing"` sentinel, so the embedder learned its own
-          representation of the missingness pattern independent of
-          the FEATURE column set. Existing embeddings and embedded
+        * EMBEDDED side is unaffected. The deterministic narrative
+          writes vital sections with a `"Missing"` sentinel, so the
+          embedder learned its own representation of the
+          missingness pattern. Existing embeddings and embedded
           classifier fits remain valid.
         * feature_vector.py output is unchanged — vitals are
-          stripped (and indicator columns derived) downstream in
-          `load_data_set` per strategy, not at the parquet level.
-          No SCRUB_FEATURE_VECTORS regeneration needed.
-        * Sophisticated multivariate imputation (KNN, MICE) is
-          abandoned. The packaging diagnostic (90.3%) shows vitals
-          missing in packages, so within-row interpolation has no
-          within-vital signal to extract and degenerates to
-          imputing from non-vital regressors — producing values
-          that reflect the engagement-disparity signal already
-          encoded by the missingness indicator itself.
+          stripped downstream in `load_data_set`, not at the
+          parquet level. No SCRUB_FEATURE_VECTORS regeneration
+          needed.
 
 - [ ] ABLATION REGISTRY CLEANUP — three changes to the ablation
       study surface, intended to land in one coordinated pass:
