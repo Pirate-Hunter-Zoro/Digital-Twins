@@ -9,130 +9,7 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] FEATURE feature_importance PNG display-name cleanup. The current
-      bars render raw ColumnTransformer.get_feature_names_out() strings,
-      which compound three layers of ugliness:
-        * Transformer-name prefixes `num__` / `cat__` / `bool__` from
-          the named branches in classical_ml.py:70,78,83.
-        * Raw parquet column names from feature_vector.py:
-          `mdd_to_anchor_days`, `psych_ANXIETY`,
-          `sud_Sedative/Hypnotic`, `medical_CHRONIC_PAIN`,
-          `safety_UNCONTROLLED_HTN`, `sdoh_*`, `trials_BUPROPION`, etc.
-        * One-hot suffixes appended verbatim:
-          `cat__Race_Ethnicity_Black or African American`,
-          `cat__mdd_severity_Unspecified`, `cat__MaritalStatus_Never Married`.
-      Patch surface: a display-name mapper applied INSIDE
-      `plot_feature_importance` (feature_importance.py:111) immediately
-      before `set_yticklabels` at line 147 — do NOT touch the raw
-      parquet column names or rewire the ColumnTransformer branches.
-      Mapping table lives in scripts/shared/ so the same labels can be
-      reused downstream (e.g. ablation summary plots, future
-      manuscript figures). Covers all four classifier PNGs
-      (logistic_regression, random_forest, gradient_boosting, xgboost).
-
-- [ ] VITALS — DROP `VITAL_COLUMNS` at `load_data_set` time on the
-      FEATURE side. The three-tier diagnostic in
-      notebooks/cohort_investigation.ipynb establishes that
-      imputation is not defensible on this data:
-        * Production YEARS_BACK = 2: 63-69% of cohort missing each
-          vital.
-        * All pre-anchor history (extended window, no future
-          leakage): still ~50% missing BMI, ~57% missing BP.
-        * No time filter at all (any date ever, including
-          post-anchor leakage): still ~33% missing BMI, ~38%
-          missing BP.
-        * TRD-stratified missingness delta is 7-11pp at every time
-          filter and does NOT collapse as the window widens —
-          MAR is structurally violated, not artifactually.
-        * Of the 101,816 joinable vital rows, 62% are post-anchor
-          (future leakage, structurally irrelevant); widening
-          YEARS_BACK can never touch this bucket.
-      Decision: drop the vital VALUES. No imputation. No indicator
-      columns. No NAN-aware passthrough. No multi-arm sweep.
-      EMBEDDED-side narratives encode missingness via the
-      deterministic narrative's `"Missing"` sentinel — existing
-      embeddings and embedded classifier fits remain valid.
-
-      Lineup change: swap `HistGradientBoostingClassifier` back to
-      plain `GradientBoostingClassifier`. HistGB was adopted to feed
-      NaN-bearing matrices to the tree branch; with vitals dropped
-      no classifier sees NaN and the HistGB-required path
-      disappears. Plain GB also restores native
-      `feature_importances_`, eliminating the AttributeError that
-      currently kills feature_importance.py mid-run
-      (slurm_jobs/quick_runs/logs/analysis_only_err.txt:1184).
-
-      Hyperparameter grid revert for `gradient_boosting`
-      (classical_ml.py:174-179): drop the three HistGB-only keys
-      `model__max_iter`, `model__max_leaf_nodes`,
-      `model__l2_regularization`; keep `model__learning_rate`
-      ([0.01, 0.1, 0.3]); add `model__n_estimators` ([300]),
-      `model__max_depth` ([3, 5, 8]), and `model__min_samples_split`
-      ([2, 10]). New candidate count = 1 * 3 * 3 * 2 = 18, matching
-      the xgboost block.
-
-      Refactor surface:
-        * scripts/shared/utils.py: delete `VitalsStrategy` enum,
-          `LEGAL_STRATEGIES` dict, and `ClassifierFamily` shim
-          entirely. No strategy vocabulary remains.
-        * classical_ml.py: replace `HistGradientBoostingClassifier`
-          with `GradientBoostingClassifier` in `HYPERPARAMETERS`
-          and in the classifier instantiation block. Apply the
-          hyperparameter grid revert above. Collapse
-          `make_numeric_transformer` to a single
-          StandardScaler-only numeric branch — no strategy
-          dispatch, no passthrough variant. `main()` runs the
-          EMBEDDED pass unchanged, then a single FEATURE pass over
-          the four classifiers — no strategy axis. 8 total fits per
-          run (4 EMBEDDED + 4 FEATURE). Delete the ASYMMETRIC
-          dual-load and the `only_classifier_family` filter on
-          `evaluate_models`.
-        * `load_data_set`: drop both `classifier_family` and
-          `vitals_strategy` parameters. Always strip `VITAL_COLUMNS`
-          in FEATURE mode. No indicator columns appended.
-        * feature_importance.py: drop the (classifier, strategy)
-          loop; single FEATURE pass over the four classifiers
-          mirroring classical_ml.py. Swap
-          `HistGradientBoostingClassifier` for
-          `GradientBoostingClassifier` in the refit fallback and in
-          `plot_pca_k_vs_roc`. `feature_importances_` extraction
-          returns to native attribute access.
-        * Cache filenames revert to `{model}_{source}.joblib` — no
-          strategy suffix. Stale HistGB and any
-          `_{DROP,INDICATOR_ONLY,NAN,ASYMMETRIC,IMPUTE}`-suffixed
-          artifacts under `trained_models/` purged by hand before
-          first run.
-        * If `scripts/digital_twins/predictions/vitals_sensitivity.py`
-          exists, delete it. Remove any sbatch wiring for it in
-          analysis_only.sbatch.
-
-      Verification (post-implementation):
-        * Submit slurm_jobs/quick_runs/analysis_only.sbatch.
-        * Confirm 8 .joblib cache files in trained_models/
-          (4 EMBEDDED + 4 FEATURE), no strategy suffixes.
-        * Confirm exactly two classical_ml_results_*.json files
-          (FEATURE + EMBEDDED), each top-level keyed by the four
-          lowercase classifier names.
-        * Confirm feature_importance.py completes without
-          AttributeError on `feature_importances_`.
-        * Confirm feature_importance/ contains 8 PNGs
-          (4 EMBEDDED + 4 FEATURE) and FEATURE plots include no
-          `missing_bmi` / `missing_bp_sys` / `missing_bp_dias`
-          indicator columns and no `bmi` / `bp_sys` / `bp_dias`
-          value columns.
-
-      Out of scope:
-        * EMBEDDED side is unaffected. The deterministic narrative
-          writes vital sections with a `"Missing"` sentinel, so the
-          embedder learned its own representation of the
-          missingness pattern. Existing embeddings and embedded
-          classifier fits remain valid.
-        * feature_vector.py output is unchanged — vitals are
-          stripped downstream in `load_data_set`, not at the
-          parquet level. No SCRUB_FEATURE_VECTORS regeneration
-          needed.
-
-- [ ] ABLATION REGISTRY CLEANUP — three changes to the ablation
+- [ ] ABLATION REGISTRY CLEANUP — four changes to the ablation
       study surface, intended to land in one coordinated pass:
 
       1. Rename the `swap_*` spec ids to `permute_*` in
@@ -175,6 +52,33 @@ ACTIVE / IMMEDIATE
          per-spec PNGs vs a single multi-panel grid, and
          per-classifier overlay vs per-classifier panel.
 
+      4. Replace the broken delta-CI source on
+         `ablation_delta_roc_score.png`. Current behavior at
+         `ablation_runner.py:48-49`: whiskers are derived from the
+         ABLATED AUC's bootstrap CI attached to the DELTA bar —
+         semantically meaningless (bar plots ablated - baseline,
+         whiskers describe ablated alone). Fix: paired bootstrap
+         of the delta. Resample test-patient indices with
+         replacement N times; per draw compute baseline_AUC and
+         ablated_AUC against `y_test[idx]` (same indices in both
+         prediction vectors); record delta =
+         ablated_AUC - baseline_AUC. 2.5 / 97.5 percentiles of the
+         resulting delta distribution are the CI bounds. Persist as
+         new `delta_roc_score_ci_low` / `delta_roc_score_ci_high`
+         columns in `ablation_summary.csv` (replacing the current
+         misuse of the ablated-AUC CI columns as whisker source).
+         Paired bootstrap is mandatory because the same patients
+         are scored by both models — the AUCs are positively
+         correlated, and independent-CI propagation inflates the
+         delta interval. Implementation lives in `ablation_runner.py`
+         above `plot_ablation_deltas`, consuming the baseline
+         searcher's predict_proba output (already loaded once above
+         the spec loop) and the per-spec ablated searcher's
+         predict_proba output. Reuse `N_BOOTSTRAP` from
+         `scripts/shared/plots.py::plot_receiving_operator_characteristic`
+         so methodology stays consistent across the ROC band and
+         the delta CI.
+
 - [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/analysis_only.sbatch
       end-to-end against the frozen-baseline ablation_runner.py. Verify
       baseline RESULTS_DIR contains:
@@ -191,8 +95,12 @@ ACTIVE / IMMEDIATE
           roc_score, auprc, brier_score, weighted_calibration_error,
           calibration_slope, calibration_intercept) emitted by
           plot_ablation_deltas. Open the roc_score PNG and confirm
-          asymmetric CI whiskers render on every bar; open at least
-          one of the other five and confirm bars only (no whiskers).
+          asymmetric CI whiskers render on every bar, sourced from
+          `delta_roc_score_ci_low` / `delta_roc_score_ci_high`
+          (paired-bootstrap of the delta per item 4 above; NOT the
+          ablated-AUC `roc_score_ci_low` / `roc_score_ci_high`);
+          open at least one of the other five and confirm bars
+          only (no whiskers).
       Verify each per-spec subdir under RESULTS_DIR contains:
         * classical_ml_results_EMBEDDED.json (4 lowercase classifier
           keys, 8 metric keys each)

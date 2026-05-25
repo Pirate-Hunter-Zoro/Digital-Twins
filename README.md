@@ -233,9 +233,10 @@ Interfaces for the neural networks.
 
 ### 7. Shared Utilities (`scripts/shared`)
 
-* **`utils.py`**: Core helpers including `VectorSource` enum (`EMBEDDED`, `FEATURE`) consumed by the classical ML pipeline, and `load_neighborhood_data()` for loading neighborhood CSVs (embedded source only).
+* **`utils.py`**: Core helpers including `VectorSource` enum (`EMBEDDED`, `FEATURE`) consumed by the classical ML pipeline, `VITAL_COLUMNS` (the three vital column names stripped at `load_data_set` time on the FEATURE side), `cast_to_int8` (used as the `bool__` branch's `FunctionTransformer` in the classical-ML `ColumnTransformer`), and `load_neighborhood_data()` for loading neighborhood CSVs (embedded source only).
 * **`plots.py`**: Wraps `matplotlib` and `sklearn` to generate diagnostic visualizations. Computes and saves ROC curves (with bootstrapped error bands), Precision-Recall curves, Calibration curves, Decision Curve Analyses (DCA), Effective Sample Size distributions, and Optimal Confusion Matrices.
 * **`prompts.py`**: Strict loader for the LLM system and user prompt templates located in the `./prompts` directory. Formats and injects patient narratives into the structured evaluation prompts for the vLLM server.
+* **`feature_display_names.py`**: Display-name mapper consumed at the matplotlib boundary of `feature_importance.py::plot_feature_importance`. Exports `RAW_TO_DISPLAY` (a single source-of-truth dict keyed on post-`ColumnTransformer.get_feature_names_out()` strings with the `num__` / `cat__` / `bool__` branch prefix stripped) and `humanize_feature_names(raw_names)` which prefix-strips and dict-looks-up each entry, falling back to the stripped raw name on miss. Each display value carries a bracketed type tag (`[numeric]`, `[boolean]`, `[one-hot]`) so a reader can disambiguate count-scale features from 0/1 indicators when comparing importance magnitudes. Lives in the shared package so ablation summary plots and future manuscript figures can reuse the same labels without duplicating the table.
 
 ### 8. Tests (`tests/`)
 

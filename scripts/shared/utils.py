@@ -10,18 +10,6 @@ load_dotenv()
 class VectorSource(Enum):
     EMBEDDED = 0
     FEATURE = 1
-    
-class VitalsStrategy(Enum):
-    DROP = 0 # Completely drop vitals
-    INDICATOR = 2 # Indicator that vital is missing
-    NAN = 3 # Replace missing vitals with NaN
-    
-LEGAL_STRATEGIES = {
-    'logistic_regression': [VitalsStrategy.DROP, VitalsStrategy.INDICATOR],
-    'random_forest': [VitalsStrategy.DROP, VitalsStrategy.INDICATOR],
-    'gradient_boosting': [VitalsStrategy.DROP, VitalsStrategy.INDICATOR],
-    'xgboost': [VitalsStrategy.DROP, VitalsStrategy.INDICATOR, VitalsStrategy.NAN],
-}
 
 VITAL_COLUMNS = ("bmi", "bp_sys", "bp_dias",)
 
