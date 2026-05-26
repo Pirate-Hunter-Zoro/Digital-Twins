@@ -9,75 +9,68 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] ABLATION REGISTRY CLEANUP — four changes to the ablation
-      study surface, intended to land in one coordinated pass:
+- [ ] ABLATION ROC OVERLAY + PAIRED DELTA-AUC CI — one coordinated
+      change. The paired bootstrap unifies what would otherwise be
+      two independent passes: a single resampling loop yields both a
+      delta-TPR(FPR) CI band (consumed by the new per-classifier
+      overlay PNG) and a delta-AUC CI (consumed by the existing
+      ablation_delta_roc_score.png whiskers). All existing per-
+      classifier per-source ROC PNGs continue to be emitted unchanged
+      by the baseline classical_ml.py pass and each per-spec ablated
+      pass — this work only adds artifacts, it does not modify or
+      remove existing ones.
 
-      1. Rename the `swap_*` spec ids to `permute_*` in
-         scripts/data_loading/ablation_registry.py. Affects all
-         five locked-slate entries: swap_race, swap_psych_history,
-         swap_med_burden, swap_safety, swap_sdoh. Permutation is
-         the precise mechanic — values are permuted across the
-         cohort via `random.Random.shuffle`, not swapped pairwise
-         — so `permute` is the accurate verb. The spec id flows
-         downstream into per-spec narrative subdirectory names
-         (NARRATIVES_DIR/{spec_id}/), per-spec EMBEDDINGS_DIR and
-         RESULTS_DIR subdirectories, ablation_summary.csv
-         `spec_id` column values, and the x-axis tick labels on
-         ablation_delta_*.png. Cached per-spec narratives and
-         embeddings sitting under the old `swap_*` subdirectory
-         names need to be either renamed on disk before the rerun
-         or scrubbed so they regenerate against the new spec ids.
+      Four steps:
 
-      2. Rename the `safety` bundle. Current key in the
-         deterministic_narrative.py nine-bundle extract is
-         `safety`; the corresponding spec id is swap_safety (after
-         (1), permute_safety). Pick a more accurate noun for what
-         that bundle actually contains and rename the bundle key,
-         the spec entry, and any consumer references. New name
-         left open here — decide when picking the task up.
+      1. Refactor scripts/shared/plots.py. Extract the bootstrap math
+         from plot_receiving_operator_characteristic into a pure
+         helper that consumes a pre-computed sample_indices array
+         (shape: N_BOOTSTRAP x n_samples) and returns the per-draw
+         interpolated TPR matrix and AUC array. Promote N_BOOTSTRAP
+         (currently the literal 1000 at plots.py:31) and FPR_GRID
+         (currently np.linspace(0,1,100) at plots.py:28) to module-
+         level constants. Seed the index generation for reproducibility
+         — current code uses np.random.randint with no seed, which
+         prevents paired-draw alignment across separate calls.
+         plot_receiving_operator_characteristic becomes a thin caller
+         of the helper: generates one sample_indices array, calls
+         helper, plots + saves as today. Signature and return value
+         (score, ci_low, ci_high) preserved exactly so all existing
+         callers in classical_ml.py and trd_prediction_computation.py
+         keep working.
 
-      3. Enhance the ablation ROC plotting to additionally render
-         the ablated vs non-ablated ROC curves alongside the
-         existing ablation_delta_roc_score.png bar chart. Current
-         behavior: `plot_ablation_deltas` emits one grouped-bar
-         PNG per metric showing delta vs the frozen baseline.
-         New requirement: for roc_score specifically, also emit
-         the raw ROC curves so the reader sees the actual shape
-         of the discrimination shift rather than only the scalar
-         AUC delta. Likely a sibling PNG per ablation spec at
-         RESULTS_DIR/{spec_id}/ROC_ablated_vs_baseline_EMBEDDED.png,
-         overlaying the four classifier curves under both
-         conditions (8 curves per panel, hue = classifier, style
-         = ablated/baseline). Open question for next session:
-         per-spec PNGs vs a single multi-panel grid, and
-         per-classifier overlay vs per-classifier panel.
+      2. New plot function in scripts/shared/plots.py for the four-
+         classifier ROC overlay output. One PNG per classifier, five-
+         panel grid (one panel per ablation spec). Each panel shows
+         the baseline ROC curve, the ablated ROC curve, and the
+         paired delta-TPR(FPR) CI band on a twin axis. Inputs per
+         call: classifier name, y_test, baseline predict_proba, dict
+         {spec_id: ablated_predict_proba}. The function generates one
+         shared sample_indices array per spec and applies it to both
+         baseline and ablated prob vectors, producing paired delta_TPR
+         and delta_AUC distributions in the same bootstrap loop.
+         Filename: RESULTS_DIR/ROC_ablated_vs_baseline_{classifier}_
+         EMBEDDED.png at the baseline RESULTS_DIR root. Returns
+         per-spec delta_roc_score CI bounds for downstream consumption
+         by ablation_summary.csv.
 
-      4. Replace the broken delta-CI source on
-         `ablation_delta_roc_score.png`. Current behavior at
-         `ablation_runner.py:48-49`: whiskers are derived from the
-         ABLATED AUC's bootstrap CI attached to the DELTA bar —
-         semantically meaningless (bar plots ablated - baseline,
-         whiskers describe ablated alone). Fix: paired bootstrap
-         of the delta. Resample test-patient indices with
-         replacement N times; per draw compute baseline_AUC and
-         ablated_AUC against `y_test[idx]` (same indices in both
-         prediction vectors); record delta =
-         ablated_AUC - baseline_AUC. 2.5 / 97.5 percentiles of the
-         resulting delta distribution are the CI bounds. Persist as
-         new `delta_roc_score_ci_low` / `delta_roc_score_ci_high`
-         columns in `ablation_summary.csv` (replacing the current
-         misuse of the ablated-AUC CI columns as whisker source).
-         Paired bootstrap is mandatory because the same patients
-         are scored by both models — the AUCs are positively
-         correlated, and independent-CI propagation inflates the
-         delta interval. Implementation lives in `ablation_runner.py`
-         above `plot_ablation_deltas`, consuming the baseline
-         searcher's predict_proba output (already loaded once above
-         the spec loop) and the per-spec ablated searcher's
-         predict_proba output. Reuse `N_BOOTSTRAP` from
-         `scripts/shared/plots.py::plot_receiving_operator_characteristic`
-         so methodology stays consistent across the ROC band and
-         the delta CI.
+      3. Wire ablation_runner.py to call the new plot function once
+         per classifier (four calls total) after the per-spec inference
+         loop has populated all five ablated predict_proba arrays.
+         Capture the returned per-spec delta-AUC CIs and persist them
+         as new delta_roc_score_ci_low / delta_roc_score_ci_high
+         columns in ablation_summary.csv.
+
+      4. Strip the broken whisker source on plot_ablation_deltas.
+         Current behavior at ablation_runner.py:48-49 misuses the
+         ablated-AUC roc_score_ci_low / roc_score_ci_high columns as
+         the delta whisker source — semantically meaningless because
+         the bar plots ablated - baseline while those whiskers
+         describe ablated alone. Paired bootstrap is mandatory here
+         because the same patients are scored by both models; the
+         AUCs are positively correlated and independent-CI propagation
+         inflates the delta interval. Replace with the new paired
+         columns from step 3.
 
 - [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/analysis_only.sbatch
       end-to-end against the frozen-baseline ablation_runner.py. Verify
@@ -89,18 +82,26 @@ ACTIVE / IMMEDIATE
         * classical_ml_results_EMBEDDED.json (baseline metrics —
           required by emit_ablation_summary)
         * exactly one ablation_summary.csv (1 header row + 20 data
-          rows, 16 columns each); open it and eyeball that delta_*
-          columns are nonzero and sign-coherent.
+          rows, 18 columns each — 16 prior columns plus the two new
+          delta_roc_score_ci_low / delta_roc_score_ci_high columns
+          from the paired bootstrap); open it and eyeball that
+          delta_* columns are nonzero and sign-coherent.
         * exactly six ablation_delta_*.png files (one per metric:
           roc_score, auprc, brier_score, weighted_calibration_error,
           calibration_slope, calibration_intercept) emitted by
           plot_ablation_deltas. Open the roc_score PNG and confirm
           asymmetric CI whiskers render on every bar, sourced from
           `delta_roc_score_ci_low` / `delta_roc_score_ci_high`
-          (paired-bootstrap of the delta per item 4 above; NOT the
-          ablated-AUC `roc_score_ci_low` / `roc_score_ci_high`);
-          open at least one of the other five and confirm bars
-          only (no whiskers).
+          (paired-bootstrap of the delta per step 4 of the ablation
+          ROC overlay entry above; NOT the ablated-AUC
+          `roc_score_ci_low` / `roc_score_ci_high`); open at least
+          one of the other five and confirm bars only (no whiskers).
+        * exactly four ROC_ablated_vs_baseline_{classifier}_EMBEDDED.png
+          files (one per classifier: logistic_regression,
+          random_forest, gradient_boosting, xgboost), each a five-
+          panel grid (one panel per ablation spec) with baseline ROC,
+          ablated ROC, and paired delta-TPR(FPR) CI band on a twin
+          axis.
       Verify each per-spec subdir under RESULTS_DIR contains:
         * classical_ml_results_EMBEDDED.json (4 lowercase classifier
           keys, 8 metric keys each)

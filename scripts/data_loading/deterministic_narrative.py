@@ -150,7 +150,7 @@ def extract_fields(sliced_json: Dict) -> Dict[str, Dict]:
         "ed_psych_visits": num_emergency,
     }
 
-    safety_bundle = {
+    treatment_contraindications_bundle = {
         "comorbidities": safety_comorbidity(sliced_json),
     }
 
@@ -163,7 +163,7 @@ def extract_fields(sliced_json: Dict) -> Dict[str, Dict]:
         "treatment_exposure": treatment_exposure_bundle,
         "medication_burden": medication_burden_bundle,
         "utilization": utilization_bundle,
-        "safety": safety_bundle,
+        "treatment_contraindications": treatment_contraindications_bundle,
     }
     
 def render_narrative(bundles: Dict[str, Dict]) -> str:
@@ -236,8 +236,8 @@ NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingr
     util = bundles["utilization"]
     UTILIZATION = f"### UTILIZATION\nPsych inpatient days: {util['psych_inpatient_days']} ({YEARS_BACK}y) | ED psych visits: {util['ed_psych_visits']} ({YEARS_BACK}y)\n"
 
-    safety = bundles["safety"]
-    SAFETY = "### SAFETY\n"+' | '.join([safety_arm + ": " + get_bool_str(safety['comorbidities'][safety_arm]) for safety_arm in safety['comorbidities'].keys()]) + '\n'
+    contraindications = bundles["treatment_contraindications"]
+    SAFETY = "### SAFETY\n"+' | '.join([arm + ": " + get_bool_str(contraindications['comorbidities'][arm]) for arm in contraindications['comorbidities'].keys()]) + '\n'
 
     return "\n".join([HEADER, DEMOGRAPHICS, VITALS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, UTILIZATION, SAFETY])
 
