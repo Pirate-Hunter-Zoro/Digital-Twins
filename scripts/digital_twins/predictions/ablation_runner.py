@@ -109,7 +109,6 @@ def emit_ablation_summary(baseline_results_dir: Path):
     plot_ablation_deltas(rows, baseline_results_dir)
 
 def main():
-    baseline_narratives_dir = Path(os.environ['NARRATIVES_DIR'])
     baseline_embeddings_dir = Path(os.environ['EMBEDDINGS_DIR'])
     baseline_results_dir = Path(os.environ['RESULTS_DIR'])
     (_, test_ids) = create_train_test_split()
@@ -121,8 +120,6 @@ def main():
     }
     for spec in ABLATIONS:
         spec_id = spec["id"]
-        ablation_narrative_dir = baseline_narratives_dir / spec_id
-        os.environ['NARRATIVES_DIR'] = str(ablation_narrative_dir)
         ablation_embeddings_dir = baseline_embeddings_dir / spec_id
         os.environ['EMBEDDINGS_DIR'] = str(ablation_embeddings_dir)
         os.makedirs(ablation_embeddings_dir, exist_ok=True)
@@ -130,19 +127,10 @@ def main():
         os.environ['RESULTS_DIR'] = str(ablation_results_dir)
         os.makedirs(ablation_results_dir, exist_ok=True)
         
-        print(f"Ablating on {spec}...", flush=True)
-        print(f"Narratives: {os.environ['NARRATIVES_DIR']}", flush=True)
-        print(f"Embeddings: {os.environ['EMBEDDINGS_DIR']}", flush=True)
-        print(f"Results: {os.environ['RESULTS_DIR']}", flush=True)
-        
-        # With all the proper .env changes made, forge the embeddings with the given ablation
-        subprocess.run(
-            ["python", '-m', 'scripts.digital_twins.embeddings.forge_embeddings'],
-            check=True,
-        )
-        
         test_X, test_y = load_data_set(test_ids, source=VectorSource.EMBEDDED)
         print(f"Running EMBEDDED ML on {spec_id}...", flush=True)
+        print(f"Embeddings: {os.environ['EMBEDDINGS_DIR']}", flush=True)
+        print(f"Results: {os.environ['RESULTS_DIR']}", flush=True)
         
         model_predictions = {
             model_name: searcher.predict_proba(X=test_X)[:, 1] # Second column is positive class probability, first is negative
