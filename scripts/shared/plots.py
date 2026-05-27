@@ -9,6 +9,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
+N_BOOTSTRAP = 1000
+FPR_GRID = np.linspace(0,1,100)
+
+def bootstrap_roc_band(y_true: np.ndarray, y_prob: np.ndarray, sample_indices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Boostrapping logic on the given flags and predicted probabilities
+
+    Args:
+        y_true (np.ndarray): Actual flags
+        y_prob (np.ndarray): Predicted probabilities
+        sample_indices (np.ndarray): Bootstrapping sample indices to draw the sampled predictions and ROC scores from
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: Resulting interpolated TPR matrix, paired with the respective ROC scores from each sample
+    """
+    tpr_matrix = np.full(shape=(N_BOOTSTRAP, len(FPR_GRID)), fill_value=np.nan)
+    auc_array = np.full(shape=(N_BOOTSTRAP,), fill_value=np.nan)
+    for i in range(N_BOOTSTRAP):
+        y_true_sample = y_true[sample_indices[i]]
+        y_prob_sample = y_prob[sample_indices[i]]
+        if len(np.unique(y_true_sample)) < 2: # Make sure by chance we did not sample only one class
+            continue
+        auc_array[i] = sklearn.metrics.roc_auc_score(y_true_sample, y_prob_sample)
+        sample_fp, sample_tp, _ = sklearn.metrics.roc_curve(y_true=y_true_sample, y_score=y_prob_sample)
+        # For FP and TP values, interpolate them on standard np.linspace(0,1,100) to force false positive rates on grid and then estimating respective true positive values
+        interpolated_roc_curve = np.interp(FPR_GRID, sample_fp, sample_tp)
+        interpolated_roc_curve[0] = 0.0
+        tpr_matrix[i] = interpolated_roc_curve
+    return (tpr_matrix, auc_array)
 
 def plot_receiving_operator_characteristic(y_true: np.ndarray, y_prob: np.ndarray, mode: str) -> tuple[float,float,float]:
     """Create and save the ROC AUC plot and return its score results
@@ -25,29 +53,14 @@ def plot_receiving_operator_characteristic(y_true: np.ndarray, y_prob: np.ndarra
     false_positive_rate, true_positive_rate, _ = sklearn.metrics.roc_curve(y_true=y_true, y_score=y_prob)
     
     # Bootstrapping for error bands
-    base_false_positive_rate = np.linspace(0,1,100)
-    interpolated_true_positive_rates = []
-    auc_list = []
-    for _ in range(1000):
-        # Bootstrap - sample entire sample size with replacement
-        sample_indices = np.random.randint(low=0, high=y_true.shape[0], size=y_true.shape[0])
-        y_true_sample = y_true[sample_indices]
-        y_prob_sample = y_prob[sample_indices]
-        if len(np.unique(y_true_sample)) < 2: # Make sure by chance we did not sample only one class
-            continue
-        auc_list.append(sklearn.metrics.roc_auc_score(y_true_sample, y_prob_sample))
-        sample_fp, sample_tp, _ = sklearn.metrics.roc_curve(y_true=y_true_sample, y_score=y_prob_sample)
-        # For FP and TP values, interpolate them on standard np.linspace(0,1,100) to force false positive rates on grid and then estimating respective true positive values
-        interpolated_roc_curve = np.interp(base_false_positive_rate, sample_fp, sample_tp)
-        interpolated_roc_curve[0] = 0.0
-        interpolated_true_positive_rates.append(interpolated_roc_curve)
+    rng = np.random.default_rng(seed=int(os.environ['SEED']))
+    sample_indices = rng.integers(low=0, high=y_true.shape[0], size=(N_BOOTSTRAP, y_true.shape[0]))
+    interpolated_tp, auc_arr = bootstrap_roc_band(y_true, y_prob, sample_indices)
     
     # Error bands are 2.5 percentile and 97.5 percentile for each FP x-value on ROC curve which generates 95% confidence interval
-    interpolated_tp = np.array(interpolated_true_positive_rates)
     q_low = np.percentile(interpolated_tp, 2.5, axis=0)
     q_high = np.percentile(interpolated_tp, 97.5, axis=0)
-    plt.fill_between(base_false_positive_rate, q_low, q_high, color='gray', alpha=0.2, label='95% CI')
-    auc_arr = np.array(auc_list)
+    plt.fill_between(FPR_GRID, q_low, q_high, color='gray', alpha=0.2, label='95% CI')
     ci_low = np.percentile(auc_arr, 2.5)
     ci_high = np.percentile(auc_arr, 97.5)
     
@@ -228,3 +241,58 @@ Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
     os.makedirs(save_path.parent, exist_ok=True)
     plt.savefig(save_path, bbox_inches='tight')
     plt.close()
+    
+def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: np.ndarray, ablated_scores: dict[str, np.ndarray]) -> dict[str, tuple[float, float]]:
+    """For the given classifier, display its base and ablated roc curves, as well as differences between the base and each ablation
+
+    Args:
+        classifier_name (str): Specifies model
+        labels (np.ndarray): Actual labels
+        probs (np.ndarray): Baseline predicted risk scores
+        ablated_scores (dict[str, np.ndarray]): For each ablation, map to a new set of risk scores
+
+    Returns:
+        dict[str, tuple[float, float]]: For each ablation, return the lower and upper 95% confidence bounds on the difference
+    """
+    deltas = {}
+    bands = {}
+    base_fp, base_tp, _ = sklearn.metrics.roc_curve(labels, probs)
+    base_roc_score = sklearn.metrics.roc_auc_score(labels, probs)
+    fig, axes = plt.subplots(nrows=1, ncols=5, figsize=(25,5))
+    for i, (spec, abl_probs) in enumerate(ablated_scores.items()):
+        rng = np.random.default_rng(seed=[i, int(os.environ['SEED'])])
+        sample_indices = rng.integers(low=0, high=labels.shape[0], size=(N_BOOTSTRAP, labels.shape[0]))
+        tpr_base, auc_base = bootstrap_roc_band(labels, probs, sample_indices)
+        tpr_spec, auc_spec = bootstrap_roc_band(labels, abl_probs, sample_indices)
+        delta_tpr = tpr_spec - tpr_base # For each bootstrapped sample, take element-wise y-axis difference values
+        delta_auc = auc_spec - auc_base # Numeric differences in ROC scores
+        q_low = np.nanpercentile(delta_tpr, 2.5, axis=0)
+        q_high = np.nanpercentile(delta_tpr, 97.5, axis=0)
+        bands[spec] = (q_low, q_high)
+        ci_low = np.nanpercentile(delta_auc, 2.5)
+        ci_high = np.nanpercentile(delta_auc, 97.5)
+        deltas[spec] = (ci_low, ci_high)
+        
+        # Now plot for this specific ablation spec
+        abl_roc_score = sklearn.metrics.roc_auc_score(labels, abl_probs)
+        ax = axes[i]
+        abl_fp, abl_tp, _ = sklearn.metrics.roc_curve(labels, abl_probs)
+        ax.plot(base_fp, base_tp, label=f'Base ROC curve (score {base_roc_score:.2f})')
+        ax.plot(abl_fp, abl_tp, label=f'Ablated ROC curve (score {abl_roc_score:.2f})')
+        ax.plot(FPR_GRID, FPR_GRID, linestyle='--')
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.set_title(f"ROC Curve {spec}")
+        ax.legend()
+        twin_axis = ax.twinx()
+        twin_axis.fill_between(FPR_GRID, q_low, q_high, alpha=0.2, color='gray', label='Confidence Band')
+        twin_axis.set_ylabel("Δ True Positive Rate (Ablated − Baseline)")
+        twin_axis.axhline(0, linestyle='--')
+        twin_axis.legend()
+        
+    fig.tight_layout()
+    save_path = RESULTS_DIR / f"ROC_ablated_vs_baseline_{classifier_name}_EMBEDDED.png"
+    os.makedirs(save_path.parent, exist_ok=True)
+    plt.savefig(save_path)
+    plt.close(fig)
+    return deltas

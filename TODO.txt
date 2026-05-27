@@ -9,59 +9,24 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] ABLATION ROC OVERLAY + PAIRED DELTA-AUC CI — one coordinated
-      change. The paired bootstrap unifies what would otherwise be
-      two independent passes: a single resampling loop yields both a
-      delta-TPR(FPR) CI band (consumed by the new per-classifier
-      overlay PNG) and a delta-AUC CI (consumed by the existing
-      ablation_delta_roc_score.png whiskers). All existing per-
-      classifier per-source ROC PNGs continue to be emitted unchanged
-      by the baseline classical_ml.py pass and each per-spec ablated
-      pass — this work only adds artifacts, it does not modify or
-      remove existing ones.
+- [ ] ABLATION ROC OVERLAY + PAIRED DELTA-AUC CI — wire ablation_runner.py
+      to consume the new paired-bootstrap plot helper that landed in
+      scripts/shared/plots.py (display_ablated_roc_deltas). The helper
+      already emits the four-classifier ROC overlay PNGs and returns
+      per-spec delta-AUC CI bounds keyed by spec id; remaining work is
+      caller wiring and stripping the broken whisker source.
 
-      Four steps:
+      Two steps:
 
-      1. Refactor scripts/shared/plots.py. Extract the bootstrap math
-         from plot_receiving_operator_characteristic into a pure
-         helper that consumes a pre-computed sample_indices array
-         (shape: N_BOOTSTRAP x n_samples) and returns the per-draw
-         interpolated TPR matrix and AUC array. Promote N_BOOTSTRAP
-         (currently the literal 1000 at plots.py:31) and FPR_GRID
-         (currently np.linspace(0,1,100) at plots.py:28) to module-
-         level constants. Seed the index generation for reproducibility
-         — current code uses np.random.randint with no seed, which
-         prevents paired-draw alignment across separate calls.
-         plot_receiving_operator_characteristic becomes a thin caller
-         of the helper: generates one sample_indices array, calls
-         helper, plots + saves as today. Signature and return value
-         (score, ci_low, ci_high) preserved exactly so all existing
-         callers in classical_ml.py and trd_prediction_computation.py
-         keep working.
+      1. Wire ablation_runner.py to call display_ablated_roc_deltas
+         once per classifier (four calls total) after the per-spec
+         inference loop has populated all five ablated predict_proba
+         arrays. Capture the returned per-spec delta-AUC CIs (dict
+         keyed by spec id, value is (ci_low, ci_high) tuple of
+         floats) and persist them as new delta_roc_score_ci_low /
+         delta_roc_score_ci_high columns in ablation_summary.csv.
 
-      2. New plot function in scripts/shared/plots.py for the four-
-         classifier ROC overlay output. One PNG per classifier, five-
-         panel grid (one panel per ablation spec). Each panel shows
-         the baseline ROC curve, the ablated ROC curve, and the
-         paired delta-TPR(FPR) CI band on a twin axis. Inputs per
-         call: classifier name, y_test, baseline predict_proba, dict
-         {spec_id: ablated_predict_proba}. The function generates one
-         shared sample_indices array per spec and applies it to both
-         baseline and ablated prob vectors, producing paired delta_TPR
-         and delta_AUC distributions in the same bootstrap loop.
-         Filename: RESULTS_DIR/ROC_ablated_vs_baseline_{classifier}_
-         EMBEDDED.png at the baseline RESULTS_DIR root. Returns
-         per-spec delta_roc_score CI bounds for downstream consumption
-         by ablation_summary.csv.
-
-      3. Wire ablation_runner.py to call the new plot function once
-         per classifier (four calls total) after the per-spec inference
-         loop has populated all five ablated predict_proba arrays.
-         Capture the returned per-spec delta-AUC CIs and persist them
-         as new delta_roc_score_ci_low / delta_roc_score_ci_high
-         columns in ablation_summary.csv.
-
-      4. Strip the broken whisker source on plot_ablation_deltas.
+      2. Strip the broken whisker source on plot_ablation_deltas.
          Current behavior at ablation_runner.py:48-49 misuses the
          ablated-AUC roc_score_ci_low / roc_score_ci_high columns as
          the delta whisker source — semantically meaningless because
@@ -70,7 +35,7 @@ ACTIVE / IMMEDIATE
          because the same patients are scored by both models; the
          AUCs are positively correlated and independent-CI propagation
          inflates the delta interval. Replace with the new paired
-         columns from step 3.
+         columns from step 1.
 
 - [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/analysis_only.sbatch
       end-to-end against the frozen-baseline ablation_runner.py. Verify
