@@ -9,37 +9,8 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] ABLATION ROC OVERLAY + PAIRED DELTA-AUC CI — wire ablation_runner.py
-      to consume the new paired-bootstrap plot helper that landed in
-      scripts/shared/plots.py (display_ablated_roc_deltas). The helper
-      already emits the four-classifier ROC overlay PNGs and returns
-      per-spec delta-AUC CI bounds keyed by spec id; remaining work is
-      caller wiring and stripping the broken whisker source.
-
-      Two steps:
-
-      1. Wire ablation_runner.py to call display_ablated_roc_deltas
-         once per classifier (four calls total) after the per-spec
-         inference loop has populated all five ablated predict_proba
-         arrays. Capture the returned per-spec delta-AUC CIs (dict
-         keyed by spec id, value is (ci_low, ci_high) tuple of
-         floats) and persist them as new delta_roc_score_ci_low /
-         delta_roc_score_ci_high columns in ablation_summary.csv.
-
-      2. Strip the broken whisker source on plot_ablation_deltas.
-         Current behavior at ablation_runner.py:48-49 misuses the
-         ablated-AUC roc_score_ci_low / roc_score_ci_high columns as
-         the delta whisker source — semantically meaningless because
-         the bar plots ablated - baseline while those whiskers
-         describe ablated alone. Paired bootstrap is mandatory here
-         because the same patients are scored by both models; the
-         AUCs are positively correlated and independent-CI propagation
-         inflates the delta interval. Replace with the new paired
-         columns from step 1.
-
-- [ ] POST-FREEZE SMOKE TEST: submit slurm_jobs/quick_runs/analysis_only.sbatch
-      end-to-end against the frozen-baseline ablation_runner.py. Verify
-      baseline RESULTS_DIR contains:
+- [ ] POST-FREEZE SMOKE TEST (job in flight as of 2026-05-27): once the
+      analysis stage completes, verify baseline RESULTS_DIR contains:
         * trained_models/{logistic_regression, random_forest,
           gradient_boosting, xgboost}_EMBEDDED.joblib  (from the
           one-shot baseline classical_ml.py pass — NOT re-emitted
@@ -57,8 +28,7 @@ ACTIVE / IMMEDIATE
           plot_ablation_deltas. Open the roc_score PNG and confirm
           asymmetric CI whiskers render on every bar, sourced from
           `delta_roc_score_ci_low` / `delta_roc_score_ci_high`
-          (paired-bootstrap of the delta per step 4 of the ablation
-          ROC overlay entry above; NOT the ablated-AUC
+          (paired-bootstrap of the delta; NOT the ablated-AUC
           `roc_score_ci_low` / `roc_score_ci_high`); open at least
           one of the other five and confirm bars only (no whiskers).
         * exactly four ROC_ablated_vs_baseline_{classifier}_EMBEDDED.png
