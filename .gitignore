@@ -8,6 +8,6 @@ scratch/
 .pytest_cache/
 cancel_pipeline.sh
 results/
-references/
 .claude/
 .vscode/
+figures/

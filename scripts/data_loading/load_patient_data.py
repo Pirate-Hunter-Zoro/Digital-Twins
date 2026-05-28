@@ -28,9 +28,14 @@ RAW_JSON_PATH = Path(os.environ['PATIENT_JSON_DIR'])
 SLICED_JSON_PATH = Path(os.environ['SLICED_PATIENT_JSON_DIR'])
 
 # Function for a worker to load one patient
-def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Optional[Dict]:
-    """
-    Return sliced json of the patient if they fit the window criteria (else return None)
+def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Dict:
+    """Return sliced json of the patient if they fit the window criteria, or a json explaining why they did not
+
+    Args:
+        patient_args (Tuple[Path, Path, Dict]): sliced path, raw path, anchor data
+
+    Returns:
+        Dict: Resulting sliced json or failure reason
     """
     sliced_path, raw_path, anchor_data = patient_args
     failure_path = sliced_path.with_suffix(".rejected")
@@ -45,13 +50,18 @@ def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Optional[Dict]:
                 print(f"Exception occured when reading from {sliced_path}... {str(e)}... will try to recreate...", flush=True)
         elif failure_path.exists():
             # Patient was rejected due to inadequate history
-            return None
+            try:
+                with open(failure_path, 'r') as f:
+                    failure_json = json.load(f)
+                    return failure_json
+            except json.JSONDecodeError as e:
+                print(f"Exception occured when reading from {failure_path}... {str(e)}... will try to recreate...", flush=True)
     
     # Load the patient's raw data
     with open(raw_path, 'r') as f:
         raw_json = json.load(f)
         sliced_json = slice_and_convert_time(patient_dict=raw_json, anchor_date=datetime.strptime(anchor_data.get('MedStartInstant'), '%Y-%m-%d'))
-        if sliced_json != None:
+        if 'reason' not in sliced_json.keys():
             # Record the json
             with open(sliced_path, 'w') as f:
                 json.dump(sliced_json, f, indent=4)
@@ -59,7 +69,7 @@ def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Optional[Dict]:
             # Record the failure
             with open(failure_path, 'w') as f:
                 # Just create the dummy file to mark the failure
-                pass
+                json.dump(sliced_json, f, indent=4)
         return sliced_json
     
 def load_patient_data() -> Iterator[Dict]:
@@ -90,5 +100,5 @@ def load_patient_data() -> Iterator[Dict]:
         
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as pool:
         for sliced_json in pool.imap_unordered(func=_load_one_patient, iterable=worker_args):
-            if sliced_json is not None:
+            if sliced_json != None and 'reason' not in sliced_json.keys():
                 yield sliced_json

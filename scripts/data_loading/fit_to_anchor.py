@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict
 from datetime import datetime, timedelta
 import copy
 import os
@@ -12,14 +12,16 @@ MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many
 YEARS_BACK = int(os.environ['YEARS_BACK'])
 YEARS_AHEAD = int(os.environ['YEARS_AHEAD'])
 
+PRE_ANCHOR = f"Insufficient pre-anchor history (require {int(os.environ['YEARS_BACK'])} years)"
+POST_ANCHOR = f"Insufficient post-anchor history (require {int(os.environ['YEARS_AHEAD'])} years)"
+NO_MDD = "No MDD diagnosis before anchor"
+
 def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict):
-    """
-    Given interval of occurences for a bunch of unique medications, for each medication merge the intervals and append all unique intervals of occurence to the patient json
+    """Given interval of occurences for a bunch of unique medications, for each medication merge the intervals and append all unique intervals of occurence to the patient json
     
-    :param med_intervals: Medications' intervals of occurrences
-    :type med_intervals: dict[any, list[list[int]]]
-    :param patient_json: Record to update post-interval merging
-    :type patient_json: dict
+    Args:
+        med_intervals (dict[any, list[list[int]]]): Medications' invervals of occurrences
+        patient_json (dict): Record to update post-inverval merging
     """
     for med_key, dates in med_intervals.items():
         dates.sort(key=lambda x : x[0]) # Sort this medications active intervals by start time
@@ -44,7 +46,7 @@ def merge_and_add(med_intervals: dict[any, list[list[int]]], patient_json: dict)
                 }
             )
 
-def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optional[Dict]:
+def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Dict:
     """Verify that the patient has an MDD diagnosis prior to their anchor date, and that their history extends the required number of years back or more, and if so return their sliced record
 
     Args:
@@ -52,7 +54,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
         anchor_date (datetime): Information on the antidepressant anchor date of the patient
 
     Returns:
-        Optional[Dict]: Sliced record of the patient or null if they do not meet the window criteria
+        Dict: Sliced record of the patient or a reason if they do not meet the window criteria
     """
     # First loop through every encounter and look for an MDD diagnosis which precedes or occurs at the same time as the anchor date
     mdd_prereq = False
@@ -86,20 +88,20 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Optiona
                             
     # If no MDD diagnosis occurs before anchor date
     if not mdd_prereq:
-        return None
+        return {"reason": NO_MDD}
     mdd_to_anchor_days = (anchor_date - latest_mdd_date).days
     
     # Define cutoff date
     cutoff_date = anchor_date - timedelta(YEARS_BACK*365)
     if earliest_sliced_encounter_date > cutoff_date:
         # Not enough patient history
-        return None
+        return {"reason": PRE_ANCHOR}
     
     # See if enough post-anchor history exists
     must_exceed_date = anchor_date + timedelta(YEARS_AHEAD*365)
     if latest_encounter_date < must_exceed_date:
         # Not enough post-anchor history
-        return None
+        return {"reason": POST_ANCHOR}
     
     # Now process the patient json
     processed_sliced_patient = {
