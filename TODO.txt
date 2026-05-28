@@ -63,8 +63,8 @@ ACTIVE / IMMEDIATE
       first to validate the feature_importance integration before fanning
       out to the other three.
 
-LOWER PRIORITY — DEFERRED UNTIL MAIN PIPELINE IS GREEN
-------------------------------------------------------
+LOWER PRIORITY
+--------------
 - [ ] Investigate bge-small's bimodal cosine-similarity distribution in
       test_data/bge-small.png. Every other embedder's pair-cosine
       distribution is unimodal/normal; bge-small has two clear modes.
@@ -93,15 +93,67 @@ LOWER PRIORITY — DEFERRED UNTIL MAIN PIPELINE IS GREEN
           moderators).
         * Save plots with treatment-tagged filenames.
 
-- [ ] cohort_investigation.ipynb — remaining diagnostic questions,
-      in decreasing priority:
-        * What percentage of patients have their MDD diagnosis within
-          the 2-year window?
-        * Histogram of mdd_to_anchor_days, stratified by TRD.
-        * Histogram of num_encounters, stratified by TRD.
-        * Histogram of pre-anchor history length (days), stratified
-          by TRD.
-        * Correlations between those metrics and TRD diagnosis.
+- [ ] cohort_investigation.ipynb — expand to cover TRIPOD-AI Results
+      items 20a/20b/20c and supporting checklist items. Stretches the
+      original five-bullet diagnostic scope into a population-
+      characterization surface usable directly at writeup time.
+      Execute in dependency order — each step's denominator depends
+      on the previous:
+        1. Participant flow (TRIPOD-AI 20a). Cohort attrition table
+           from raw population through each filter stage (MDD-
+           positive, not bipolar/schizophrenic, MDD-within-window,
+           >=YEARS_BACK pre-anchor history, >=YEARS_AHEAD post-anchor
+           follow-up) to final cohort. Counts per stage and per
+           rejection reason. Source: .rejected marker file basenames
+           in SLICED_PATIENT_JSON_DIR plus PERSON_CSV_PATH for the
+           raw denominator. Drives every denominator below.
+        2. Accrual dates + follow-up distribution (5b, 8a). Earliest
+           and latest anchor_date; distribution of post-anchor
+           observation days. Near-free numeric block over the anchor
+           CSV at MDD_MED_DATE_CSV_PATH.
+        3. Table 1 overall and TRD-stratified (20b). Sociodemographics
+           (Sex, Race_Ethnicity, PreferredLanguage, MaritalStatus,
+           Religion, SmokingStatus, age band derived from float age),
+           MDD recurrence / severity, single-valued binary flags
+           (suicide_flag, somatic_flag, augmentation_occured,
+           mdd_within_window), every multi-label indicator group
+           (psych_*, medical_*, safety_*, sud_*, sdoh_*), continuous
+           features (num_encounters, pre_anchor_history_days,
+           mdd_to_anchor_days, polypharmacy count, adequate-trial
+           count, age). Report median (IQR) for continuous, n (%)
+           for categorical / boolean / multi-label, plus standardized
+           mean differences across TRD strata. Single parquet load
+           over FEATURE_DATAFRAME_PATH covers everything.
+        4. Subgroup outcome prevalence (3c, 14). TRD rate stratified
+           by Sex, Race_Ethnicity, PreferredLanguage, age band, SDOH
+           indicators. Flag any cell with n < 20 — those set the
+           small-cell ceiling on the eventual Model Performance
+           subgroup analysis (23a) and feed Limitations (26).
+        5. Subgroup missingness audit (7). For every column with
+           non-zero missingness post-load_data_set, report
+           missingness rate by Sex / Race_Ethnicity /
+           PreferredLanguage / age band. Vitals are dropped at
+           load_data_set time, so this primarily certifies the
+           remaining columns are clean across subgroups.
+        6. Train/test comparability (20c, 21). n_train, n_test,
+           n_TRD_pos per split, plus an SMD table for every predictor
+           column across train vs test. Demonstrates the stratified
+           80/20 split preserved distributions, not just the class
+           balance.
+        7. Events-per-variable (10). n_TRD_pos divided by the post-
+           ColumnTransformer feature count — joblib.load a cached
+           {model}_EMBEDDED.joblib's transformer to get the count
+           without re-fitting. Report the EPV ratio and state
+           whether it meets the >=10 traditional threshold.
+        8. TRD-stratified density figures. PNGs for
+           mdd_to_anchor_days, num_encounters,
+           pre_anchor_history_days. Each saved to the notebook's
+           figure directory for direct writeup reuse. Pair with a
+           small correlation table (Pearson + Spearman vs TRD label)
+           for the three continuous columns. Subsumes the original
+           five-bullet scope: mdd_within_window percentage collapses
+           into Table 1; the three histograms and the correlation
+           table land here. Do not duplicate.
 
 - [ ] When this work becomes a paper, format to JMIR Mental Health's
       submission template (TRIPOD-AI prediction-model reporting
