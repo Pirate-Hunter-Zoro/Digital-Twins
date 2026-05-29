@@ -394,6 +394,21 @@ sbatch slurm_jobs/pipeline/trd_prediction_orchestrator.sbatch
 
 The orchestrator sequentially submits: JSON loading, embedding pipeline (narratives + feature vector DataFrame + embedded vectors), vLLM server startup, neighborhood construction (Slurm array on embedded vectors), and analysis (neighbor-weighted evaluation + classical ML on both sources). All results are rsynced to `results/` upon completion.
 
+## Running the Notebooks on a Compute Node
+
+The analysis notebooks (e.g. `notebooks/cohort_investigation.ipynb`) sweep the full cohort and read the per-patient JSONs directly, so they crawl when the kernel runs on a shared login node. Run the kernel on an allocated compute node instead — the speed-up comes almost entirely from that node's dedicated, uncontended filesystem, which dominates these file-heavy passes (the sweeps are single-threaded, so the extra cores are incidental).
+
+Per-session process (VS Code / Cursor Remote):
+
+1. From a shell on an allocated compute node — request an interactive Slurm allocation first if you are not already on one — activate `ehr_env`.
+2. Start a Jupyter server from that shell and leave the terminal open. It prints a URL containing an access token.
+3. In the notebook's kernel picker, choose *Select Another Kernel -> Existing Jupyter Server* and paste that URL, token included. When the VS Code remote session is attached to the same node, the printed loopback URL connects as-is; if the editor is attached to a different host, substitute the node's name for the loopback host (or forward the port).
+4. Select the **Python (ehr_env)** kernel.
+
+One-time setup: the **Python (ehr_env)** kernel has to be registered once as a user-level Jupyter kernelspec pinned to `ehr_env`'s interpreter (via its `ipykernel` module); it persists across sessions afterward. This matters because the `jupyter` binary on the default PATH can resolve to a system install running a different Python — the registered kernelspec is what guarantees cells execute under `ehr_env` (Python 3.11.13) regardless of which server process is serving the notebook.
+
+Closing the server's terminal or losing the allocation tears down the server and every kernel under it, so keep that session alive for the duration of your work.
+
 ## Downloading Models
 
 ```bash

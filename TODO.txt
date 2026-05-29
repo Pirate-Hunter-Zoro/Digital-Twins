@@ -121,11 +121,7 @@ LOWER PRIORITY
       on the previous. Participant-flow attrition table (TRIPOD-AI
       20a) already landed at notebooks/figures/attrition_table.csv;
       it underwrites every denominator below.
-        1. Accrual dates + follow-up distribution (5b, 8a). Earliest
-           and latest anchor_date; distribution of post-anchor
-           observation days. Near-free numeric block over the anchor
-           CSV at MDD_MED_DATE_CSV_PATH.
-        2. Table 1 overall and TRD-stratified (20b). Sociodemographics
+        1. Table 1 overall and TRD-stratified (20b). Sociodemographics
            (Sex, Race_Ethnicity, PreferredLanguage, MaritalStatus,
            Religion, SmokingStatus, age band derived from float age),
            MDD recurrence / severity, single-valued binary flags
@@ -138,28 +134,28 @@ LOWER PRIORITY
            for categorical / boolean / multi-label, plus standardized
            mean differences across TRD strata. Single parquet load
            over FEATURE_DATAFRAME_PATH covers everything.
-        3. Subgroup outcome prevalence (3c, 14). TRD rate stratified
+        2. Subgroup outcome prevalence (3c, 14). TRD rate stratified
            by Sex, Race_Ethnicity, PreferredLanguage, age band, SDOH
            indicators. Flag any cell with n < 20 — those set the
            small-cell ceiling on the eventual Model Performance
            subgroup analysis (23a) and feed Limitations (26).
-        4. Subgroup missingness audit (7). For every column with
+        3. Subgroup missingness audit (7). For every column with
            non-zero missingness post-load_data_set, report
            missingness rate by Sex / Race_Ethnicity /
            PreferredLanguage / age band. Vitals are dropped at
            load_data_set time, so this primarily certifies the
            remaining columns are clean across subgroups.
-        5. Train/test comparability (20c, 21). n_train, n_test,
+        4. Train/test comparability (20c, 21). n_train, n_test,
            n_TRD_pos per split, plus an SMD table for every predictor
            column across train vs test. Demonstrates the stratified
            80/20 split preserved distributions, not just the class
            balance.
-        6. Events-per-variable (10). n_TRD_pos divided by the post-
+        5. Events-per-variable (10). n_TRD_pos divided by the post-
            ColumnTransformer feature count — joblib.load a cached
            {model}_EMBEDDED.joblib's transformer to get the count
            without re-fitting. Report the EPV ratio and state
            whether it meets the >=10 traditional threshold.
-        7. TRD-stratified density figures. PNGs for
+        6. TRD-stratified density figures. PNGs for
            mdd_to_anchor_days, num_encounters,
            pre_anchor_history_days. Each saved to the notebook's
            figure directory for direct writeup reuse. Pair with a
