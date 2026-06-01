@@ -5,7 +5,7 @@ RAW_TO_DISPLAY: dict[str, str] = {
     # Numeric block (passed through StandardScaler verbatim; vitals dropped at load_data_set time)
     "mdd_to_anchor_days":     "MDD-to-anchor gap (days) [numeric]",
     "num_encounters":         "Encounter count [numeric]",
-    "days_of_history":        "Pre-anchor history (days) [numeric]",
+    "pre_anchor_history_days": "Pre-anchor history (days) [numeric]",
     "AgeInYears":             "Age (years) [numeric]",
     "benzo_days_coverage":    "Anti-anxiety med days [numeric]",
     "psychotherapy_count":    "Psychotherapy visit count [numeric]",

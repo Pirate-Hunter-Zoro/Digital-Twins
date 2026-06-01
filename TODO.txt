@@ -63,6 +63,102 @@ ACTIVE / IMMEDIATE
       first to validate the feature_importance integration before fanning
       out to the other three.
 
+DATA INTEGRITY — FEATURE EXTRACTOR & MISSINGNESS BUGS
+(surfaced 2026-06-01 via cohort_investigation.ipynb + notebooks/figures)
+--------------------------------------------------------------------
+These corrupt the FEATURE-vector parquet and every classical-ML and
+ablation result built on it. Fixing the extractors means regenerating
+the feature DataFrame (SCRUB_FEATURE_VECTORS=1) and re-running the
+FEATURE classical_ml.py pass. The EMBEDDED narratives also stamp these
+fields textually, so #1 additionally contaminates the ablation deltas.
+
+SEQUENCING WARNING: the POST-FREEZE SMOKE TEST under ACTIVE above is
+verifying FEATURE artifacts built from the current (corrupt) extractors.
+Sequence the somatic_flag (#1) and psychotherapy_count (#2) fixes — and
+the resulting feature-DataFrame regen + FEATURE retrain — BEFORE trusting
+any FEATURE-side smoke-test result. EMBEDDED-side baseline artifacts are
+unaffected except where #1's somatic narrative content feeds the
+ablation specs.
+
+- [ ] somatic_flag massively over-counts ECT. boolean_summary.csv:
+      15.1% prevalence, and it runs BACKWARDS by outcome (15.6% non-TRD
+      vs 10.5% TRD) — both impossible for ECT, which is rare and should
+      be MORE common in treatment-resistant patients. Root cause:
+      scripts/data_loading/procedure_definitions.py ECT_KEYWORDS =
+      {"ELECTROCONVULSIVE", "ECT "} matched as a bare substring in
+      somatic_treatment_flag (features.py:208). "ECT " matches the tail
+      of ordinary procedure words — DEFECT, ASPECT, INSPECT, DISSECT,
+      RESECT, TRANSECT — none related to depression, which is exactly
+      why the flag is flat/inverted across TRD. Fix: match on word
+      boundaries or on actual ECT procedure codes, not a substring.
+      SECONDARY: the same function also fires on TMS_KEYWORDS, so the
+      feature is really "ECT or TMS" while every display label
+      (feature_display_names.py; the narrative "Somatic treatments"
+      line) says ECT only — rename or split the feature. ABLATION
+      IMPACT: the SAFETY / treatment_contraindications narrative section
+      carries somatic content, so permute_treatment_contraindications
+      and any somatic-bearing spec produce contaminated deltas until
+      this is fixed and embeddings are regenerated.
+
+- [ ] psychotherapy_count is identically 0 for all 9,725 patients
+      (numeric_summary.csv mean=std=max=0; Table 1; train/test SMD=0).
+      Procedures ARE being read (somatic_flag fires on the same field),
+      so the literal keyword "PSYCHOTHERAPY" (procedure_definitions.py
+      PSYCHOTHERAPY_KEYWORDS, matched in features.py:223) simply never
+      appears in this EHR's Procedure_Description vocabulary — therapy
+      is coded under CPT 90832/90834/90837 or abbreviated text. Dead
+      feature feeding every model plus a [numeric] Table 1 row. Inspect
+      the real distinct Procedure_Description values for therapy and
+      match those (or the CPT codes). The existing unit test passes only
+      on synthetic descriptions containing the word, so it cannot catch
+      this against real data.
+
+- [ ] pre_anchor_history_days has a corrupt max of 28,150 days (~77 yr)
+      in numeric_summary.csv (non-TRD). Anchor dates span 2016-2024
+      (~8 yr total, per the 5b cell), so this is a garbage early record
+      date that fit_to_anchor does not cap (~33 SD above the mean).
+      Hidden in density_pre_anchor_history_days.png by the 99th-pctl
+      truncation. Add a bad-date floor / sanity cap upstream and re-check
+      the tail.
+
+- [ ] Degenerate / near-zero-variance FEATURE columns flagged by the
+      by-dtype summaries: sud_Other Substance is never True (n=0);
+      sdoh_Occupational Exposure (n=1), sdoh_Psychosocial Circumstances
+      (n=1), sud_Inhalant (n=2), sud_Hallucinogen (n=5) carry almost no
+      signal. Decide whether to prune — directly relevant to the
+      EPV >= 10 discussion, since they inflate the FEATURE feature count
+      without contributing. Separately, mdd_to_anchor_days is a near
+      point-mass at 0 (median 1, 75th pctl 1); density_mdd_to_anchor_
+      days.png is mostly empty whitespace — recode (same-day vs delayed)
+      or use a log axis if kept as a diagnostic.
+
+- [ ] Religion missingness is NOT clean and reaches the model.
+      subgroup_missingness.csv: 15-33% missing with a steep age gradient
+      (30.5% in 18-29 down to 9.5% in 65+) — a MAR pattern. categorical_
+      summary.csv encodes it as a "Missing" one-hot level at 15.8%, i.e.
+      the NaN flows into the FEATURE OneHotEncoder as an implicit missing
+      category. Decide: keep the explicit missing-indicator (current
+      implicit behavior), drop Religion, or document as a limitation.
+      MaritalStatus and SmokingStatus are effectively clean (<0.5%).
+      README item-7 wording corrected alongside this finding.
+
+- [ ] feature_display_names.py RAW_TO_DISPLAY is missing two keys, so
+      categorical_summary.csv renders them raw (no type tag, no
+      humanization): Sex_Female (its sibling "Sex: Male [one-hot]" maps
+      fine) and the empty mdd_recurrence level (renders "mdd_recurrence_").
+      Add both mappings.
+
+- [ ] get_mdd_components() (diagnoses_definitions.py) emits an empty-
+      string mdd_recurrence level (~0.26%, ~25 patients; visible in
+      categorical_summary.csv and train_test_smd.csv) while mdd_severity
+      uses an explicit "Unspecified" catch-all. Make recurrence
+      consistent — map the blank to "Unspecified" (or equivalent).
+
+- [ ] cohort_investigation.ipynb Tier-2 vitals cell raises
+      SettingWithCopyWarning (chained assignment of cutoff_date onto a
+      boolean-masked slice of vitals_joined). Assign on an explicit copy
+      so a future pandas version does not silently drop the write.
+
 LOWER PRIORITY
 --------------
 - [ ] load_patient_data.py:_load_one_patient should always return a
@@ -113,58 +209,6 @@ LOWER PRIORITY
           moderators).
         * Save plots with treatment-tagged filenames.
 
-- [ ] cohort_investigation.ipynb — expand to cover TRIPOD-AI Results
-      items 20b/20c and supporting checklist items. Stretches the
-      original five-bullet diagnostic scope into a population-
-      characterization surface usable directly at writeup time.
-      Execute in dependency order — each step's denominator depends
-      on the previous. Participant-flow attrition table (TRIPOD-AI
-      20a) already landed at notebooks/figures/attrition_table.csv;
-      it underwrites every denominator below.
-        1. Table 1 overall and TRD-stratified (20b). Sociodemographics
-           (Sex, Race_Ethnicity, PreferredLanguage, MaritalStatus,
-           Religion, SmokingStatus, age band derived from float age),
-           MDD recurrence / severity, single-valued binary flags
-           (suicide_flag, somatic_flag, augmentation_occured,
-           mdd_within_window), every multi-label indicator group
-           (psych_*, medical_*, safety_*, sud_*, sdoh_*), continuous
-           features (num_encounters, pre_anchor_history_days,
-           mdd_to_anchor_days, polypharmacy count, adequate-trial
-           count, age). Report median (IQR) for continuous, n (%)
-           for categorical / boolean / multi-label, plus standardized
-           mean differences across TRD strata. Single parquet load
-           over FEATURE_DATAFRAME_PATH covers everything.
-        2. Subgroup outcome prevalence (3c, 14). TRD rate stratified
-           by Sex, Race_Ethnicity, PreferredLanguage, age band, SDOH
-           indicators. Flag any cell with n < 20 — those set the
-           small-cell ceiling on the eventual Model Performance
-           subgroup analysis (23a) and feed Limitations (26).
-        3. Subgroup missingness audit (7). For every column with
-           non-zero missingness post-load_data_set, report
-           missingness rate by Sex / Race_Ethnicity /
-           PreferredLanguage / age band. Vitals are dropped at
-           load_data_set time, so this primarily certifies the
-           remaining columns are clean across subgroups.
-        4. Train/test comparability (20c, 21). n_train, n_test,
-           n_TRD_pos per split, plus an SMD table for every predictor
-           column across train vs test. Demonstrates the stratified
-           80/20 split preserved distributions, not just the class
-           balance.
-        5. Events-per-variable (10). n_TRD_pos divided by the post-
-           ColumnTransformer feature count — joblib.load a cached
-           {model}_EMBEDDED.joblib's transformer to get the count
-           without re-fitting. Report the EPV ratio and state
-           whether it meets the >=10 traditional threshold.
-        6. TRD-stratified density figures. PNGs for
-           mdd_to_anchor_days, num_encounters,
-           pre_anchor_history_days. Each saved to the notebook's
-           figure directory for direct writeup reuse. Pair with a
-           small correlation table (Pearson + Spearman vs TRD label)
-           for the three continuous columns. Subsumes the original
-           five-bullet scope: mdd_within_window percentage collapses
-           into Table 1; the three histograms and the correlation
-           table land here. Do not duplicate.
-
 - [ ] When this work becomes a paper, format to JMIR Mental Health's
       submission template (TRIPOD-AI prediction-model reporting
       checklist). Note ahead of writing; no action now. Local
@@ -178,3 +222,12 @@ LOWER PRIORITY
       include "can we use encoding systems to predict TRD?" and
       "how much better or worse is this than standard ML / logistic
       regression on features?".
+
+- [ ] Manuscript representativeness / generalizability note (TRIPOD-AI
+      5a, deferred to write-up; not a bug). The cohort_investigation.ipynb
+      figures establish that the cohort skews old (52.7% are 65+, mean
+      age 62.5) and female (72.8%), and that 28.4% of patients have zero
+      vital rows at any date with in-window vitals missingness of
+      ~63-80%. Document these as representativeness limitations when
+      drafting; the supporting tables/figures already live in
+      notebooks/figures.

@@ -394,6 +394,23 @@ sbatch slurm_jobs/pipeline/trd_prediction_orchestrator.sbatch
 
 The orchestrator sequentially submits: JSON loading, embedding pipeline (narratives + feature vector DataFrame + embedded vectors), vLLM server startup, neighborhood construction (Slurm array on embedded vectors), and analysis (neighbor-weighted evaluation + classical ML on both sources). All results are rsynced to `results/` upon completion.
 
+## Cohort Investigation Notebook
+
+`notebooks/cohort_investigation.ipynb` is the population-characterization surface backing the TRIPOD-AI reporting checklist; its outputs feed Table 1 and the supporting tables/figures at manuscript time. A roadmap table at the top of the notebook maps each TRIPOD-AI item to the cell that produces it. All artifacts land in `notebooks/figures/`:
+
+* **Participant flow (20a)** — `attrition_table.csv`: raw population down to the final analysis set, one row per filter stage. Underwrites every denominator below.
+* **Data span & follow-up (5b)** — anchor-date range and the post-anchor follow-up-length distribution. The TRD outcome itself is a pre-defined external label consumed as-is; the formal outcome definition (8a) is deferred to manuscript prose, not built here.
+* **Vitals missingness diagnostic (7, 11)** — three-tier check (in-window / all pre-anchor history / any date) establishing the structural MAR violation that justifies dropping `VITAL_COLUMNS` at `load_data_set` time.
+* **By-dtype descriptive summary** — `numeric_summary.csv` (per-group `describe()`), `boolean_summary.csv` (True-rate + TRD delta), `categorical_summary.csv` (per-level share + TRD delta). Exploratory companion to Table 1.
+* **Table 1 (20b)** — `table_one.csv`: median (IQR) for continuous, n (%) for boolean / multi-label / categorical levels, with standardized mean differences (SMD) across TRD strata. Age band is derived from the float `AgeInYears` column.
+* **Subgroup outcome prevalence (3c, 14)** — `subgroup_trd_prevalence.csv`: TRD rate by Sex / Race_Ethnicity / PreferredLanguage / age band / each SDOH indicator, with cells of n < 20 flagged as the small-cell ceiling on the eventual subgroup performance analysis (23a).
+* **Subgroup missingness audit (7)** — `subgroup_missingness.csv`: per-subgroup missingness for any column still carrying NaNs after the vital-dropped load. The block is **not** fully clean: `Religion` carries 15–33% missingness with a steep age gradient (30.5% in 18–29 down to 9.5% in 65+, a MAR pattern) that reaches the FEATURE `OneHotEncoder` as an implicit "Missing" level, while `MaritalStatus` and `SmokingStatus` are effectively clean (<0.5%). The pending missing-indicator / drop decision for `Religion` is tracked in `TODO.txt`.
+* **Train/test comparability (20c, 21)** — `train_test_smd.csv`: split sizes and TRD-positive counts plus a per-predictor SMD across train vs test, sourced from `create_train_test_split()` so it matches the classical-ML and KNN pipelines.
+* **Events-per-variable (10)** — training TRD-positive count divided by the post-`ColumnTransformer` feature count, computed for both vector sources from the cached `{model}_{EMBEDDED,FEATURE}.joblib` transformers (no refit) and reported against the >= 10 threshold. The shared TRD-positive numerator is divided by each source's expanded feature width, so the high-dimensional EMBEDDED block fails the threshold while the much narrower FEATURE block is reported on its own terms.
+* **TRD-stratified density figures** — `density_{mdd_to_anchor_days,num_encounters,pre_anchor_history_days}.png` (truncated at a per-column percentile bound for low-value resolution; presentation only) plus `density_correlation.csv` (Pearson + Spearman vs the TRD label, on the full untruncated data).
+
+Feature and categorical-level labels in every table and figure are routed through `humanize_feature_names` from `scripts/shared/feature_display_names.py`, so the notebook, ablation summary plots, and `feature_importance.py` share one display-name source of truth.
+
 ## Running the Notebooks on a Compute Node
 
 The analysis notebooks (e.g. `notebooks/cohort_investigation.ipynb`) sweep the full cohort and read the per-patient JSONs directly, so they crawl when the kernel runs on a shared login node. Run the kernel on an allocated compute node instead — the speed-up comes almost entirely from that node's dedicated, uncontended filesystem, which dominates these file-heavy passes (the sweeps are single-threaded, so the extra cores are incidental).
