@@ -39,7 +39,7 @@ def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Dict:
     """
     sliced_path, raw_path, anchor_data = patient_args
     failure_path = sliced_path.with_suffix(".rejected")
-    sliced_json = None
+    sliced_json = {}
     if int(os.environ['SCRUB_PATIENT_JSON']) == 0:
         if sliced_path.exists():
             try:

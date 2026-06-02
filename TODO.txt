@@ -63,55 +63,35 @@ ACTIVE / IMMEDIATE
       first to validate the feature_importance integration before fanning
       out to the other three.
 
-DATA INTEGRITY — FEATURE EXTRACTOR & MISSINGNESS BUGS
+DATA INTEGRITY — REGEN OWED AFTER DEAD-FEATURE PURGE
 (surfaced 2026-06-01 via cohort_investigation.ipynb + notebooks/figures)
 --------------------------------------------------------------------
-These corrupt the FEATURE-vector parquet and every classical-ML and
-ablation result built on it. Fixing the extractors means regenerating
-the feature DataFrame (SCRUB_FEATURE_VECTORS=1) and re-running the
-FEATURE classical_ml.py pass. The EMBEDDED narratives also stamp these
-fields textually, so #1 additionally contaminates the ablation deltas.
+somatic_flag and psychotherapy_count were purged from the pipeline
+(removed from features.py, feature_vector.py, deterministic_narrative.py,
+feature_display_names.py, tests; procedure_definitions.py deleted). Both
+were dead in this cohort: real ECT (ELECTROCONVULSIVE / CPT 90870) does
+NOT survive the YEARS_BACK window — zero patients — so the old 15.1%
+somatic_flag prevalence was 100% substring false positives (SPECT,
+DIRECT REFER, HYSTERECT, ...); individual psychotherapy is not captured
+in this EHR's procedure vocabulary at all (~12 group-therapy rows
+cohort-wide). Detail in memory project_procedure_data_reality.
 
-SEQUENCING WARNING: the POST-FREEZE SMOKE TEST under ACTIVE above is
-verifying FEATURE artifacts built from the current (corrupt) extractors.
-Sequence the somatic_flag (#1) and psychotherapy_count (#2) fixes — and
-the resulting feature-DataFrame regen + FEATURE retrain — BEFORE trusting
-any FEATURE-side smoke-test result. EMBEDDED-side baseline artifacts are
-unaffected except where #1's somatic narrative content feeds the
-ablation specs.
-
-- [ ] somatic_flag massively over-counts ECT. boolean_summary.csv:
-      15.1% prevalence, and it runs BACKWARDS by outcome (15.6% non-TRD
-      vs 10.5% TRD) — both impossible for ECT, which is rare and should
-      be MORE common in treatment-resistant patients. Root cause:
-      scripts/data_loading/procedure_definitions.py ECT_KEYWORDS =
-      {"ELECTROCONVULSIVE", "ECT "} matched as a bare substring in
-      somatic_treatment_flag (features.py:208). "ECT " matches the tail
-      of ordinary procedure words — DEFECT, ASPECT, INSPECT, DISSECT,
-      RESECT, TRANSECT — none related to depression, which is exactly
-      why the flag is flat/inverted across TRD. Fix: match on word
-      boundaries or on actual ECT procedure codes, not a substring.
-      SECONDARY: the same function also fires on TMS_KEYWORDS, so the
-      feature is really "ECT or TMS" while every display label
-      (feature_display_names.py; the narrative "Somatic treatments"
-      line) says ECT only — rename or split the feature. ABLATION
-      IMPACT: the SAFETY / treatment_contraindications narrative section
-      carries somatic content, so permute_treatment_contraindications
-      and any somatic-bearing spec produce contaminated deltas until
-      this is fixed and embeddings are regenerated.
-
-- [ ] psychotherapy_count is identically 0 for all 9,725 patients
-      (numeric_summary.csv mean=std=max=0; Table 1; train/test SMD=0).
-      Procedures ARE being read (somatic_flag fires on the same field),
-      so the literal keyword "PSYCHOTHERAPY" (procedure_definitions.py
-      PSYCHOTHERAPY_KEYWORDS, matched in features.py:223) simply never
-      appears in this EHR's Procedure_Description vocabulary — therapy
-      is coded under CPT 90832/90834/90837 or abbreviated text. Dead
-      feature feeding every model plus a [numeric] Table 1 row. Inspect
-      the real distinct Procedure_Description values for therapy and
-      match those (or the CPT codes). The existing unit test passes only
-      on synthetic descriptions containing the word, so it cannot catch
-      this against real data.
+- [ ] Regen + retrain owed — the purge changed BOTH vector sources:
+        * FEATURE: regenerate the feature DataFrame (SCRUB_FEATURE_
+          VECTORS=1) to drop the two columns, then re-run the FEATURE
+          classical_ml.py pass. EPV improves (narrower feature block) —
+          recompute the cohort_investigation EPV cell, and the
+          notebooks/figures/*.csv (table_one, boolean_summary, numeric_
+          summary, train_test_smd) regenerate on the next notebook run.
+        * EMBEDDED: the deterministic narrative no longer stamps the
+          "Somatic treatments / Psychotherapy visits" line, so every
+          narrative text changed. Regenerate narratives + re-embed
+          baseline AND all 5 ablation specs across all 4 embedders, then
+          re-run the EMBEDDED classical_ml + ablation_runner passes.
+          Existing embeddings carry a now-false somatic "Yes" for ~1,459
+          patients until this completes.
+      SEQUENCING: the POST-FREEZE SMOKE TEST under ACTIVE verifies FEATURE
+      and ablation artifacts — run it only AFTER this regen, not before.
 
 - [ ] pre_anchor_history_days has a corrupt max of 28,150 days (~77 yr)
       in numeric_summary.csv (non-TRD). Anchor dates span 2016-2024
@@ -188,12 +168,13 @@ LOWER PRIORITY
 
 - [ ] Causal Random Forest + Treatment Heterogeneity notebook
       (causal_forest_analysis.ipynb). Estimates CATE per candidate
-      treatment (augmentation, polypharmacy, somatic/ECT, adequate
-      trial >= 1). Lives outside the main pipeline because CATE
+      treatment (augmentation, polypharmacy, adequate trial >= 1;
+      somatic/ECT dropped — feature purged, no ECT survives the
+      YEARS_BACK window). Lives outside the main pipeline because CATE
       evaluation is incompatible with the ROC/PR/Calibration harness.
         * Treatment dispatcher: get_treatment_indicator(patient_id,
           treatment) -> int.
-        * Prevalence report for all four candidates; drop any outside
+        * Prevalence report for all three candidates; drop any outside
           [5%, 95%].
         * Reduced X matrix: load the FEATURE DataFrame from
           FEATURE_DATAFRAME_PATH, drop ALL candidate treatment columns

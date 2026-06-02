@@ -18,8 +18,6 @@ from scripts.data_loading.features import (
     nsaid_burden,
     psych_utilization,
     hypnotic_burden,
-    somatic_treatment_flag,
-    psychotherapy_count,
     safety_comorbidity,
     sud_specifics,
     get_sdoh,
@@ -135,8 +133,6 @@ def extract_fields(sliced_json: Dict) -> Dict[str, Dict]:
         "benzo_days": benzo_days(sliced_json),
         "hypnotics": hypnotic_burden(sliced_json),
         "augmentation": augmentation_flag(sliced_json),
-        "somatic": somatic_treatment_flag(sliced_json),
-        "psychotherapy_count": psychotherapy_count(sliced_json),
     }
 
     medication_burden_bundle = {
@@ -224,8 +220,7 @@ MDD within window: {get_bool_str(cohort['mdd_within_window'])}\n"
     TREAT_EXPOSURE = f"### TREATMENT EXPOSURE\nPrior adequate AD trials: {' | '.join([f'{arm}: {adequate_trials_count[arm]}' for arm in adequate_trials_count.keys()]) if len(adequate_trials_count) > 0 else 'Absent'}\n\
 Benzodiazepine days ({YEARS_BACK}y): {treat['benzo_days']}\n\
 Hypnotics: {' | '.join([hypnotic for hypnotic in sorted(hypnotics_burden_set)]) if len(hypnotics_burden_set) > 0 else 'Absent'}\n\
-Augmentation: {get_bool_str(treat['augmentation'])}\n\
-Somatic treatments: {get_bool_str(treat['somatic'])} | Psychotherapy visits ({YEARS_BACK}y): {treat['psychotherapy_count'] if treat['psychotherapy_count'] > 0 else 'Absent'}\n"
+Augmentation: {get_bool_str(treat['augmentation'])}\n"
 
     medburden = bundles["medication_burden"]
     distinct_ingredients = medburden["active_meds"]

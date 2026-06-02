@@ -11,8 +11,6 @@ from scripts.data_loading.features import (
     polypharmacy,
     suicidality_flag,
     psych_utilization,
-    somatic_treatment_flag,
-    psychotherapy_count,
     nsaid_burden,
     psych_comorbidity
 )
@@ -121,20 +119,6 @@ def test_psych_utilization_days(builder: MockPatientBuilder):
         .add_explicit_encounter(start=-20, end=-20, patient_class="Emergency").build()
     in_patient_days, emergencies = psych_utilization(patient_dict=patient_dict, years=1)
     assert in_patient_days == 10 and emergencies == 1
-    
-def test_somatic_treatment_case_insensitivity(builder: MockPatientBuilder):
-    """
-    Test to ensure flag for convulsive treatment is correct
-    """
-    patient_dict = builder.add_procedure(description="Electroconvulsive therapy", date=-20).build()
-    assert somatic_treatment_flag(patient_dict=patient_dict)
-    
-def test_psychotherapy_count_case_insensitivity(builder: MockPatientBuilder):
-    """
-    Test to ensure psychotherapy count is correct
-    """
-    patient_dict = builder.add_procedure(description="Individual psychotherapy session", date=-30).build()
-    assert psychotherapy_count(patient_dict=patient_dict) == 1
     
 def test_nsaid_burden_duration(builder: MockPatientBuilder):
     """

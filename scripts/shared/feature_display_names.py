@@ -8,7 +8,6 @@ RAW_TO_DISPLAY: dict[str, str] = {
     "pre_anchor_history_days": "Pre-anchor history (days) [numeric]",
     "AgeInYears":             "Age (years) [numeric]",
     "benzo_days_coverage":    "Anti-anxiety med days [numeric]",
-    "psychotherapy_count":    "Psychotherapy visit count [numeric]",
     "polypharmacy_count":     "Active med count at baseline [numeric]",
     "nsaid_count":            "Anti-inflammatory pain med count (NSAID) [numeric]",
     "hypnotics_burden":       "Sleep medication count [numeric]",
@@ -23,7 +22,6 @@ RAW_TO_DISPLAY: dict[str, str] = {
     "mdd_within_window":                       "MDD diagnosed in history [boolean]",
     "suicide_flag":                            "Suicidality flagged [boolean]",
     "augmentation_occured":                    "Augmentation therapy used [boolean]",
-    "somatic_flag":                            "Somatic treatment (ECT) received [boolean]",
     # Psychiatric comorbidities
     "psych_ADJUSTMENT_DISORDER":               "Adjustment disorder [boolean]",
     "psych_ANXIETY":                           "Anxiety disorder [boolean]",

@@ -20,8 +20,6 @@ from scripts.data_loading.features import (
     nsaid_burden,
     psych_utilization,
     hypnotic_burden,
-    somatic_treatment_flag,
-    psychotherapy_count,
     safety_comorbidity,
     sud_specifics,
     get_vitals_average,
@@ -177,15 +175,13 @@ def generate_feature_vector(sliced_json: Dict) -> pd.Series:
     
     # Various flags
     suicide_flag = suicidality_flag(sliced_json)
-    somatic_flag = somatic_treatment_flag(sliced_json)
-    
+
     augmentation_occured = augmentation_flag(sliced_json)
     
     # Treatment counts 
     adequate_trials_count = prior_adequate_trials(sliced_json)
     benzo_days_coverage = benzo_days(sliced_json)
-    psychotherapy_treament_count = psychotherapy_count(sliced_json)
-    
+
     # Burden
     hypnotics_burden_set = hypnotic_burden(sliced_json)
     safety_comorbidity_dict = safety_comorbidity(sliced_json)
@@ -217,7 +213,6 @@ def generate_feature_vector(sliced_json: Dict) -> pd.Series:
         "bp_sys": bps,
         "bp_dias": bp_dias,
         "benzo_days_coverage": float(benzo_days_coverage),
-        "psychotherapy_count": float(psychotherapy_treament_count),
         "polypharmacy_count": float(len(distinct_ingredients)),
         "nsaid_count": float(len(distinct_nsaid_ingredients)),
         "hypnotics_burden": float(len(hypnotics_burden_set)),
@@ -231,7 +226,6 @@ def generate_feature_vector(sliced_json: Dict) -> pd.Series:
     row["mdd_within_window"] = bool(sliced_json["mdd_to_anchor_days"] <= 365 * YEARS_BACK)
     row["suicide_flag"] = bool(suicide_flag)
     row["augmentation_occured"] = bool(augmentation_occured)
-    row["somatic_flag"] = bool(somatic_flag)
 
     # Various comorbidities
     for arm in sorted(PSYCH_ARMS):

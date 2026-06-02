@@ -2,7 +2,6 @@ from typing import Dict, Set, Tuple
 
 from scripts.data_loading.diagnoses_definitions import PSYCH_ARMS, MEDICAL_ARMS, get_diagnosis_arm, SUICIDE_ARMS, SAFETY_ARMS, get_sud_substance, SDOH_MAP
 from scripts.data_loading.med_definitions import NSAID_INGREDIENTS, BENZODIAZEPINE_INGREDIENTS, get_med_arm, ALL_ARMS, AUGMENTATION_INGREDIENTS, ALL_ARM_INGREDIENTS, HYPNOTICS_INGREDIENTS, MASTER_INGREDIENTS_MAP
-from scripts.data_loading.procedure_definitions import ECT_KEYWORDS, TMS_KEYWORDS
 
 def comorbidity(patient_dict: Dict, arm_set: Set[str]) -> Dict[str, bool]:
     """
@@ -204,32 +203,6 @@ def augmentation_flag(patient_dict: dict) -> bool:
         else:
             ad_pointer += 1
     return False
-
-def somatic_treatment_flag(patient_dict: dict) -> bool:
-    """
-    Flag for if a patient has received any somatic treatment during their history window
-    """
-    for encounter in patient_dict['encounters']:
-        for procedure in encounter['procedures']:
-            description = str(procedure['Procedure_Description']).upper()
-            for keyword in ECT_KEYWORDS:
-                if keyword in description:
-                    return True
-            for keyword in TMS_KEYWORDS:
-                if keyword in description:
-                    return True
-    return False
-
-def psychotherapy_count(patient_dict: dict) -> int:
-    """
-    Count number of instances of procedures with 'PSYCHOTHERAPY' in their description
-    """
-    count = 0
-    for encounter in patient_dict['encounters']:
-        for procedure in encounter['procedures']:
-            if "PSYCHOTHERAPY" in str(procedure['Procedure_Description']).upper():
-                count += 1
-    return count
 
 def sud_specifics(patient_dict: dict) -> dict[str, bool]:
     """
