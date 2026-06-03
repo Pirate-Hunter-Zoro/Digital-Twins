@@ -63,6 +63,7 @@ RAW_TO_DISPLAY: dict[str, str] = {
     # Categorical one-hot block (OneHotEncoder(drop='if_binary', handle_unknown='ignore'))
     # Binary: Sex (drops reference 'Female', keeps 'Male'); other categories keep all levels.
     "Sex_Male":                                          "Sex: Male [one-hot]",
+    "Sex_Female":                                        "Sex: Female [one-hot]",
     "PreferredLanguage_Asian and Pacific Island":        "Preferred language: Asian/Pacific Islander [one-hot]",
     "PreferredLanguage_English Only":                    "Preferred language: English [one-hot]",
     "PreferredLanguage_Other":                           "Preferred language: Other [one-hot]",

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=analysis_only
+#SBATCH --job-name=ml_only
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
@@ -38,7 +38,6 @@ export CUDA_VISIBLE_DEVICES="${FREE_GPU}"
 echo "Pinning to GPU ${CUDA_VISIBLE_DEVICES} on $(hostname)"
 nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
 
-# python -m scripts.digital_twins.predictions.analyze_trd_prediction
 python -m scripts.digital_twins.predictions.classical_ml
 python -m scripts.digital_twins.predictions.feature_importance
 python -m scripts.digital_twins.predictions.ablation_runner

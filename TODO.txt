@@ -9,7 +9,7 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] POST-FREEZE SMOKE TEST (job in flight as of 2026-05-27): once the
+- [ ] POST-FREEZE SMOKE TEST (job in flight as of 2026-06-03): once the
       analysis stage completes, verify baseline RESULTS_DIR contains:
         * trained_models/{logistic_regression, random_forest,
           gradient_boosting, xgboost}_EMBEDDED.joblib  (from the
@@ -51,7 +51,7 @@ ACTIVE / IMMEDIATE
         * NO results.txt (presence indicates the JSON migration
           backslid)
 
-- [ ] Backfill analysis_only.sbatch for ALL FOUR embedders so the FEATURE
+- [ ] Backfill ml_only.sbatch for ALL FOUR embedders so the FEATURE
       outputs use the categorical-cast fix AND the feature_importance.py
       artifacts land for every embedder:
         * bge-en-icl
@@ -63,36 +63,8 @@ ACTIVE / IMMEDIATE
       first to validate the feature_importance integration before fanning
       out to the other three.
 
-DATA INTEGRITY — REGEN OWED AFTER DEAD-FEATURE PURGE
-(surfaced 2026-06-01 via cohort_investigation.ipynb + notebooks/figures)
+DATA INTEGRITY
 --------------------------------------------------------------------
-somatic_flag and psychotherapy_count were purged from the pipeline
-(removed from features.py, feature_vector.py, deterministic_narrative.py,
-feature_display_names.py, tests; procedure_definitions.py deleted). Both
-were dead in this cohort: real ECT (ELECTROCONVULSIVE / CPT 90870) does
-NOT survive the YEARS_BACK window — zero patients — so the old 15.1%
-somatic_flag prevalence was 100% substring false positives (SPECT,
-DIRECT REFER, HYSTERECT, ...); individual psychotherapy is not captured
-in this EHR's procedure vocabulary at all (~12 group-therapy rows
-cohort-wide). Detail in memory project_procedure_data_reality.
-
-- [ ] Regen + retrain owed — the purge changed BOTH vector sources:
-        * FEATURE: regenerate the feature DataFrame (SCRUB_FEATURE_
-          VECTORS=1) to drop the two columns, then re-run the FEATURE
-          classical_ml.py pass. EPV improves (narrower feature block) —
-          recompute the cohort_investigation EPV cell, and the
-          notebooks/figures/*.csv (table_one, boolean_summary, numeric_
-          summary, train_test_smd) regenerate on the next notebook run.
-        * EMBEDDED: the deterministic narrative no longer stamps the
-          "Somatic treatments / Psychotherapy visits" line, so every
-          narrative text changed. Regenerate narratives + re-embed
-          baseline AND all 5 ablation specs across all 4 embedders, then
-          re-run the EMBEDDED classical_ml + ablation_runner passes.
-          Existing embeddings carry a now-false somatic "Yes" for ~1,459
-          patients until this completes.
-      SEQUENCING: the POST-FREEZE SMOKE TEST under ACTIVE verifies FEATURE
-      and ablation artifacts — run it only AFTER this regen, not before.
-
 - [ ] pre_anchor_history_days has a corrupt max of 28,150 days (~77 yr)
       in numeric_summary.csv (non-TRD). Anchor dates span 2016-2024
       (~8 yr total, per the 5b cell), so this is a garbage early record
@@ -141,26 +113,6 @@ cohort-wide). Detail in memory project_procedure_data_reality.
 
 LOWER PRIORITY
 --------------
-- [ ] load_patient_data.py:_load_one_patient should always return a
-      dict so the iterator at load_patient_data.py:92-94 is type-
-      consistent across all worker outcomes. Currently the cached-
-      rejection branch at line 48 returns None; the yield at line 93
-      reads .keys() unconditionally and would crash on the first None
-      received. Bug is latent today only because no recent caller
-      iterated over a directory containing .rejected markers, but
-      every future narratives or feature-vector regen call (which
-      now finds ~33k populated .rejected files under
-      SLICED_PATIENT_JSON_DIR) hits the cached-rejection branch on
-      the first such patient. Fix: at line 48, json.load the marker
-      body and return the resulting reason dict (mirror the success
-      branch at lines 39-43, including a JSONDecodeError fallback
-      that falls through to re-slice for legacy empty markers); then
-      line 93 simplifies to `if 'reason' not in sliced_json: yield
-      sliced_json`. Return-type annotation collapses from
-      Optional[Dict] to Dict. Land this before the next
-      run_embedding_pipeline.sbatch or narratives_only.sbatch
-      submission.
-
 - [ ] Investigate bge-small's bimodal cosine-similarity distribution in
       test_data/bge-small.png. Every other embedder's pair-cosine
       distribution is unimodal/normal; bge-small has two clear modes.
@@ -211,4 +163,11 @@ LOWER PRIORITY
       vital rows at any date with in-window vitals missingness of
       ~63-80%. Document these as representativeness limitations when
       drafting; the supporting tables/figures already live in
-      notebooks/figures.
+      notebooks/figures. Also document the missing-data strategy
+      explicitly: NO imputation anywhere — continuous missingness
+      (vitals) is dropped under structural MAR, categorical missingness
+      is retained as an explicit OneHotEncoder indicator level, and the
+      EMBEDDED side carries it as a literal "Missing" token in the
+      narrative. Note that missing-Race patients (n=21) show ~2x TRD
+      prevalence (23.8% vs 10.6% baseline) — the same MAR-correlates-
+      with-outcome pattern flagged for Religion.

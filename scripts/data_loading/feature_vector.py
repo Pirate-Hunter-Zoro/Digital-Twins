@@ -257,7 +257,7 @@ def generate_feature_vector(sliced_json: Dict) -> pd.Series:
             row[field] = raw_val
 
     # MDD recurrence and severity
-    row['mdd_recurrence'] = sliced_json['mdd_recurrence']
-    row['mdd_severity'] = sliced_json['mdd_severity']
+    row['mdd_recurrence'] = patient_mdd_rec
+    row['mdd_severity'] = patient_mdd_sev
     
     return pd.Series(row)

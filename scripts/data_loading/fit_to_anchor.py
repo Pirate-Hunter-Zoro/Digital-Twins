@@ -11,6 +11,7 @@ from scripts.data_loading.diagnoses_definitions import get_mdd_components
 MED_OVERLAP_TOLERANCE = 1 # If one patient stops a medication and then this many days later restarts it, just shove it into one interval
 YEARS_BACK = int(os.environ['YEARS_BACK'])
 YEARS_AHEAD = int(os.environ['YEARS_AHEAD'])
+EARLIEST_ALLOWED_DATE = datetime(2010, 1, 1) # First day of 2010
 
 PRE_ANCHOR = f"Insufficient pre-anchor history (require {int(os.environ['YEARS_BACK'])} years)"
 POST_ANCHOR = f"Insufficient post-anchor history (require {int(os.environ['YEARS_AHEAD'])} years)"
@@ -72,7 +73,7 @@ def slice_and_convert_time(patient_dict: Dict, anchor_date: datetime) -> Dict:
         latest_encounter_date = max(latest_encounter_date, encounter_start_date)
         if encounter_start_date <= anchor_date:
             # Potential MDD preceding anchor date
-            if encounter_start_date < earliest_sliced_encounter_date:
+            if encounter_start_date < earliest_sliced_encounter_date and encounter_start_date >= EARLIEST_ALLOWED_DATE:
                 # Update record for earliest encounter date
                 earliest_sliced_encounter_date = encounter_start_date
             # Still need to check diagnoses for codes
