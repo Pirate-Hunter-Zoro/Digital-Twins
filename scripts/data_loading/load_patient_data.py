@@ -1,5 +1,5 @@
 import os
-from typing import Tuple, Iterator, Dict, Optional
+from typing import Tuple, Iterator, Dict
 from pathlib import Path
 import pandas as pd
 import json
@@ -48,15 +48,7 @@ def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Dict:
                     return sliced_json
             except json.JSONDecodeError as e:
                 print(f"Exception occured when reading from {sliced_path}... {str(e)}... will try to recreate...", flush=True)
-        elif failure_path.exists():
-            # Patient was rejected due to inadequate history
-            try:
-                with open(failure_path, 'r') as f:
-                    failure_json = json.load(f)
-                    return failure_json
-            except json.JSONDecodeError as e:
-                print(f"Exception occured when reading from {failure_path}... {str(e)}... will try to recreate...", flush=True)
-    
+        
     # Load the patient's raw data
     with open(raw_path, 'r') as f:
         raw_json = json.load(f)
@@ -91,12 +83,15 @@ def load_patient_data() -> Iterator[Dict]:
     worker_args = []
     for patient_id, patient_info in patients_with_anchor.iterrows():
         anchor_data = patient_info.to_dict()
-        
-        worker_args.append((
-            SLICED_JSON_PATH / f"{patient_id}.json",
-            RAW_JSON_PATH / f"{patient_id}.json",
-            anchor_data
-        ))
+       
+        failure_path = SLICED_JSON_PATH / f"{patient_id}.rejected"
+        if (int(os.environ['SCRUB_PATIENT_JSON']) == 1) or (not failure_path.exists()):
+            # Patient was not rejected or we are wiping and generate again 
+            worker_args.append((
+                SLICED_JSON_PATH / f"{patient_id}.json",
+                RAW_JSON_PATH / f"{patient_id}.json",
+                anchor_data
+            ))
         
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as pool:
         for sliced_json in pool.imap_unordered(func=_load_one_patient, iterable=worker_args):

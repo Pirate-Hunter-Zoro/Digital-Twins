@@ -1,6 +1,8 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+FOR ROC curve comparision, random vs nearest will suffice
+
 NOTE TO FUTURE EDITORS (INCLUDING CLAUDE): When work is completed, DELETE the
 corresponding entry from this file. Do not leave checkmarks, "DONE" tags,
 struck-through items, or "(completed YYYY-MM-DD)" annotations. This file
@@ -9,6 +11,21 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
+- [ ] Absolute-AUC ablation forest plot (ADDITIVE — does NOT replace
+      plot_ablation_deltas or the ROC overlay grids). New helper beside
+      plot_ablation_deltas in ablation_runner.py, called from
+      emit_ablation_summary. Each run's RAW ROC AUC
+      rendered as a horizontal CI band (point marker + whisker), one row
+      per run: unablated baseline on top, then the five specs ordered by
+      DESCENDING logistic-regression AUC drop (same row order reused across
+      every panel), one panel per classifier, shared absolute-AUC x-axis,
+      light reference line at the baseline AUC. Bands are visual, not
+      printed numbers. Buildable from the existing run — per-run roc_score
+      / roc_score_ci_low / roc_score_ci_high already live in
+      ablation_summary.csv and the baseline band comes from
+      classical_ml_results_EMBEDDED.json; needs NO paired-bootstrap delta
+      CIs. Output: ablation_roc_ci_EMBEDDED.png in RESULTS_DIR.
+
 - [ ] POST-FREEZE SMOKE TEST (job in flight as of 2026-06-03): once the
       analysis stage completes, verify baseline RESULTS_DIR contains:
         * trained_models/{logistic_regression, random_forest,

@@ -125,7 +125,7 @@ def benzo_days(patient_dict: dict) -> int:
 
 def prior_adequate_trials(patient_dict: dict) -> Dict[str, int]:
     """
-    Prior adequate antidepressant trials (24 months): for each class, did the patient have at least 6 weeks at a therapeutic dose?
+    Prior adequate antidepressant trials: for each class, did the patient have at least 6 weeks at a therapeutic dose?
     """
     result = {MedName: 0 for MedName in ALL_ARMS}
     for med in patient_dict['active_medications']:

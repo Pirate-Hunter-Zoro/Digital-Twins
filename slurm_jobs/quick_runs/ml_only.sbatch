@@ -7,7 +7,7 @@
 #SBATCH --mem=192G
 #SBATCH -o slurm_jobs/quick_runs/logs/analysis_only_out.txt
 #SBATCH -e slurm_jobs/quick_runs/logs/analysis_only_err.txt
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 
 # Exit immediately if command fails
 set -e
