@@ -11,21 +11,6 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] Absolute-AUC ablation forest plot (ADDITIVE — does NOT replace
-      plot_ablation_deltas or the ROC overlay grids). New helper beside
-      plot_ablation_deltas in ablation_runner.py, called from
-      emit_ablation_summary. Each run's RAW ROC AUC
-      rendered as a horizontal CI band (point marker + whisker), one row
-      per run: unablated baseline on top, then the five specs ordered by
-      DESCENDING logistic-regression AUC drop (same row order reused across
-      every panel), one panel per classifier, shared absolute-AUC x-axis,
-      light reference line at the baseline AUC. Bands are visual, not
-      printed numbers. Buildable from the existing run — per-run roc_score
-      / roc_score_ci_low / roc_score_ci_high already live in
-      ablation_summary.csv and the baseline band comes from
-      classical_ml_results_EMBEDDED.json; needs NO paired-bootstrap delta
-      CIs. Output: ablation_roc_ci_EMBEDDED.png in RESULTS_DIR.
-
 - [ ] POST-FREEZE SMOKE TEST (job in flight as of 2026-06-03): once the
       analysis stage completes, verify baseline RESULTS_DIR contains:
         * trained_models/{logistic_regression, random_forest,
@@ -42,12 +27,15 @@ ACTIVE / IMMEDIATE
         * exactly six ablation_delta_*.png files (one per metric:
           roc_score, auprc, brier_score, weighted_calibration_error,
           calibration_slope, calibration_intercept) emitted by
-          plot_ablation_deltas. Open the roc_score PNG and confirm
-          asymmetric CI whiskers render on every bar, sourced from
-          `delta_roc_score_ci_low` / `delta_roc_score_ci_high`
-          (paired-bootstrap of the delta; NOT the ablated-AUC
-          `roc_score_ci_low` / `roc_score_ci_high`); open at least
-          one of the other five and confirm bars only (no whiskers).
+          plot_ablation_deltas, all bars-only. The roc_score whiskers
+          were removed deliberately; delta_roc_score_ci_low/high stay in
+          ablation_summary.csv but are no longer rendered on any bar.
+        * exactly one ablation_roc_ci_EMBEDDED.png (absolute-AUC forest
+          plot from plot_ablation_roc_ci): four classifier panels on a
+          shared AUC x-axis, baseline row on top, five specs ordered by
+          DESCENDING logistic-regression AUC drop (same order reused
+          across panels), humanized row labels on the leftmost panel,
+          light dashed reference line at each panel's baseline AUC.
         * exactly four ROC_ablated_vs_baseline_{classifier}_EMBEDDED.png
           files (one per classifier: logistic_regression,
           random_forest, gradient_boosting, xgboost), each a five-
@@ -127,6 +115,25 @@ DATA INTEGRITY
       SettingWithCopyWarning (chained assignment of cutoff_date onto a
       boolean-masked slice of vitals_joined). Assign on an explicit copy
       so a future pandas version does not silently drop the write.
+
+FEATURE DISPLAY NAMES — OPEN QUESTIONS (relocated from
+feature_display_names.py)
+--------------------------------------------------------------------
+- [ ] EMAIL Katie or Elizabeth: how are the SDOH issue categories
+      operationally defined (sdoh_Education/Literacy, sdoh_Employment,
+      sdoh_Housing/Economic, sdoh_Legal/Crime/Other Psychosocial,
+      sdoh_Occupational Exposure, sdoh_Primary Support Group/Family,
+      sdoh_Psychosocial Circumstances, sdoh_Social Environment,
+      sdoh_Upbringing)? Need the coding rule behind each before the
+      display labels can claim a precise clinical meaning.
+- [ ] EMAIL: marital-status one-hot semantics. Can a patient carry more
+      than one MaritalStatus level (e.g. Now Married alongside a prior
+      Widowed/Divorced state), or is the source strictly single-valued
+      at index? Determines whether the labels read as mutually exclusive
+      states.
+- [ ] Make the categorical one-hot display labels less wordy — convey
+      the category and its level succinctly (no email; a wording pass on
+      RAW_TO_DISPLAY in feature_display_names.py).
 
 LOWER PRIORITY
 --------------

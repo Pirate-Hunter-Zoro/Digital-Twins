@@ -28,6 +28,7 @@ def plot_ablation_deltas(rows: list[dict], baseline_results_dir: Path):
         baseline_results_dir (Path): Specify where to build ablation delta results files from
     """
     spec_order = [abl["id"] for abl in ABLATIONS]
+    spec_labels = [abl['display'] for abl in ABLATIONS]
     classifier_order = ["logistic_regression", "random_forest", "gradient_boosting", "xgboost"]
     metrics_to_plot = ["roc_score", "auprc", "brier_score", "weighted_calibration_error", "calibration_slope", "calibration_intercept"]
     row_lookup = {
@@ -43,23 +44,15 @@ def plot_ablation_deltas(rows: list[dict], baseline_results_dir: Path):
             # X positions of the bars for this classifier's errors
             x_positions = x_base + bar_width * (i - (n_classifiers - 1) / 2)
             heights = [row_lookup[(spec_id, classifier)][f"delta_{metric}"] for spec_id in spec_order]
-            if metric == "roc_score":
-                # Error bands
-                yerr_lower = [row_lookup[(spec_id, classifier)]["delta_roc_score"] - row_lookup[(spec_id, classifier)]["delta_roc_score_ci_low"] for spec_id in spec_order]
-                yerr_upper = [row_lookup[(spec_id, classifier)]["delta_roc_score_ci_high"] - row_lookup[(spec_id, classifier)]["delta_roc_score"] for spec_id in spec_order]
-                yerr = np.array([yerr_lower, yerr_upper])
-            else:
-                yerr = None
             ax.bar(
                 x_positions,
                 heights,
                 width=bar_width,
-                label=classifier,
-                yerr=yerr,
+                label=classifier
             )
         ax.axhline(0, color="black", linewidth=0.8, linestyle="--") # y-coordinate of horizontal line is 0
         ax.set_xticks(x_base)
-        ax.set_xticklabels(spec_order, rotation=15, ha="right")
+        ax.set_xticklabels(spec_labels, rotation=15, ha="right")
         ax.set_xlabel(f"Ablation Spec")
         ax.set_ylabel(f"Δ {metric} (ablated − baseline)")
         ax.set_title(f"Ablation Delta — {metric}" + ("" if metric != 'roc_score' else "\n95% paired-bootstrap CI on Δ AUC"))
@@ -67,6 +60,59 @@ def plot_ablation_deltas(rows: list[dict], baseline_results_dir: Path):
         fig.tight_layout()
         fig.savefig(baseline_results_dir / f"ablation_delta_{metric}.png")
         plt.close(fig)
+
+def plot_ablation_roc_ci(rows: list[dict], baseline_metrics: dict[str, dict[str, tuple[float, float]]], baseline_results_dir: Path):
+    """Create a forest plot showing all of the ROC score confidence interval bands over the different ablations over the different machine learning models
+
+    Args:
+        rows (list[dict]): Confidence interval ROC scores across the different classifiers for the different ablations
+        baseline_metrics (dict[str, dict[str, tuple[float]]]): Confidence interval ROC scores given no ablation across the different models
+        baseline_results_dir (Path): Location to store forest plot
+    """
+    spec_labels = {abl["id"]: abl['display'] for abl in ABLATIONS}
+    classifier_order = ["logistic_regression", "random_forest", "gradient_boosting", "xgboost"]
+    row_lookup = {
+        (row["spec_id"], row["classifier"]): row
+        for row in rows
+    }
+    
+    diffs = []
+    for spec in ABLATIONS:
+        spec_id = spec["id"]
+        lr_roc_score_abl = row_lookup[(spec_id, "logistic_regression")]['roc_score']
+        diff = baseline_metrics['logistic_regression']['roc_score'] - lr_roc_score_abl
+        diffs.append((spec_id, diff))
+    diffs.sort(key=lambda x: x[1], reverse=True) # Sort by highest difference first
+    ablation_labels = ["Baseline"] + [spec_labels[diff[0]] for diff in diffs]
+    
+    # Now plot the confidence intervals for each classifier over the different ablations
+    fig, axes = plt.subplots(nrows=1, ncols=4, sharex=True, figsize=(20,len(ABLATIONS)+1))
+    for i, classifier in enumerate(classifier_order):
+        ax = axes[i]
+        lows, mids, highs = np.zeros(len(ABLATIONS)+1),\
+            np.zeros(len(ABLATIONS)+1),\
+                np.zeros(len(ABLATIONS)+1)
+        lows[0], mids[0], highs[0] = baseline_metrics[classifier]["roc_score_ci_low"],\
+            baseline_metrics[classifier]["roc_score"],\
+                baseline_metrics[classifier]["roc_score_ci_high"]
+        for j, (spec_id, _) in enumerate(diffs):
+            lows[j+1] = row_lookup[(spec_id, classifier)]['roc_score_ci_low']
+            mids[j+1] = row_lookup[(spec_id, classifier)]['roc_score']
+            highs[j+1] = row_lookup[(spec_id, classifier)]['roc_score_ci_high']
+        
+        # Array of confidence intervals
+        errors = np.array([mids - lows, highs - mids])
+        ax.errorbar(mids, np.arange(len(ABLATIONS)+1), xerr=errors, fmt='o', capsize=5)
+        ax.axvline(baseline_metrics[classifier]["roc_score"], linestyle='--', linewidth=1, alpha=0.5)
+        ax.set_yticks(np.arange(len(ABLATIONS)+1))
+        ax.set_yticklabels(ablation_labels if i==0 else [""]*len(ablation_labels))
+        ax.invert_yaxis() # Baseline row should go at top
+        ax.set_title(classifier)
+        ax.set_xlabel("ROC AUC")
+    
+    fig.tight_layout()
+    fig.savefig(baseline_results_dir / f"ablation_roc_ci_{VectorSource.EMBEDDED.name}.png")
+    plt.close(fig)
 
 def emit_ablation_summary(baseline_results_dir: Path, delta_roc_score_ci: dict[str, dict[str, tuple[float, float]]]):
     """Given the embedded ML results directory, write the ablation results in the same location
@@ -110,6 +156,7 @@ def emit_ablation_summary(baseline_results_dir: Path, delta_roc_score_ci: dict[s
         writer.writeheader()
         writer.writerows(rows)
     plot_ablation_deltas(rows, baseline_results_dir)
+    plot_ablation_roc_ci(rows, baseline_metrics, baseline_results_dir)
 
 def main():
     baseline_embeddings_dir = Path(os.environ['EMBEDDINGS_DIR'])
@@ -170,8 +217,9 @@ def main():
         with open(results_json_file, 'w') as f:
             json.dump(results, f, indent=4)
     
+    ablated_names = {spec["id"]: spec["display"] for spec in ABLATIONS}
     delta_ci_by_classifier = {
-        model: display_ablated_roc_deltas(classifier_name=model, labels=test_y, probs=baseline_predictions[model], ablated_scores=accumulator[model])
+        model: display_ablated_roc_deltas(classifier_name=model, labels=test_y, probs=baseline_predictions[model], ablated_scores=accumulator[model], ablated_names=ablated_names)
         for model in models
     }
     

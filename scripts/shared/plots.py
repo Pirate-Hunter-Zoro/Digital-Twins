@@ -242,7 +242,7 @@ Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
     plt.savefig(save_path, bbox_inches='tight')
     plt.close()
     
-def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: np.ndarray, ablated_scores: dict[str, np.ndarray]) -> dict[str, tuple[float, float]]:
+def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: np.ndarray, ablated_scores: dict[str, np.ndarray], ablated_names: dict[str, str]) -> dict[str, tuple[float, float]]:
     """For the given classifier, display its base and ablated roc curves, as well as differences between the base and each ablation
 
     Args:
@@ -250,6 +250,7 @@ def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: 
         labels (np.ndarray): Actual labels
         probs (np.ndarray): Baseline predicted risk scores
         ablated_scores (dict[str, np.ndarray]): For each ablation, map to a new set of risk scores
+        ablated_names (dict[str, str]): For each ablation, map to a display name for the graph
 
     Returns:
         dict[str, tuple[float, float]]: For each ablation, return the lower and upper 95% confidence bounds on the difference
@@ -282,7 +283,7 @@ def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: 
         ax.plot(FPR_GRID, FPR_GRID, linestyle='--')
         ax.set_xlabel("False Positive Rate")
         ax.set_ylabel("True Positive Rate")
-        ax.set_title(f"ROC Curve {spec}")
+        ax.set_title(f"ROC Curve {ablated_names[spec]}")
         ax.legend()
         twin_axis = ax.twinx()
         twin_axis.fill_between(FPR_GRID, q_low, q_high, alpha=0.2, color='gray', label='Confidence Band')
