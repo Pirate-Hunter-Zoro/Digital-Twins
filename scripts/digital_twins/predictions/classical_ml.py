@@ -44,7 +44,7 @@ def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATU
     Returns:
         Tuple[pd.DataFrame, np.ndarray]: Features paired with labels
     """
-    predictor = TRDPredictor() # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
+    predictor = TRDPredictor(save_time_hist=False) # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
     if source == VectorSource.FEATURE:
         parquet_path = Path(os.environ['FEATURE_DATAFRAME_PATH'])
         cohort_df = pd.read_parquet(parquet_path)

@@ -14,7 +14,7 @@ EMBEDDINGS_DIR = Path(os.environ['EMBEDDINGS_DIR'])
 
 class Retriever:
     
-    def __init__(self, exclude_ids: set[str]=set()):
+    def __init__(self, exclude_ids: set[str]=set(), save_time_hist: bool=True):
         """
         Loads all patient vectors and their corresponding narrative string IDs, excluding the specified anchor patients
         """
@@ -46,14 +46,15 @@ SELECT patient_id, embedding, chronological_length FROM embeddings
         norms = np.linalg.norm(self.vectors, axis=1, keepdims=True)
         self.vectors /= norms
         
-        # Create histogram of pre-anchor history lengths
-        plt.figure(figsize=(10,6))
-        plt.hist(np.array([l for l in self.chronological_lengths if l < int(os.environ['HISTORY_LENGTH_CUTOFF'])]), bins=100)
-        plt.xlabel("Pre-Anchor History (Days)")
-        plt.ylabel("Frequency")
-        plt.title("Histogram of Pre-Anchor Patient History")
-        plt.savefig(Path(os.environ['RESULTS_DIR']) / 'pre_anchor_history_histogram.png')
-        plt.close()
+        if save_time_hist:
+            # Create histogram of pre-anchor history lengths
+            plt.figure(figsize=(10,6))
+            plt.hist(np.array([l for l in self.chronological_lengths if l < int(os.environ['HISTORY_LENGTH_CUTOFF'])]), bins=100)
+            plt.xlabel("Pre-Anchor History (Days)")
+            plt.ylabel("Frequency")
+            plt.title("Histogram of Pre-Anchor Patient History")
+            plt.savefig(Path(os.environ['RESULTS_DIR']) / 'pre_anchor_history_histogram.png')
+            plt.close()
         
     def get_narrative(self, id: str) -> str:
         """

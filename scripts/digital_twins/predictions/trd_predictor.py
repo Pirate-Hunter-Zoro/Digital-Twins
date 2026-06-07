@@ -10,14 +10,15 @@ from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
 
 class TRDPredictor:
     
-    def __init__(self, exclude_ids: set[str]=set()):
+    def __init__(self, exclude_ids: set[str]=set(), save_time_hist:bool = True):
         """Create necessary retrievers and scorers and TRD-positive set
 
         Args:
             exclude_ids (set[str]): Set of anchor patients which are not allowed to be considered neighbors
+            save_time_hist (bool, optional): Boolean for whether or not to create the time histogram. Defaults to True.
         """
-        self.retriever = Retriever(exclude_ids=exclude_ids)
-        self.scorer = Scorer()
+        self.retriever = Retriever(exclude_ids=exclude_ids, save_time_hist=save_time_hist)
+        self.scorer = Scorer(save_time_hist=save_time_hist)
         self.trd_set = set()
         trd_file = Path(os.environ['TRD_LIST_PATH'])
         self.trd_set = set([l.strip('"') for l in trd_file.read_text().splitlines()])

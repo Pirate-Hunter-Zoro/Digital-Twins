@@ -14,16 +14,17 @@ from scripts.digital_twins.neighbors.retriever import Retriever
 
 class Scorer:
     
-    def __init__(self, require_client:bool = True):
+    def __init__(self, require_client:bool = True, save_time_hist:bool = True):
         """Initialize vllm client and internal database
 
         Args:
             require_client (bool, optional): Boolean for whether or not to load the VLLM server. Defaults to True.
+            save_time_hist (bool, optional): Boolean for whether or not to create the time histogram. Defaults to True.
         """
         if require_client:
             self.client = VllmClient()
         self.prompt_loader = PromptLoader()
-        self.retriever = Retriever()
+        self.retriever = Retriever(save_time_hist=save_time_hist)
         self._init_db()
         
     def _init_db(self):
