@@ -11,18 +11,23 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] Build scripts/digital_twins/predictions/plot_cross_embedder.py for
-      manuscript Figure 6 (currently a [PENDING] placeholder in
-      writeup/manuscript.md). Standalone module, run by hand once all four
-      embedders are backfilled. Two panels across the four encoders, fixed
-      on logistic regression: (A) embedded LR roc_score + asymmetric CI per
-      encoder from each results/{embedder}/.../classical_ml_results_
-      EMBEDDED.json; (B) delta_roc_score for permute_psych_history and
-      permute_med_burden per encoder from each ablation_summary.csv. Use
-      the dash-sanitized results/{embedder}/ dir names verbatim; fail loud
-      if any embedder's results dir is absent. Save to
-      results/cross_embedder_robustness_EMBEDDED.png and repoint the
-      manuscript Figure 6 link once generated.
+- [ ] Run scripts/digital_twins/predictions/plot_cross_embedder.py by hand
+      once all four embedders are backfilled, then repoint manuscript
+      Figure 6. The script is built: standalone (no Slurm), two panels
+      fixed on logistic regression and drawn as point-plus-interval
+      errorbars across the four encoders — (A) embedded LR roc_score with
+      asymmetric CI per encoder from each classical_ml_results_EMBEDDED.
+      json; (B) delta_roc_score with paired-bootstrap CI (read from the
+      delta_roc_score_ci_low/high columns, not recomputed) for
+      permute_psych_history and permute_med_burden per encoder from each
+      ablation_summary.csv. Reads each encoder's results from the live
+      ARTIFACTS_DIR/{embedder}/{VLLM_MODEL_NAME}/ tree (NOT the rsync'd
+      results/ mirror) and fails loud if any embedder's results are absent;
+      writes ARTIFACTS_DIR/cross_embedder_robustness_EMBEDDED.png, which the
+      post-job rsync carries into results/. After it runs, add the
+      ../results/cross_embedder_robustness_EMBEDDED.png link above the
+      Figure 6 caption in writeup/manuscript.md and strike the [PENDING:
+      figure to be generated] clause.
 
 DATA INTEGRITY
 --------------------------------------------------------------------

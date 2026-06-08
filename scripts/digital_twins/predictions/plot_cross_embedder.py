@@ -23,6 +23,7 @@ for abl in ABLATION_SPECS:
             break
     
 EMBEDDERS = ["bge-small-en-v1.5", "bge-en-icl", "Qwen-Qwen3-Embedding-4B", "Qwen-Qwen3-Embedding-8B"]
+SHORT_NAME_EMBS = ["bge-small", "bge-en-icl", "Qwen3-4B", "Qwen3-8B"]
 ENCODING_DIRS = [ARTIFACTS_DIR / embedder_model_name / VLLM_MODEL_NAME for embedder_model_name in EMBEDDERS]
 
 def main():
@@ -37,17 +38,58 @@ def main():
             ml_results = json.load(f)
             roc_score, roc_score_ci_low, roc_score_ci_high = ml_results['logistic_regression']['roc_score'],\
                 ml_results['logistic_regression']['roc_score_ci_low'],\
-                    ml_results['logistic_regression']['roc_score_ci_high']
+                    ml_results['logistic_regression']['roc_score_ci_high'],\
             scores[i] = np.array([roc_score_ci_low, roc_score, roc_score_ci_high])
-            error_bar_lengths[0, i] = roc_score - roc_score_ci_low
-            error_bar_lengths[1, i] = roc_score_ci_high - roc_score
+            error_bar_lengths[0, i] = roc_score - roc_score_ci_low # How far each error bar should dip below dot
+            error_bar_lengths[1, i] = roc_score_ci_high - roc_score # How far each error bar should rise above dot
     
+    # For logistic logression only, over all the different embedding models and specified ablations, see the roc difference
     lr_ablation_deltas = np.zeros(shape=(len(ENCODING_DIRS),len(ABLATION_SPECS)))
+    lr_ablation_delta_ci_lows = np.zeros_like(lr_ablation_deltas)
+    lr_ablation_delta_ci_highs = np.zeros_like(lr_ablation_deltas)
     for i, dir in enumerate(ENCODING_DIRS):
         ablation_df = pd.read_csv(dir / "ablation_summary.csv")
         lr_for_ablations = ablation_df[(ablation_df['classifier'] == 'logistic_regression') & ablation_df['spec_id'].isin(ABLATION_SPECS)]
         lr_for_ablations = lr_for_ablations.set_index('spec_id')
-        
+        for j, abl_id in enumerate(ABLATION_SPECS):
+            lr_ablation_deltas[i, j] = lr_for_ablations.loc[abl_id, 'delta_roc_score']
+            lr_ablation_delta_ci_lows[i, j] = lr_for_ablations.loc[abl_id, 'delta_roc_score_ci_low']
+            lr_ablation_delta_ci_highs[i, j] = lr_for_ablations.loc[abl_id, 'delta_roc_score_ci_high']
+    
+    # Plot cross-embedder ablation results
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12,5))
+    left_ax, right_ax = axes[0], axes[1]
+    
+    # Left plot is AUC score confidence interval over all embedders
+    positions = np.arange(len(EMBEDDERS))
+    # scores[:, 1] stores the height of each dot for each error bar - the actual observed ROC AUC score
+    left_ax.errorbar(positions, scores[:, 1], fmt='o', yerr=error_bar_lengths, capsize=5)
+    left_ax.axhline(y=0.5, color='red', linestyle='--', linewidth=2)
+    left_ax.set_ylabel("Embedded LR ROC AUC")
+    left_ax.set_xticks(positions, SHORT_NAME_EMBS)
+    left_ax.set_title("(A) Discrimination")
+    
+    # Right plot is similar, but now multiple bars for each ablation
+    n = len(ABLATION_SPECS)
+    cluster_width = 0.8
+    bar_width = cluster_width / n
+    for j, abl_name in enumerate(ABLATION_NAMES):
+        abl_error_bar_lengths = np.zeros(shape=(2, len(ENCODING_DIRS)))
+        # Similar to confidence interval plot in left plot, but now it is multiple such intervals for one embedding model - one for each ablation
+        for i in range(len(ENCODING_DIRS)):
+            abl_error_bar_lengths[0, i] = lr_ablation_deltas[i, j] - lr_ablation_delta_ci_lows[i, j]
+            abl_error_bar_lengths[1, i] = lr_ablation_delta_ci_highs[i, j] - lr_ablation_deltas[i, j]
+        # Offset positions spread across entire right plot for this particular ablation
+        right_ax.errorbar(positions + (j - (n-1)/2)*bar_width, lr_ablation_deltas[:, j], fmt='o', yerr=abl_error_bar_lengths, capsize=5, label=abl_name)
+    right_ax.legend()
+    right_ax.axhline(y=0, color='red', linestyle='--', linewidth=2)
+    right_ax.set_ylabel("Δ ROC AUC (ablated − baseline)")
+    right_ax.set_xticks(positions, SHORT_NAME_EMBS) 
+    right_ax.set_title("(B) Semantic-feature ablation")
+    
+    fig.tight_layout()
+    fig.savefig(ARTIFACTS_DIR / f"cross_embedder_robustness_{VectorSource.EMBEDDED.name}.png")
+    plt.close(fig)
     
 if __name__=="__main__":
     main()
