@@ -352,19 +352,8 @@ MDD-to-anchor gap (ρ = −0.085), and encounter count (ρ = −0.052), each
 negative and small, indicating that TRD-positive patients did not
 simply have more data. The direction (slightly *shorter* histories
 among TRD-positive patients) is consistent with earlier escalation
-rather than a richness artifact.
-
-![](../notebooks/figures/density_pre_anchor_history_days.png){width=80%}
-![](../notebooks/figures/density_num_encounters.png){width=80%}
-![](../notebooks/figures/density_mdd_to_anchor_days.png){width=80%}
-
-***Figure 1.** TRD-stratified distributions of data-volume and recency
-proxies (full cohort). (A) Pre-anchor history length; (B) encounter
-count; (C) interval from MDD onset to index. The TRD-positive and
-TRD-negative distributions are near-identical, consistent with the weak
-negative label correlations reported above and arguing against data
-volume acting as a richness confound. Axes are truncated at a per-panel
-percentile for resolution only.*
+rather than a richness artifact. The TRD-stratified distribution figures
+are provided in the supplement.
 
 ## Provenance of performance results
 
@@ -420,11 +409,18 @@ intervals. FEATURE-side values are from the legacy 64-column matrix
 ![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/roc_curves/roc_curve_logistic_regression_EMBEDDED.png){width=80%}
 ![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/roc_curves/roc_curve_random_forest_FEATURE.png){width=80%}
 
-***Figure 2.** Receiver-operating-characteristic curves for the best
+***Figure 1.** Receiver-operating-characteristic curves for the best
 classifier on each representation (held-out test set). (A) Embedded
 logistic regression; (B) rule-based random forest. Shaded bands are
 bootstrap 95% confidence intervals; point AUCs are given in Table 4.
-The cross-embedder discrimination comparison is shown in Figure 8.*
+The cross-embedder discrimination comparison is shown in Figure 6.*
+
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/confusion_matrices/confusion_matrix_logistic_regression_EMBEDDED.png){width=80%}
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/confusion_matrices/confusion_matrix_random_forest_FEATURE.png){width=80%}
+
+***Figure 2.** Confusion matrices at the Youden-J optimal operating point
+for the best classifier on each representation (held-out test set).
+(A) Embedded logistic regression; (B) rule-based random forest.*
 
 ## Model calibration
 
@@ -454,46 +450,27 @@ ideal is 0.*
 | FEATURE | Gradient boosting | 0.090 | 0.009 | 0.43 | 0.13 |
 | FEATURE | XGBoost | 0.089 | 0.008 | 1.62 | −0.11 |
 
-![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/calibration_curves/calibration_curve_logistic_regression_EMBEDDED.png){width=80%}
-![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/calibration_curves/calibration_curve_gradient_boosting_EMBEDDED.png){width=80%}
+Calibration curves for all classifiers are provided in the supplement.
 
-***Figure 3.** Calibration curves on the embedded representation
-(held-out test set). (A) Logistic regression, the best-calibrated
-discriminative model (slope near 1). (B) Gradient boosting, showing
-severely compressed probability estimates (slope near 0). Calibration
-statistics for all classifiers are in Table 5.*
+## Feature importance
 
-## Feature importance and embedding dimensionality
-
-On the rule-based representation, the highest-weighted predictors were
-clinically coherent and recapitulated the strongest univariate
-correlates of TRD (Table 2): obsessive–compulsive disorder, a flagged
-suicidality history, any substance-use disorder, and severe MDD coding
-carried the largest positive logistic-regression weights, while a
-smaller set of indicators (e.g., nicotine use disorder, an
-employment-related social-determinant flag) carried negative weights
-(Figure 5). On the embedded representation no single latent dimension is
-clinically interpretable, so we instead characterized how many
-dimensions carry the predictive signal: a principal-component sweep
-located the discrimination plateau well below the full 4,096-dimensional
-space, and the cumulative built-in-importance curves concentrate most of
-the signal mass in a leading subset of dimensions (Figure 4), indicating
-a largely low-dimensional predictive structure.
-
-![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_pca_sweep_logistic_regression_EMBEDDED.png){width=80%}
-![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_cumulative_EMBEDDED.png){width=80%}
-
-***Figure 4.** Embedded effective-rank diagnostics. (A) ROC AUC versus
-the number of retained principal components for embedded logistic
-regression; discrimination plateaus far below the full dimensionality.
-(B) Cumulative built-in importance across embedding dimensions for each
-classifier, ranked by magnitude; the early rise indicates signal
-concentrated in a leading subset of dimensions.*
+Feature-level interpretability is available only for the rule-based
+representation: the embedded representation's 4,096 latent dimensions
+carry no individual clinical meaning, so per-concept attribution on the
+embedded side is addressed by the semantic-feature ablation below rather
+than by a feature-importance ranking. On the rule-based representation,
+the highest-weighted predictors were clinically coherent and
+recapitulated the strongest univariate correlates of TRD (Table 2):
+obsessive–compulsive disorder, a flagged suicidality history, any
+substance-use disorder, and severe MDD coding carried the largest
+positive logistic-regression weights, while a smaller set of indicators
+(e.g., nicotine use disorder, an employment-related social-determinant
+flag) carried negative weights (Figure 3).
 
 ![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_logistic_regression.png){width=80%}
 ![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_random_forest.png){width=80%}
 
-***Figure 5.** Feature importance on the rule-based representation.
+***Figure 3.** Feature importance on the rule-based representation.
 (A) Signed logistic-regression coefficients (steelblue raises TRD risk,
 firebrick lowers it). (B) Random-forest importances, with
 direction-of-effect recovered by univariate correlation. The
@@ -528,29 +505,21 @@ weighting strategy (embedded representation, held-out test set).*
 | Random | 0.452 | 0.466 | 0.508 | 0.497 |
 | Farthest | 0.396 | 0.389 | 0.397 | 0.395 |
 
-The retrieved neighborhoods were also statistically distinct from chance
-and modestly reweighted by the LLM judge (Figure 7). Neighbor cosine
-similarities separated cleanly from a random-pair reference
-distribution, and top-*k* label agreement (homophily) was marginally
-higher under LLM-judge weighting than under raw cosine weighting.
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/roc_curves/roc_curve_NEAREST_LLM.png){width=80%}
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/roc_curves/roc_curve_RANDOM_LLM.png){width=80%}
 
-![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/roc_curves/roc_curve_NEAREST_COSINE.png){width=70%}
+***Figure 4.** Neighbor-weighted ROC for the LLM-weighted predictor on
+the embedded representation (held-out test set). (A) Nearest retrieval;
+(B) random retrieval. The separation between the nearest and random
+schemes is the discriminative signal; weighting-strategy and the
+farthest/subsampled schemes are reported in Table 6 and the supplement.*
 
-***Figure 6.** Neighbor-weighted ROC for the nearest-retrieval,
-cosine-weighted predictor (embedded representation), shown as a
-representative single curve. The full nearest ≫ random ≫ farthest scheme
-ordering across all four weighting strategies (Table 6) will be rendered
-as a single composite AUC-by-scheme figure built from summary.csv.
-**[Stand-in pending composite.]***
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/confusion_matrices/confusion_matrix_NEAREST_LLM.png){width=80%}
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/confusion_matrices/confusion_matrix_RANDOM_LLM.png){width=80%}
 
-![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/cosine_score_random_vs_neighbor.png){width=80%}
-![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/agreement_curves/agreement_curve_NEAREST.png){width=80%}
-
-***Figure 7.** Embedding-space validity and neighbor homophily (embedded
-representation). (A) Distribution of cosine similarity for retrieved
-neighbors versus random patient pairs; the separation confirms that
-retrieved neighbors are not random draws. (B) Top-*k* label agreement
-under cosine versus LLM-judge weighting for the nearest scheme.*
+***Figure 5.** Confusion matrices at the Youden-J optimal operating point
+for the LLM-weighted neighbor predictor (embedded representation).
+(A) Nearest retrieval; (B) random retrieval.*
 
 ## Embedder comparison
 
@@ -559,7 +528,7 @@ encoders (bge-small-en-v1.5, bge-en-icl, Qwen3-Embedding-4B,
 Qwen3-Embedding-8B). Only Qwen3-Embedding-8B has been run to date; the
 remaining three require backfill through ml_only.sbatch.]**
 
-***Figure 8.** Cross-embedder robustness: best-classifier ROC AUC and the
+***Figure 6.** Cross-embedder robustness: best-classifier ROC AUC and the
 largest semantic-feature ablation deltas across all four encoders
 (bge-small-en-v1.5, bge-en-icl, Qwen3-Embedding-4B, Qwen3-Embedding-8B),
 demonstrating that the principal conclusions hold beyond the
@@ -577,9 +546,13 @@ by medication burden (−0.031 to −0.055). In contrast, permuting
 race/ethnicity, social determinants, or treatment contraindications
 produced small deltas (approximately −0.01 to −0.035), indicating that
 the embedding relied comparatively little on sociodemographic content
-for TRD prediction. Consistent with a concentrated signal, the best
-L1/elasticnet logistic-regression fit retained only 165 of 4,096
-embedding dimensions (4.0%) with nonzero coefficients.
+for TRD prediction. The embedded signal was not sparse in this run: the
+best logistic-regression fit retained all 4,096 embedding dimensions
+with nonzero coefficients, and its cumulative-importance curve was
+diffuse (80% of the coefficient magnitude was spread across roughly
+2,067 of 4,096 dimensions, and 90% across 2,659), indicating that
+TRD-relevant information is distributed broadly across the embedding
+rather than concentrated in a few dimensions.
 
 ***Table 7.** Semantic-feature ablation: change in ROC AUC versus the
 frozen baseline when each narrative concept is permuted across donors
@@ -596,7 +569,7 @@ concept. Point estimates; paired-bootstrap CIs pending re-run.*
 
 ![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/ablation_roc_ci_EMBEDDED.png){width=95%}
 
-***Figure 9.** Semantic-feature ablation, absolute-discrimination view
+***Figure 7.** Semantic-feature ablation, absolute-discrimination view
 (embedded representation). Each row is a run — the unablated baseline on
 top, then the five permutation specifications ordered by descending
 logistic-regression AUC drop (the same ordering reused across panels) —
@@ -616,10 +589,13 @@ logistic regression, gave the best discrimination (ROC AUC 0.70) and
 the best calibration among discriminative models, exceeding logistic
 regression on the rule-based feature vector (0.65) and edging the best
 feature-vector model (random forest, 0.69). That the linear model on
-the embedding outperformed the tree ensembles, and that only about 4%
-of embedding dimensions carried nonzero weight, together suggest the
-predictive structure in the embedding is largely low-dimensional and
-approximately linear. The semantic-feature ablation attributed this
+the embedding outperformed the tree ensembles suggests the predictive
+structure is approximately linear; the signal was not, however,
+low-dimensional — the logistic-regression fit used all 4,096 embedding
+dimensions, with 80% of the coefficient magnitude spread across roughly
+half of them, so the embedding distributes TRD-relevant information
+broadly rather than concentrating it in a few latent directions. The
+semantic-feature ablation attributed this
 signal predominantly to psychiatric history and medication burden
 rather than to sociodemographic content — a reassuring result both
 clinically and from a fairness standpoint, as it argues against the

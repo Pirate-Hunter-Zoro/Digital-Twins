@@ -58,7 +58,8 @@ def _load_one_patient(patient_args: Tuple[Path, Path, Dict]) -> Dict:
             with open(sliced_path, 'w') as f:
                 json.dump(sliced_json, f, indent=4)
         else:
-            # Record the failure
+            # Record the failure and in case the json file exists for some reason, remove it
+            sliced_path.unlink(missing_ok=True)
             with open(failure_path, 'w') as f:
                 # Just create the dummy file to mark the failure
                 json.dump(sliced_json, f, indent=4)

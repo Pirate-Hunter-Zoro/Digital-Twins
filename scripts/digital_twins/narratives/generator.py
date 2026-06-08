@@ -21,8 +21,6 @@ from scripts.data_loading.load_patient_data import load_patient_data
 
 RECORD_EVERY = 1000
 
-# Now deterministically parsed narratives
-
 def generate_deterministic_narratives():
     """
     Use multiprocessing to generate narratives for all the sampled patients
@@ -41,3 +39,8 @@ def generate_deterministic_narratives():
             if (i + 1) % RECORD_EVERY == 0:
                 print(f"Created {i+1} deterministic narratives...", flush=True)
     pd.DataFrame(narrative_lengths).to_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_pre_anchor_history_days.csv')
+    
+    # Now that cohort is established, remove all narratives belonging to non-cohort patients
+    for p in Path(os.environ['NARRATIVES_DIR']).glob("*.md"):
+        if p.stem not in donor_pool.keys():
+            p.unlink(missing_ok=True)

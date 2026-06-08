@@ -11,27 +11,22 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] Backfill ml_only.sbatch for ALL FOUR embedders so the FEATURE
-      outputs use the categorical-cast fix AND the feature_importance.py
-      artifacts land for every embedder:
-        * bge-en-icl
-        * bge-small-en-v1.5
-        * Qwen-Qwen3-Embedding-4B
-        * Qwen-Qwen3-Embedding-8B
-      Update .env's EMBEDDER_MODEL_NAME between sequential runs. DO NOT
-      parallelize (shared log paths). Smoke test Qwen-Qwen3-Embedding-8B
-      first to validate the feature_importance integration before fanning
-      out to the other three.
+- [ ] Build scripts/digital_twins/predictions/plot_cross_embedder.py for
+      manuscript Figure 6 (currently a [PENDING] placeholder in
+      writeup/manuscript.md). Standalone module, run by hand once all four
+      embedders are backfilled. Two panels across the four encoders, fixed
+      on logistic regression: (A) embedded LR roc_score + asymmetric CI per
+      encoder from each results/{embedder}/.../classical_ml_results_
+      EMBEDDED.json; (B) delta_roc_score for permute_psych_history and
+      permute_med_burden per encoder from each ablation_summary.csv. Use
+      the dash-sanitized results/{embedder}/ dir names verbatim; fail loud
+      if any embedder's results dir is absent. Save to
+      results/cross_embedder_robustness_EMBEDDED.png and repoint the
+      manuscript Figure 6 link once generated.
 
 DATA INTEGRITY
 --------------------------------------------------------------------
-- [ ] Degenerate / near-zero-variance FEATURE columns flagged by the
-      by-dtype summaries: sud_Other Substance is never True (n=0);
-      sdoh_Occupational Exposure (n=1), sdoh_Psychosocial Circumstances
-      (n=1), sud_Inhalant (n=2), sud_Hallucinogen (n=5) carry almost no
-      signal. Decide whether to prune — directly relevant to the
-      EPV >= 10 discussion, since they inflate the FEATURE feature count
-      without contributing. Separately, mdd_to_anchor_days is a near
+- [ ] Feature mdd_to_anchor_days is a near
       point-mass at 0 (median 1, 75th pctl 1); density_mdd_to_anchor_
       days.png is mostly empty whitespace — recode (same-day vs delayed)
       or use a log axis if kept as a diagnostic.
@@ -46,13 +41,70 @@ DATA INTEGRITY
       MaritalStatus and SmokingStatus are effectively clean (<0.5%).
       README item-7 wording corrected alongside this finding.
 
+- [ ] A rejected patient must not survive in ANY downstream store, and if
+      one does the run should fail loudly rather than route around it. The
+      narrative .md and sliced .json are now purged at rejection time, but
+      a patient embedded under an older cohort and then rejected on a later
+      cohort change still leaves its row in that embedder's embeddings.db
+      (forge_embeddings only inserts/skips, never deletes; SCRUB_EMBEDDINGS
+      =0 preserves the stale row) — exactly the orphan that put patient
+      36B87111 into the qwen-8b neighbor pool. Close it at the source:
+      delete the patient's embeddings.db row when the .rejected marker is
+      written, AND/OR assert at the embedding/analysis boundary that
+      embeddings.db membership is a subset of the current cohort and ABORT
+      naming the offender. Do NOT make the retriever silently skip
+      non-cohort IDs — that hides the violation instead of catching it.
+
 - [ ] cohort_investigation.ipynb Tier-2 vitals cell raises
       SettingWithCopyWarning (chained assignment of cutoff_date onto a
       boolean-masked slice of vitals_joined). Assign on an explicit copy
       so a future pandas version does not silently drop the write.
 
-LOWER PRIORITY
---------------
+- [ ] Manuscript representativeness / generalizability note (TRIPOD-AI
+      5a, deferred to write-up; not a bug). The cohort_investigation.ipynb
+      figures establish that the cohort skews old (52.7% are 65+, mean
+      age 62.5) and female (72.8%), and that 28.4% of patients have zero
+      vital rows at any date with in-window vitals missingness of
+      ~63-80%. Document these as representativeness limitations when
+      drafting; the supporting tables/figures already live in
+      notebooks/figures. Also document the missing-data strategy
+      explicitly: NO imputation anywhere — continuous missingness
+      (vitals) is dropped under structural MAR, categorical missingness
+      is retained as an explicit OneHotEncoder indicator level, and the
+      EMBEDDED side carries it as a literal "Missing" token in the
+      narrative. Note that missing-Race patients (n=21) show ~2x TRD
+      prevalence (23.8% vs 10.6% baseline) — the same MAR-correlates-
+      with-outcome pattern flagged for Religion.
+
+- [ ] Backfill ml_only.sbatch for ALL FOUR embedders so the FEATURE
+      outputs use the categorical-cast fix AND the feature_importance.py
+      artifacts land for every embedder:
+        * bge-en-icl
+        * bge-small-en-v1.5
+        * Qwen-Qwen3-Embedding-4B
+        * Qwen-Qwen3-Embedding-8B
+      Update .env's EMBEDDER_MODEL_NAME between sequential runs. DO NOT
+      parallelize (shared log paths). Smoke test Qwen-Qwen3-Embedding-8B
+      first to validate the feature_importance integration before fanning
+      out to the other three.
+
+- [ ] When this work becomes a paper, format to JMIR Mental Health's
+      submission template (TRIPOD-AI prediction-model reporting
+      checklist). Note ahead of writing; no action now. Local
+      reference: TripodAI.pdf at the repo root. Cover letter must
+      cite TRIPOD-AI guideline adherence per JMIR submission
+      requirements. Writeup-time outline (from important.txt, also
+      deferred until manuscript drafting begins): start with the
+      methods section; then organize results (tables, figures);
+      Table 1 describing the population (age, sex, distributions,
+      sociodemographics, TRD vs non-TRD); framing questions
+      include "can we use encoding systems to predict TRD?" and
+      "how much better or worse is this than standard ML / logistic
+      regression on features?".
+
+LOW PRIORITY INVESTIGATIONS
+--------------------------------------------------------------------
+
 - [ ] Investigate bge-small's bimodal cosine-similarity distribution in
       test_data/bge-small.png. Every other embedder's pair-cosine
       distribution is unimodal/normal; bge-small has two clear modes.
@@ -81,33 +133,3 @@ LOWER PRIORITY
           (tau_hat averaged within quartiles of the top-3 SHAP-ranked
           moderators).
         * Save plots with treatment-tagged filenames.
-
-- [ ] When this work becomes a paper, format to JMIR Mental Health's
-      submission template (TRIPOD-AI prediction-model reporting
-      checklist). Note ahead of writing; no action now. Local
-      reference: TripodAI.pdf at the repo root. Cover letter must
-      cite TRIPOD-AI guideline adherence per JMIR submission
-      requirements. Writeup-time outline (from important.txt, also
-      deferred until manuscript drafting begins): start with the
-      methods section; then organize results (tables, figures);
-      Table 1 describing the population (age, sex, distributions,
-      sociodemographics, TRD vs non-TRD); framing questions
-      include "can we use encoding systems to predict TRD?" and
-      "how much better or worse is this than standard ML / logistic
-      regression on features?".
-
-- [ ] Manuscript representativeness / generalizability note (TRIPOD-AI
-      5a, deferred to write-up; not a bug). The cohort_investigation.ipynb
-      figures establish that the cohort skews old (52.7% are 65+, mean
-      age 62.5) and female (72.8%), and that 28.4% of patients have zero
-      vital rows at any date with in-window vitals missingness of
-      ~63-80%. Document these as representativeness limitations when
-      drafting; the supporting tables/figures already live in
-      notebooks/figures. Also document the missing-data strategy
-      explicitly: NO imputation anywhere — continuous missingness
-      (vitals) is dropped under structural MAR, categorical missingness
-      is retained as an explicit OneHotEncoder indicator level, and the
-      EMBEDDED side carries it as a literal "Missing" token in the
-      narrative. Note that missing-Race patients (n=21) show ~2x TRD
-      prevalence (23.8% vs 10.6% baseline) — the same MAR-correlates-
-      with-outcome pattern flagged for Religion.
