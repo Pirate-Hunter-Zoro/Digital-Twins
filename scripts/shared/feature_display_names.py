@@ -3,25 +3,25 @@ from typing import Iterable
 
 RAW_TO_DISPLAY: dict[str, str] = {
     # Numeric block (passed through StandardScaler verbatim; vitals dropped at load_data_set time)
-    "mdd_to_anchor_days":     "Duration of MDD history prior to index",                           # numeric
-    "num_encounters":         "Number of encounters",                                             # numeric
-    "pre_anchor_history_days": "Duration of encounter history",                                   # numeric
-    "AgeInYears":             "Age (years)",                                                      # numeric
-    "benzo_days_coverage":    "Anxiolytic treatment days prior to index",                         # numeric
-    "polypharmacy_count":     "Number of medications active at index",                            # numeric
-    "nsaid_count":            "Number of anti-inflammatory medications active at index",          # numeric
-    "hypnotics_burden":       "Number of sleep medications active at index",                      # numeric
-    "in_patient_days":        "Total number of in-patient days prior to index",                   # numeric
-    "num_emergency":          "Total number of ED visits",                                        # numeric
-    "trials_BUPROPION":       "Number of Bupropion trials lasting at least six weeks",    # numeric
-    "trials_MIRTAZAPINE":     "Number of Mirtazapine trials lasting at least six weeks",  # numeric
-    "trials_SNRI":            "Number of SNRI trials lasting at least six weeks",         # numeric
-    "trials_SSRI":            "Number of SSRI trials lasting at least six weeks",         # numeric
-    "trials_VORTIOXETINE":    "Number of Vortioxetine trials lasting at least six weeks", # numeric
+    "mdd_to_anchor_days":     "MDD history before index (days)",    # numeric
+    "num_encounters":         "Encounter count",                    # numeric
+    "pre_anchor_history_days": "History length (days)",             # numeric
+    "AgeInYears":             "Age (years)",                        # numeric
+    "benzo_days_coverage":    "Anxiolytic days before index",       # numeric
+    "polypharmacy_count":     "Medications active at index",        # numeric
+    "nsaid_count":            "Anti-inflammatories active at index", # numeric
+    "hypnotics_burden":       "Sleep meds active at index",         # numeric
+    "in_patient_days":        "Inpatient days before index",        # numeric
+    "num_emergency":          "ED visits (count)",                  # numeric
+    "trials_BUPROPION":       "Bupropion trials (6+ wk)",           # numeric
+    "trials_MIRTAZAPINE":     "Mirtazapine trials (6+ wk)",         # numeric
+    "trials_SNRI":            "SNRI trials (6+ wk)",                # numeric
+    "trials_SSRI":            "SSRI trials (6+ wk)",                # numeric
+    "trials_VORTIOXETINE":    "Vortioxetine trials (6+ wk)",        # numeric
     # Bool block (single-flag and multi-label indicators; passed through as int8)
-    "mdd_within_window":                       "MDD diagnosed in history",       # boolean
-    "suicide_flag":                            "Suicidality flagged",            # boolean
-    "augmentation_occured":                    "Augmentation therapy used",      # boolean
+    "mdd_within_window":                       "MDD in history",     # boolean
+    "suicide_flag":                            "Suicidality",        # boolean
+    "augmentation_occured":                    "Augmentation therapy", # boolean
     # Psychiatric comorbidities
     "psych_ADJUSTMENT_DISORDER":               "Adjustment disorder",            # boolean
     "psych_ANXIETY":                           "Anxiety disorder",               # boolean
@@ -37,8 +37,8 @@ RAW_TO_DISPLAY: dict[str, str] = {
     "medical_HYPERLIPIDEMIA":                  "High cholesterol",               # boolean
     "medical_THYROID":                         "Thyroid disorder",               # boolean
     # Safety
-    "safety_EPILEPSY":                         "Comorbid seizure disorder",          # boolean
-    "safety_UNCONTROLLED_HTN":                 "Comorbid uncontrolled hypertension", # boolean
+    "safety_EPILEPSY":                         "Seizure disorder",          # boolean
+    "safety_UNCONTROLLED_HTN":                 "Uncontrolled hypertension", # boolean
     # Substance use disorder by substance
     "sud_Alcohol":                             "Alcohol use disorder",           # boolean
     "sud_Cannabis":                            "Cannabis use disorder",          # boolean
@@ -59,16 +59,15 @@ RAW_TO_DISPLAY: dict[str, str] = {
     "sdoh_Primary Support Group/Family":       "Family/support group issue",     # boolean
     "sdoh_Psychosocial Circumstances":         "Psychosocial circumstances",     # boolean
     "sdoh_Social Environment":                 "Social environment issue",       # boolean
-    "sdoh_Upbringing":                         "Upbringing-related issue",       # boolean
+    "sdoh_Upbringing":                         "Upbringing issue",               # boolean
     # Categorical one-hot block (OneHotEncoder(drop='if_binary', handle_unknown='ignore'))
     # Binary: Sex (drops reference 'Female', keeps 'Male'); other categories keep all levels.
     "Sex_Male":                                          "Sex: Male",      # one-hot
-    "Sex_Female":                                        "Sex: Female",    # one-hot
-    "PreferredLanguage_Asian and Pacific Island":        "Preferred language: Asian/Pacific Islander",  # one-hot
-    "PreferredLanguage_English Only":                    "Preferred language: English",                 # one-hot
-    "PreferredLanguage_Other":                           "Preferred language: Other",                   # one-hot
-    "PreferredLanguage_Other Indo-European":             "Preferred language: Other Indo-European",     # one-hot
-    "PreferredLanguage_Spanish":                         "Preferred language: Spanish",                 # one-hot
+    "PreferredLanguage_Asian and Pacific Island":        "Language: Asian/Pacific Islander",  # one-hot
+    "PreferredLanguage_English Only":                    "Language: English",                 # one-hot
+    "PreferredLanguage_Other":                           "Language: Other",                   # one-hot
+    "PreferredLanguage_Other Indo-European":             "Language: Other Indo-European",     # one-hot
+    "PreferredLanguage_Spanish":                         "Language: Spanish",                 # one-hot
     "MaritalStatus_Divorced":                            "Marital status: Divorced",      # one-hot
     "MaritalStatus_Never Married":                       "Marital status: Never married", # one-hot
     "MaritalStatus_Now Married":                         "Marital status: Married",       # one-hot
@@ -90,6 +89,9 @@ RAW_TO_DISPLAY: dict[str, str] = {
     "Race_Ethnicity_Native Hawaiian or Other Pacific Islander": "Race/Ethnicity: Native Hawaiian/Pacific Islander", # one-hot
     "Race_Ethnicity_White or Caucasian":                 "Race/Ethnicity: White/Caucasian",                    # one-hot
     # MDD recurrence and severity (per diagnoses_definitions.py; not in categorical_levels.json)
+    # Blank recurrence level (get_mdd_components emits "") is labeled Unspecified at the display
+    # boundary only — the source field is left as-is to preserve the existing embedding cache.
+    "mdd_recurrence_":                                   "MDD recurrence: Unspecified",                  # one-hot
     "mdd_recurrence_Single Episode":                     "MDD recurrence: Single episode",               # one-hot
     "mdd_recurrence_Recurrent":                          "MDD recurrence: Recurrent",                    # one-hot
     "mdd_recurrence_Dysthymia":                          "MDD recurrence: Dysthymia (chronic depression)", # one-hot

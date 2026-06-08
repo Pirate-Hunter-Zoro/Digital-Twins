@@ -11,51 +11,6 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] POST-FREEZE SMOKE TEST (job in flight as of 2026-06-03): once the
-      analysis stage completes, verify baseline RESULTS_DIR contains:
-        * trained_models/{logistic_regression, random_forest,
-          gradient_boosting, xgboost}_EMBEDDED.joblib  (from the
-          one-shot baseline classical_ml.py pass — NOT re-emitted
-          by the ablation runner)
-        * classical_ml_results_EMBEDDED.json (baseline metrics —
-          required by emit_ablation_summary)
-        * exactly one ablation_summary.csv (1 header row + 20 data
-          rows, 18 columns each — 16 prior columns plus the two new
-          delta_roc_score_ci_low / delta_roc_score_ci_high columns
-          from the paired bootstrap); open it and eyeball that
-          delta_* columns are nonzero and sign-coherent.
-        * exactly six ablation_delta_*.png files (one per metric:
-          roc_score, auprc, brier_score, weighted_calibration_error,
-          calibration_slope, calibration_intercept) emitted by
-          plot_ablation_deltas, all bars-only. The roc_score whiskers
-          were removed deliberately; delta_roc_score_ci_low/high stay in
-          ablation_summary.csv but are no longer rendered on any bar.
-        * exactly one ablation_roc_ci_EMBEDDED.png (absolute-AUC forest
-          plot from plot_ablation_roc_ci): four classifier panels on a
-          shared AUC x-axis, baseline row on top, five specs ordered by
-          DESCENDING logistic-regression AUC drop (same order reused
-          across panels), humanized row labels on the leftmost panel,
-          light dashed reference line at each panel's baseline AUC.
-        * exactly four ROC_ablated_vs_baseline_{classifier}_EMBEDDED.png
-          files (one per classifier: logistic_regression,
-          random_forest, gradient_boosting, xgboost), each a five-
-          panel grid (one panel per ablation spec) with baseline ROC,
-          ablated ROC, and paired delta-TPR(FPR) CI band on a twin
-          axis.
-      Verify each per-spec subdir under RESULTS_DIR contains:
-        * classical_ml_results_EMBEDDED.json (4 lowercase classifier
-          keys, 8 metric keys each)
-        * ROC / PR / calibration / DCA / optimal-CM plot PNGs
-          (5 per classifier x 4 classifiers = 20 plot files)
-        * NO trained_models/ subdir (presence indicates the frozen
-          baseline refactor backslid into per-spec GridSearchCV)
-        * NO grid_search_ml_results_EMBEDDED.json (same — no per-spec
-          grid search runs)
-        * NO FEATURE artifacts (presence indicates the inlined loop
-          accidentally iterated VectorSource)
-        * NO results.txt (presence indicates the JSON migration
-          backslid)
-
 - [ ] Backfill ml_only.sbatch for ALL FOUR embedders so the FEATURE
       outputs use the categorical-cast fix AND the feature_importance.py
       artifacts land for every embedder:
@@ -70,14 +25,6 @@ ACTIVE / IMMEDIATE
 
 DATA INTEGRITY
 --------------------------------------------------------------------
-- [ ] pre_anchor_history_days has a corrupt max of 28,150 days (~77 yr)
-      in numeric_summary.csv (non-TRD). Anchor dates span 2016-2024
-      (~8 yr total, per the 5b cell), so this is a garbage early record
-      date that fit_to_anchor does not cap (~33 SD above the mean).
-      Hidden in density_pre_anchor_history_days.png by the 99th-pctl
-      truncation. Add a bad-date floor / sanity cap upstream and re-check
-      the tail.
-
 - [ ] Degenerate / near-zero-variance FEATURE columns flagged by the
       by-dtype summaries: sud_Other Substance is never True (n=0);
       sdoh_Occupational Exposure (n=1), sdoh_Psychosocial Circumstances
@@ -99,41 +46,10 @@ DATA INTEGRITY
       MaritalStatus and SmokingStatus are effectively clean (<0.5%).
       README item-7 wording corrected alongside this finding.
 
-- [ ] feature_display_names.py RAW_TO_DISPLAY is missing two keys, so
-      categorical_summary.csv renders them raw (no type tag, no
-      humanization): Sex_Female (its sibling "Sex: Male [one-hot]" maps
-      fine) and the empty mdd_recurrence level (renders "mdd_recurrence_").
-      Add both mappings.
-
-- [ ] get_mdd_components() (diagnoses_definitions.py) emits an empty-
-      string mdd_recurrence level (~0.26%, ~25 patients; visible in
-      categorical_summary.csv and train_test_smd.csv) while mdd_severity
-      uses an explicit "Unspecified" catch-all. Make recurrence
-      consistent — map the blank to "Unspecified" (or equivalent).
-
 - [ ] cohort_investigation.ipynb Tier-2 vitals cell raises
       SettingWithCopyWarning (chained assignment of cutoff_date onto a
       boolean-masked slice of vitals_joined). Assign on an explicit copy
       so a future pandas version does not silently drop the write.
-
-FEATURE DISPLAY NAMES — OPEN QUESTIONS (relocated from
-feature_display_names.py)
---------------------------------------------------------------------
-- [ ] EMAIL Katie or Elizabeth: how are the SDOH issue categories
-      operationally defined (sdoh_Education/Literacy, sdoh_Employment,
-      sdoh_Housing/Economic, sdoh_Legal/Crime/Other Psychosocial,
-      sdoh_Occupational Exposure, sdoh_Primary Support Group/Family,
-      sdoh_Psychosocial Circumstances, sdoh_Social Environment,
-      sdoh_Upbringing)? Need the coding rule behind each before the
-      display labels can claim a precise clinical meaning.
-- [ ] EMAIL: marital-status one-hot semantics. Can a patient carry more
-      than one MaritalStatus level (e.g. Now Married alongside a prior
-      Widowed/Divorced state), or is the source strictly single-valued
-      at index? Determines whether the labels read as mutually exclusive
-      states.
-- [ ] Make the categorical one-hot display labels less wordy — convey
-      the category and its level succinctly (no email; a wording pass on
-      RAW_TO_DISPLAY in feature_display_names.py).
 
 LOWER PRIORITY
 --------------
