@@ -15,7 +15,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
-from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
+from scripts.digital_twins.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
 from scripts.shared.utils import load_neighborhood_data
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
@@ -119,6 +119,9 @@ def plot_agreement_curves(agreement_df: pd.DataFrame, neighbor_scheme: str):
     plt.close()
 
 def run_trd_ranking_analysis():
+    if int(os.environ['COMPUTE_LLM_SIMILARITY']) == 0:
+        return
+    
     predictor = TRDPredictor() 
     results_df = load_neighborhood_data()
     results_df['anchor_trd_label'] = results_df['anchor_patient_id'].apply(predictor.get_trd_status)
@@ -126,7 +129,9 @@ def run_trd_ranking_analysis():
     results_df = results_df[results_df['anchor_patient_id'] != results_df['neighbor_patient_id']]
     
     k_values = [5, 10, 25, 50]
-    for scheme in NeighborScheme:
+    # Create the strategies necessary per the .env flags
+    
+    for scheme in RELEVANT_NEIGHBOR_SCHEMES:
         # Find TRD agreement of anchor patient with nearby neighbors
         filtered_df = results_df[results_df['neighbor_scheme'] == scheme.name]
         agreement_df = agreement(results_df=filtered_df, k_values=k_values)  

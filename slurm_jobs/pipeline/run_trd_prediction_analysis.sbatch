@@ -32,7 +32,11 @@ fi
 set -a; source "${ENV_FILE}"; set +a
 
 python -m scripts.digital_twins.embeddings.embedding_audit
-python -m scripts.digital_twins.neighbors.llm_similarity_audit
+
+if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
+  python -m scripts.digital_twins.neighbors.llm_similarity_audit
+fi
+
 python -m scripts.digital_twins.predictions.analyze_trd_prediction
 python -m scripts.digital_twins.predictions.classical_ml
 python -m scripts.digital_twins.predictions.feature_importance

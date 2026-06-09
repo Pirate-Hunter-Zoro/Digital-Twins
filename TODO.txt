@@ -11,46 +11,6 @@ completion. Preserve this NOTE block on every edit.
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] Add a COMPUTE_LLM_SIMILARITY (0/1) .env flag that suppresses the
-      expensive LLM neighbor judgement while KEEPING the cheap
-      cosine/uniform neighbor predictions. Read with the existing
-      int(os.environ[...]) == 1 idiom; safe default = anything other than
-      the on-value means off; document in README Configuration beside the
-      SCRUB_* entries. Gate it across SIX consumers in lockstep (changing
-      only the first two leaves the off-path crashing on the LLM branch):
-        1. trd_predictor.py — read the flag in TRDPredictor.__init__ and
-           pass it as Scorer's require_client arg (off-path never builds
-           VllmClient). In construct_neighborhood_data, when off do NOT
-           call scorer.judge; set llm_sim to float('nan') and bypass the
-           `if llm_sim == {}: continue` failed-judge skip so the neighbor
-           is still kept with its cosine_sim/neighbor_trd_label/rank_cosine.
-        2. trd_prediction_computation.py — in run_trd_prediction_computation
-           iterate a strategy LIST (all four when on; UNIFORM+COSINE only
-           when off) instead of `for strat in WeightingStrategy`. Leave
-           calculated_weighted_risk untouched — trimming upstream keeps its
-           LLM/COMBINED branches (notna filter -> empty -> weight_sum 0 ->
-           ValueError) from ever being entered.
-        3. trd_binning_analysis.py line 149 — same strategy-list trim,
-           same flag, in lockstep with #2.
-        4. trd_ranking_analysis.py — entirely a Cosine-vs-LLM comparison
-           (sorts by llm_sim, homophily curves, cos-vs-llm Spearman);
-           all-NaN llm_sim breaks its notna/groupby. Gate the whole thing
-           off (nothing cosine-only to salvage).
-        5. analyze_trd_prediction.py — wrap the run_trd_ranking_analysis()
-           call behind the flag. run_trd_prediction_computation,
-           run_trd_bin_analysis, run_trd_sanity_checks stay unconditional
-           (trd_sanity_checks touches neither WeightingStrategy nor llm_sim).
-        6. run_trd_prediction_analysis.sbatch — gate the
-           llm_similarity_audit invocation behind the flag (no judgements
-           written -> nothing to sample). Other five Python steps stay.
-      Orchestration: prediction pipeline + analysis still run (they produce
-      the cosine/uniform CSVs). Only skip the VLLM_JOB_ID submission, both
-      vLLM-reachability while loops, and the VLLM_KILL_JOB_ID stub in
-      trd_prediction_orchestrator.sbatch when off (no judge -> no GPU
-      server, the real saving). Source .env near the top of the
-      orchestrator so the flag is read before the vLLM block. Prediction
-      and analysis submissions and their dependency edges stay as-is.
-
 - [ ] Run scripts/digital_twins/predictions/plot_cross_embedder.py by hand
       once all four embedders are backfilled, then repoint manuscript
       Figure 6. The script is built: standalone (no Slurm), two panels

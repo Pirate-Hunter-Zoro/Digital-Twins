@@ -16,8 +16,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
-from scripts.digital_twins.predictions.weighting_strategy import WeightingStrategy
-from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
+from scripts.digital_twins.predictions.weighting_strategy import WeightingStrategy, RELEVANT_WEIGHTING_STRATS
+from scripts.digital_twins.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
 from scripts.shared.plots import (
     plot_receiving_operator_characteristic,
     plot_precision_recall,
@@ -153,12 +153,13 @@ def run_trd_prediction_computation():
         for patient_id in anchor_ids
     }
     
+    
     # Run the battle
     results = {}
     # Store for each mode and strategy the TRD predictions of each anchor patient
     raw_predictions = [] 
-    for scheme, current_df in [(mode, df[df['neighbor_scheme'] == mode.name]) for mode in NeighborScheme]:
-        for strat in WeightingStrategy:
+    for scheme, current_df in [(mode, df[df['neighbor_scheme'] == mode.name]) for mode in RELEVANT_NEIGHBOR_SCHEMES]:
+        for strat in RELEVANT_WEIGHTING_STRATS:
             print(f"Running analysis for weighting strategy: {scheme.name}_{strat.name}...", flush=True)
             grouped_by_anchor_patient = current_df.groupby('anchor_patient_id')
             labels = []

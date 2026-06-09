@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.shared.utils import load_neighborhood_data
-from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
-from scripts.digital_twins.predictions.weighting_strategy import WeightingStrategy
+from scripts.digital_twins.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
+from scripts.digital_twins.predictions.weighting_strategy import RELEVANT_WEIGHTING_STRATS
 
 def load_and_merge_data() -> pd.DataFrame:
     """Loads the neighbor data for each anchor patient, as well as the evaluation results for each anchor patient and merges them into a single array
@@ -145,8 +145,9 @@ def plot_bin_impact(
     
     Saves the plot to output_path.
     """
-    for scheme in NeighborScheme:
-        for strat in WeightingStrategy:
+    
+    for scheme in RELEVANT_NEIGHBOR_SCHEMES:
+        for strat in RELEVANT_WEIGHTING_STRATS:
             # Set up graph and filter performance summary according to strategy
             fig, ax1 = plt.subplots(figsize=(10,6))
             ax2 = ax1.twinx() # Share x axis

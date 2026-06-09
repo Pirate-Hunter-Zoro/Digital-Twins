@@ -164,9 +164,9 @@ graph TD
   * Loads neighborhood CSV data (embedding source only) and computes weighted TRD risk predictions.
   * **Digital Twin Matcher Logic**:
       1. Groups neighbors by anchor patient.
-      2. Scores neighbors via weighting strategies (Uniform, Cosine, LLM, Combined (Harmonic Mean of Cosine and LLM)).
+      2. Scores neighbors via the weighting strategies in `RELEVANT_WEIGHTING_STRATS` (Uniform, Cosine, and — only when `COMPUTE_LLM_SIMILARITY=1` — LLM and Combined (Harmonic Mean of Cosine and LLM)).
       3. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$).
-  * **Multi-Stream Evaluation**: Processes across all four retrieval schemes (**Nearest**, **Farthest**, **Random**, and **Subsampled**) to isolate the true predictive lift of the vector space against varied baselines.
+  * **Multi-Stream Evaluation**: Processes across the retrieval schemes in `RELEVANT_NEIGHBOR_SCHEMES` (**Nearest** and **Random** always; **Farthest** and **Subsampled** gated by `NEIGHBOR_FARTHEST` / `NEIGHBOR_SUBSAMPLE`) to isolate the true predictive lift of the vector space against varied baselines.
   * **Analysis & Metrics**:
     * **Discrimination**: ROC AUC (with bootstrapped 95% CI bands; numeric CI bounds emitted as `roc_score_ci_low` / `roc_score_ci_high` alongside the point estimate in `knn_results.json` and `summary.csv`), AUPRC.
     * **Calibration**: Brier Score, **Weighted ECE**, **Calibration Slope & Intercept**.
@@ -332,6 +332,14 @@ The pipeline requires a `.env` file. Below are the standard configurations:
 * `SCRUB_FEATURE_VECTORS`: 0 (Flag to force recreation of the feature vector DataFrame and `categorical_levels.json`).
 * `SCRUB_EMBEDDINGS`: 0 (Flag to force re-computation of embedded vectors).
 * `SCRUB_TRAINED_MODELS`: 0 (Flag to force retraining of the classical-ML grid searches and PCA-K sweep pipelines. When `0`, cached fitted estimators under `RESULTS_DIR/trained_models/` and `RESULTS_DIR/trained_models_pca/` are reused; when `1`, they are ignored and overwritten on the next fit. Makes `ml_only.sbatch` re-runs cheap when an unrelated bug downstream of training kills the job).
+
+### Neighbor-Weighted Pipeline Scope
+
+These three `0`/`1` flags scope what the neighbor-weighted KNN pipeline computes. All three read with the `int(os.environ[...]) == 1` idiom; any value other than the on-value means off. They are independent of the classical-ML pipeline, which never touches retrieval schemes or LLM judgement.
+
+* `COMPUTE_LLM_SIMILARITY`: 0 (Gate for the expensive LLM neighbor judgement. When `1`, the vLLM server is launched, each neighbor pair is scored by the LLM judge, and the **LLM** and **Combined** weighting strategies plus the ranking/homophily analysis (`trd_ranking_analysis`) are computed. When `0`, no vLLM server is started — `trd_prediction_orchestrator.sbatch` skips the server submission, both reachability loops, and the kill stub, and `run_trd_prediction_analysis.sbatch` skips `llm_similarity_audit` — neighbors are retained with a placeholder LLM similarity, and only the **Uniform** and **Cosine** strategies are evaluated. The single source of truth for the strategy trim is `RELEVANT_WEIGHTING_STRATS` in `weighting_strategy.py`).
+* `NEIGHBOR_FARTHEST`: 0 (When `0`, the **Farthest** retrieval scheme is dropped from neighborhood construction (`run_neighborhood_constructor.py`) and every downstream analysis).
+* `NEIGHBOR_SUBSAMPLE`: 0 (When `0`, the **Subsampled** retrieval scheme is dropped from neighborhood construction and every downstream analysis. The single source of truth for the scheme trim is `RELEVANT_NEIGHBOR_SCHEMES` in `neighbor_scheme.py`, consumed by the constructor and every downstream analysis script).
 
 ### Data Paths
 

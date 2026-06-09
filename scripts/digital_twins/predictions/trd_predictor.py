@@ -18,7 +18,8 @@ class TRDPredictor:
             save_time_hist (bool, optional): Boolean for whether or not to create the time histogram. Defaults to True.
         """
         self.retriever = Retriever(exclude_ids=exclude_ids, save_time_hist=save_time_hist)
-        self.scorer = Scorer(save_time_hist=save_time_hist)
+        self.judge_sims = int(os.environ['COMPUTE_LLM_SIMILARITY'])==1 
+        self.scorer = Scorer(require_client=self.judge_sims, save_time_hist=save_time_hist)
         self.trd_set = set()
         trd_file = Path(os.environ['TRD_LIST_PATH'])
         self.trd_set = set([l.strip('"') for l in trd_file.read_text().splitlines()])
@@ -56,15 +57,18 @@ class TRDPredictor:
         
         neighborhood_data = []
         for idx, (neighbor_id, score) in enumerate(neighbors):
-            neighbor_narrative = self.retriever.get_narrative(id=neighbor_id)
-            llm_sim = self.scorer.judge(index_narrative=index_narrative, 
-                                        candidate_narrative=neighbor_narrative, 
-                                        index_id=index_id, 
-                                        candidate_id=neighbor_id)
-            if llm_sim == {}:
-                continue # This neighbor won't count
-            else:
-                llm_sim = llm_sim['overall_similarity']
+            # Judge LLM similarity if we are doing so
+            llm_sim = float('nan')
+            if self.judge_sims:
+                neighbor_narrative = self.retriever.get_narrative(id=neighbor_id)
+                llm_sim = self.scorer.judge(index_narrative=index_narrative, 
+                                            candidate_narrative=neighbor_narrative, 
+                                            index_id=index_id, 
+                                            candidate_id=neighbor_id)
+                if llm_sim == {}:
+                    continue # This neighbor won't count
+                else:
+                    llm_sim = llm_sim['overall_similarity']
             # Flag for if this neighbor is trd
             neighbor_trd_flag = self.get_trd_status(candidate_patient_id=neighbor_id)
             neighborhood_data.append({
