@@ -31,16 +31,15 @@ def generate_deterministic_narratives():
     pairings = build_pairings(list(donor_pool.keys()))
     set_donor_pool(donor_pool)
     set_pairings(pairings)
-    narrative_lengths = {'patient_id': [], 'pre_anchor_history_days': []}
-    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as thread_pool:
-        for i, (patient_id, history_length) in enumerate(thread_pool.imap_unordered(generate_deterministic_narrative, sliced_jsons)):
-            narrative_lengths['patient_id'].append(patient_id)
-            narrative_lengths['pre_anchor_history_days'].append(history_length)
-            if (i + 1) % RECORD_EVERY == 0:
-                print(f"Created {i+1} deterministic narratives...", flush=True)
-    pd.DataFrame(narrative_lengths).to_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_pre_anchor_history_days.csv')
-    
     # Now that cohort is established, remove all narratives belonging to non-cohort patients
     for p in Path(os.environ['NARRATIVES_DIR']).glob("*.md"):
         if p.stem not in donor_pool.keys():
             p.unlink(missing_ok=True)
+    
+    narrative_lengths = {'patient_id': [j['patient_id'] for j in sliced_jsons], 'pre_anchor_history_days': [j['pre_anchor_history_days'] for j in sliced_jsons]}
+    pd.DataFrame(narrative_lengths).to_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_pre_anchor_history_days.csv')
+    
+    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as thread_pool:
+        for i, _ in enumerate(thread_pool.imap_unordered(generate_deterministic_narrative, sliced_jsons)):
+            if (i + 1) % RECORD_EVERY == 0:
+                print(f"Created {i+1} deterministic narratives...", flush=True)

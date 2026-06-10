@@ -66,7 +66,7 @@ The foundation. These scripts ingest raw EHR exports and structure them into usa
 
 Transforms the structured JSONs into textual narratives.
 
-* **`generator.py`**: Iterates through the cohort, applies the `deterministic_narrative` logic, and saves `.md` files to the `NARRATIVES_DIR`. After generation it reconciles `NARRATIVES_DIR` against the current cohort, deleting any top-level `.md` whose patient is no longer in the cohort so a downstream embedding pass cannot pick up an orphaned narrative (per-spec ablation subdirectories are left untouched).
+* **`generator.py`**: Iterates through the cohort, applies the `deterministic_narrative` logic, and saves `.md` files to the `NARRATIVES_DIR`. Reconciliation runs **before** generation, not after: once the cohort is established it deletes any top-level `.md` whose patient is no longer in the cohort (per-spec ablation subdirectories are left untouched), then writes the pre-anchor history-length CSV (`narrative_pre_anchor_history_days.csv` in `ARTIFACTS_DIR`) directly from the cohort's sliced JSONs — both steps complete before the multiprocessing pool writes a single narrative. Ordering it this way keeps the on-disk narrative set a subset of the cohort and the length CSV a full cover of the cohort at all times, so even an interrupted generation run cannot leave the downstream embedding pass an orphaned narrative or one missing its length row (the `KeyError` source in `patient_embedder.embed`). The pool loop now only drives `.md` generation and progress logging; the CSV no longer depends on its return values.
 * **`runner.py`**: Orchestrates the generation job via Slurm.
 
 ### 2b. Stage 1b: Feature Vector Generation (`scripts/digital_twins/vectors`)
