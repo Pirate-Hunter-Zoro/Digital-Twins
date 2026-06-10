@@ -65,7 +65,7 @@ if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
 fi
 
 echo "Launching the prediction pipeline..."
-PREDICTION_JOB_ID=$(sbatch --parsable slurm_jobs/pipeline/run_trd_prediction_pipeline.sbatch)
+PREDICTION_JOB_ID=$(sbatch --parsable --dependency=afterok:$EMBEDDING_JOB_ID slurm_jobs/pipeline/run_trd_prediction_pipeline.sbatch)
 echo "scancel ${PREDICTION_JOB_ID} # Prediction Pipeline" >> "${CANCEL_SCRIPT}"
 
 if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
