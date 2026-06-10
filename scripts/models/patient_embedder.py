@@ -55,6 +55,26 @@ CREATE TABLE IF NOT EXISTS embeddings (
         # Whether vectors are to be scrubbed and recomputing
         self.scrub_embeddings = int(os.environ['SCRUB_EMBEDDINGS']) == 1
 
+    def purge_orphans(self, valid_ids: set[str]) -> set[str]:
+        """Delete all embeddings in the database which do not pertain to IDs in the valid input set
+
+        Args:
+            valid_ids (set[str]): Set of valid IDs
+
+        Returns:
+            set[str]: Resulting deleted IDs
+        """
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT patient_id FROM embeddings")
+        
+        rows = cursor.fetchall()
+        all_ids = set([row[0] for row in rows])
+        invalid = all_ids - valid_ids
+        for orphan in invalid:
+            cursor.execute("DELETE FROM embeddings WHERE patient_id=?", (orphan,))
+        self.connection.commit()
+        return invalid
+
     def embed(self, patients: tuple[list[str], list[str]]) -> List[np.ndarray]:
         """
         Generates normalized vector embeddings for a batch of texts using a simple .encode() call.

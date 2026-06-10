@@ -16,7 +16,10 @@ def forge():
     else:
         embedder = PatientEmbedder()
         # Embed all of our narratives
-        narrative_files = narratives_dir.glob("*.md")
+        narrative_files = list(narratives_dir.glob("*.md"))
+        valid_ids = set([p.stem for p in narrative_files])
+        for deleted_id in embedder.purge_orphans(valid_ids):
+            print(f"Deleted orphan patient {deleted_id} from embedding database...", flush=True)
         batch_size = int(os.environ['EMBEDDER_BATCH_SIZE'])
         current_narrative_batch = []
         current_patient_id_batch = []

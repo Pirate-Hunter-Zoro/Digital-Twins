@@ -29,11 +29,14 @@ SELECT patient_id, embedding, chronological_length FROM embeddings
         )
         # List of tuples - (id string of narrative, vector in bytes)
         self.patient_tuples = self.cursor.fetchall()
+        existing_narratives = set([p.stem for p in Path(os.environ['NARRATIVES_DIR']).glob("*.md")])
         
         self.ids = []
         vectors = []
         self.chronological_lengths = []
         for row in self.patient_tuples:
+            if row[0] not in existing_narratives:
+                raise ValueError(f"Patient with id {row[0]} has no existing narrative but does have an embedding entry...")
             if row[0] not in exclude_ids:
                 self.ids.append(row[0])
                 # Load the vector by deserializing from the BLOB column

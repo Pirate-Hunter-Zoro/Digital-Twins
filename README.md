@@ -82,9 +82,10 @@ Converts text narratives into high-dimensional vectors using the `PatientEmbedde
 
 * **`forge_embeddings.py`**: The main driver.
 
-1. Reads `.md` files from Stage 1.
-2. Batches them.
-3. Feeds them to the `PatientEmbedder` to generate embeddings.
+1. Reads `.md` files from Stage 1 and collects their patient IDs (the current cohort's narrative stems).
+2. Reconciles `embeddings.db` against that ID set via `PatientEmbedder.purge_orphans` **before** embedding, deleting any row whose patient is no longer a current narrative and logging each purged ID. This closes the accepted→rejected orphan that `INSERT OR REPLACE` alone (with `SCRUB_EMBEDDINGS=0`) would otherwise preserve — the row that put a non-cohort patient into the qwen-8b neighbor pool. Runs unconditionally, including on an all-cached pass.
+3. Batches the narratives.
+4. Feeds them to the `PatientEmbedder` to generate embeddings.
 
 * **`forge_ablated_embeddings.py`**: Per-spec embedding regen for the Semantic-Feature Ablation Study (see Planned Extensions). Invoked in `run_embedding_pipeline.sbatch` immediately after `forge_embeddings`. Captures the baseline `NARRATIVES_DIR` and `EMBEDDINGS_DIR` once, then iterates `ABLATIONS`: per spec it env-mutates both to per-spec subdirs (`{NARRATIVES_DIR,EMBEDDINGS_DIR}/{spec_id}/`) and fires `forge_embeddings` as a fresh subprocess. A new interpreter per spec is required because `PatientEmbedder.__init__` snapshots `EMBEDDINGS_DIR` at construction time; the resulting per-spec `embeddings.db` files are what `ablation_runner.py` consumes downstream in `ml_only.sbatch`.
 
@@ -104,6 +105,7 @@ Finds and scores patient similarity on the embedded vectors.
 * **`retriever.py`**:
   * Accepts an `exclude_ids` set at initialization. Embedded-only — cosine similarity is not defined over mixed categorical/numeric features, so the feature-vector retrieval path has been removed.
   * Loads patient IDs, embeddings, and pre-anchor history lengths from `embeddings.db`.
+  * Asserts at load that every `embeddings.db` `patient_id` is a current narrative stem under `NARRATIVES_DIR`; a row with no live narrative raises `ValueError` naming the offender rather than being silently skipped — the analysis-boundary half of the orphan guard. The check runs over the full DB before the `exclude_ids` filter, so legitimately-excluded test patients do not trip it.
   * Patients in `exclude_ids` are filtered out of the in-memory search arrays during initialization, ensuring test patients never appear as neighbors.
   * Performs fast cosine similarity search to find candidates using four distinct retrieval modes:
     * **Nearest**: Finds the top-K closest vectors by cosine similarity.
@@ -233,6 +235,7 @@ Interfaces for the neural networks.
 * **Storage**: Manages a SQLite connection to `embeddings.db`.
 * **Logic**: Checks the DB for existing IDs. If missing, computes the embedding and inserts it as a binary BLOB.
 * **Scrubbing**: Respects `SCRUB_EMBEDDINGS` env var to force re-computation.
+* **Orphan purge**: `purge_orphans(valid_ids)` deletes every `embeddings.db` row whose `patient_id` is absent from the supplied valid-ID set (the current narrative stems), commits, and returns the deleted IDs. Called by `forge_embeddings` before each embedding pass so a patient embedded under an older cohort and later rejected cannot survive as a stale row — the source-side half of the orphan guard.
 * **`vllm_client.py`**: Client for interacting with the vLLM inference server (for LLM-based narrative generation or scoring).
 
 ### 7. Shared Utilities (`scripts/shared`)
