@@ -13,13 +13,13 @@ SCH_PATH = DATA_DIR / 'SCH_IDs.csv'
 OUTPUT_CSV = Path(os.environ['COHORT_PATH'])
 
 def extract_ids(file_path: Path) -> set[str]:
-    """
-    Docstring for extract_ids
-    
-    :param file_path: Location of 'csv' file to read
-    :type file_path: Path
-    :return: All patient IDs associated with said file
-    :rtype: set[str]
+    """Given a file path with patient IDs present in it, extract them all in a set
+
+    Args:
+        file_path (Path): _description_
+
+    Returns:
+        set[str]: _description_
     """
     df = pd.read_csv(file_path, escapechar='\\', low_memory=False, header=None)
     return set(df.iloc[:, 0].astype(str))
