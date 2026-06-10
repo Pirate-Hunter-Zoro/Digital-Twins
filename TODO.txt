@@ -9,13 +9,6 @@ completion. Preserve this NOTE block on every edit.
 
 TOP PRIORITY — ACTIVE WORK
 --------------------------------------------------------------------
-- [ ] Rotate the cross-embedder robustness figure
-      (plot_cross_embedder.py) 90 degrees: draw both panels as HORIZONTAL
-      errorbars with the four encoders stacked down the y-axis (models read
-      top-to-bottom), instead of across the x-axis. The code edit can land
-      now; the figure itself only regenerates once the 4-embedder backfill
-      (DATA INTEGRITY) has produced each encoder's results.
-
 - [ ] Feature mdd_to_anchor_days is a near
       point-mass at 0 (median 1, 75th pctl 1); density_mdd_to_anchor_
       days.png is mostly empty whitespace — recode (same-day vs delayed)

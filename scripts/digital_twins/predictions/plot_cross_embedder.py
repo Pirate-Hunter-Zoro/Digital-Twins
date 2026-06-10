@@ -57,17 +57,18 @@ def main():
             lr_ablation_delta_ci_highs[i, j] = lr_for_ablations.loc[abl_id, 'delta_roc_score_ci_high']
     
     # Plot cross-embedder ablation results
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12,5))
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(11,6))
     left_ax, right_ax = axes[0], axes[1]
     
     # Left plot is AUC score confidence interval over all embedders
     positions = np.arange(len(EMBEDDERS))
     # scores[:, 1] stores the height of each dot for each error bar - the actual observed ROC AUC score
-    left_ax.errorbar(positions, scores[:, 1], fmt='o', yerr=error_bar_lengths, capsize=5)
-    left_ax.axhline(y=0.5, color='red', linestyle='--', linewidth=2)
-    left_ax.set_ylabel("Embedded LR ROC AUC")
-    left_ax.set_xticks(positions, SHORT_NAME_EMBS)
+    left_ax.errorbar(scores[:, 1], positions, fmt='o', xerr=error_bar_lengths, capsize=5)
+    left_ax.axvline(x=0.5, color='red', linestyle='--', linewidth=2)
+    left_ax.set_xlabel("Embedded LR ROC AUC")
+    left_ax.set_yticks(positions, SHORT_NAME_EMBS)
     left_ax.set_title("(A) Discrimination")
+    left_ax.invert_yaxis()
     
     # Right plot is similar, but now multiple bars for each ablation
     n = len(ABLATION_SPECS)
@@ -80,12 +81,13 @@ def main():
             abl_error_bar_lengths[0, i] = lr_ablation_deltas[i, j] - lr_ablation_delta_ci_lows[i, j]
             abl_error_bar_lengths[1, i] = lr_ablation_delta_ci_highs[i, j] - lr_ablation_deltas[i, j]
         # Offset positions spread across entire right plot for this particular ablation
-        right_ax.errorbar(positions + (j - (n-1)/2)*bar_width, lr_ablation_deltas[:, j], fmt='o', yerr=abl_error_bar_lengths, capsize=5, label=abl_name)
+        right_ax.errorbar(lr_ablation_deltas[:, j], positions + (j - (n-1)/2)*bar_width, fmt='o', xerr=abl_error_bar_lengths, capsize=5, label=abl_name)
     right_ax.legend()
-    right_ax.axhline(y=0, color='red', linestyle='--', linewidth=2)
-    right_ax.set_ylabel("Δ ROC AUC (ablated − baseline)")
-    right_ax.set_xticks(positions, SHORT_NAME_EMBS) 
+    right_ax.axvline(x=0, color='red', linestyle='--', linewidth=2)
+    right_ax.set_xlabel("Δ ROC AUC (ablated − baseline)")
+    right_ax.set_yticks(positions, SHORT_NAME_EMBS) 
     right_ax.set_title("(B) Semantic-feature ablation")
+    right_ax.invert_yaxis()
     
     fig.tight_layout()
     fig.savefig(ARTIFACTS_DIR / f"cross_embedder_robustness_{VectorSource.EMBEDDED.name}.png")
