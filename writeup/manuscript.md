@@ -145,7 +145,7 @@ transformers.]**
 
 A single stratified 80/20 train/test split was created once and shared
 across every evaluation arm to ensure fair comparison. The split
-preserved the natural class imbalance: 7,780 training patients (827
+preserved the natural class imbalance: 7,779 training patients (827
 TRD-positive, 10.6%) and 1,945 test patients (207 TRD-positive, 10.6%).
 Test patient identifiers were persisted for reproducibility. In the
 neighbor-weighted pipeline, test patients were excluded from one
@@ -238,10 +238,10 @@ statement and repository/DOI link for submission.]**
 <!-- TRIPOD+AI 13a (participant flow), 13b (characteristics) -->
 
 The eligibility cascade reduced a source population of 502,118 patients
-to a final analysis cohort of 9,725 (Table 1). The largest single
+to a final analysis cohort of 9,724 (Table 1). The largest single
 reduction was the MDD diagnosis requirement (502,118 → 73,942),
-followed by the pre-anchor history requirement (43,141 → 16,799) and
-the post-anchor follow-up requirement (16,799 → 9,725). Of the final
+followed by the pre-anchor history requirement (43,141 → 16,798) and
+the post-anchor follow-up requirement (16,798 → 9,724). Of the final
 cohort, 1,034 patients (10.6%) were TRD-positive.
 
 ***Table 1.** Participant flow through the eligibility cascade. Each
@@ -254,8 +254,8 @@ row applies one additional filter to the survivors of the row above.*
 | Not bipolar AND not schizophrenia-spectrum | 61,806 | 12,136 |
 | Has antidepressant anchor | 43,330 | 18,476 |
 | Has MDD before anchor | 43,141 | 189 |
-| ≥2 years pre-anchor history | 16,799 | 26,342 |
-| ≥1 year post-anchor follow-up (final cohort) | 9,725 | 7,074 |
+| ≥2 years pre-anchor history | 16,798 | 26,343 |
+| ≥1 year post-anchor follow-up (final cohort) | 9,724 | 7,074 |
 
 ## Cohort characteristics (Table 1 of manuscript)
 
@@ -339,7 +339,7 @@ small (max |SMD| ≈ 0.07).*
 
 | Split | n | TRD-positive | TRD rate |
 | --- | ---: | ---: | ---: |
-| Train | 7,780 | 827 | 10.6% |
+| Train | 7,779 | 827 | 10.6% |
 | Test | 1,945 | 207 | 10.6% |
 
 ## Density and chronology checks
@@ -358,9 +358,12 @@ are provided in the supplement.
 ## Provenance of performance results
 
 The performance results in the remaining subsections are drawn from a
-complete prior pipeline run on the same 9,725-patient cohort and the
-same 1,945-patient held-out test split used for the cohort
-characterization above, with the `Qwen3-Embedding-8B` encoder and a
+complete prior pipeline run on a 9,725-patient cohort — one more than
+the current 9,724-patient characterization cohort above, the difference
+being a single TRD-negative training patient since excluded for
+insufficient pre-anchor history — sharing the identical 1,945-patient
+held-out test split used for the cohort characterization above, with
+the `Qwen3-Embedding-8B` encoder and a
 `MedGemma-27B` similarity judge. They are reported here as the current
 best available evidence and carry three caveats that the planned re-run
 will resolve. First, the FEATURE-side classical-ML numbers were
