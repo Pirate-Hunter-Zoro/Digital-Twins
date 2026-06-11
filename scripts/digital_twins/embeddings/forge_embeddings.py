@@ -15,10 +15,16 @@ def forge():
         raise ValueError(f"Missing directory: {str(narratives_dir)}...", flush=True)
     else:
         embedder = PatientEmbedder()
+        embedder_valid_ids = set(embedder.narrative_chronological_lengths.keys())
         # Embed all of our narratives
         narrative_files = list(narratives_dir.glob("*.md"))
-        valid_ids = set([p.stem for p in narrative_files])
-        for deleted_id in embedder.purge_orphans(valid_ids):
+        for p in narrative_files:
+            if p.stem not in embedder_valid_ids:
+                p.unlink(missing_ok=True)
+        narrative_valid_ids = set([p.stem for p in narrative_files])
+        narrative_valid_ids = narrative_valid_ids & embedder_valid_ids
+        narrative_files = [p for p in narrative_files if p.stem in narrative_valid_ids]
+        for deleted_id in embedder.purge_orphans(narrative_valid_ids):
             print(f"Deleted orphan patient {deleted_id} from embedding database...", flush=True)
         batch_size = int(os.environ['EMBEDDER_BATCH_SIZE'])
         current_narrative_batch = []
