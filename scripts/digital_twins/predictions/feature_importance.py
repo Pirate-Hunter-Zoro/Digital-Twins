@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-PCA_K_VALUES = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
+PCA_K_VALUES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 MODEL_NAMES = ("logistic_regression", "random_forest", "gradient_boosting", "xgboost")
 TOP_K = 20
 
@@ -280,7 +280,9 @@ def plot_pca_k_vs_roc(
     }
     best_params = load_best_params(model_name, VectorSource.EMBEDDED)
     auc_scores = []
-    for k in PCA_K_VALUES:
+    RELEVANT_PCA_VALUES = [v for v in PCA_K_VALUES if v <= min(X_train.shape)]
+    
+    for k in RELEVANT_PCA_VALUES:
         # Different number of PCA dimensions each time
         pca_save_path = pca_cache_path(model_name, k)
         if pca_save_path.exists() and int(os.environ['SCRUB_TRAINED_MODELS']) == 0:
@@ -301,9 +303,9 @@ def plot_pca_k_vs_roc(
         score = float(roc_auc_score(y_true=y_test, y_score=y_pred))
         auc_scores.append(score)
     fig, ax = plt.subplots(figsize=(10,6))
-    ax.plot(PCA_K_VALUES, auc_scores, marker='o', color='steelblue', linewidth=2)
+    ax.plot(RELEVANT_PCA_VALUES, auc_scores, marker='o', color='steelblue', linewidth=2)
     ax.set_xscale('log', base=2) # Logarithmic x-scale since k-values are powers of 2
-    for k, auc in zip(PCA_K_VALUES, auc_scores):
+    for k, auc in zip(RELEVANT_PCA_VALUES, auc_scores):
         ax.text(k, auc, f"{auc:.3f}")
     ax.set_xlabel("Truncated PCA components (K)")
     ax.set_ylabel("Held-out ROC AUC")

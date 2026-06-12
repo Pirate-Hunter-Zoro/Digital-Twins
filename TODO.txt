@@ -9,6 +9,41 @@ completion. Preserve this NOTE block on every edit.
 
 TOP PRIORITY — ACTIVE WORK
 --------------------------------------------------------------------
+- [ ] Author a from-scratch environment setup shell script (setup_env.sh)
+      for publication/reproducibility, so the referenced GitHub repo builds
+      a working pipeline env in one run. Do NOT nuke the live ehr_env. Two
+      SEPARATE environments are mandatory, not optional:
+        * MAIN PIPELINE env. Hard-pinned to scikit-learn 1.7.1 (the version
+          the trained_models/*.joblib caches were pickled under). Libraries:
+          numpy, pandas, scipy, scikit-learn, xgboost, joblib, matplotlib,
+          seaborn, sentence-transformers (pulls transformers, torch,
+          accelerate, huggingface-hub, tokenizers, safetensors), vllm
+          (launched as a server via vllm.entrypoints.openai.api_server;
+          pulls ray, xformers, triton, the nvidia-cuda-* wheels), requests,
+          python-dotenv, tqdm, pyarrow (REQUIRED runtime parquet engine for
+          the FEATURE DataFrame — never imported by name, easy to miss),
+          pytest, ipykernel. Verify whether build_jsons ingests .RData before
+          adding pyreadr; no live import found.
+        * CAUSAL-FOREST env (separate, lean). econml hard-caps
+          scikit-learn below 1.7, which is INCOMPATIBLE with the main
+          pipeline's 1.7.1 — they cannot share one env, and forcing it
+          corrupts the joblib caches (see the InconsistentVersionWarning
+          incident that killed trd_prediction_analysis). Libraries: econml,
+          scikit-learn (below 1.7), shap, lightgbm, statsmodels, plus the
+          shared base numpy, pandas, scipy, matplotlib, joblib, pyarrow,
+          ipykernel. No torch/vllm needed. Caveat: if importing the scripts
+          package (for create_train_test_split reuse) transitively pulls
+          torch, either install torch here or refactor the import.
+        * Script requirements: install INTO the env, never user-site (the
+          original failure was pip falling back to ~/.local because the env
+          site-packages was not writeable); fail loud on any error; source
+          conda's profile hook before activating (bare activate fails in a
+          non-interactive shell); end with an import smoke check of the heavy
+          packages so the script proves the env works before claiming
+          success. Pin the version-sensitive core (scikit-learn, torch,
+          vllm, econml); the existing requirements.txt is the starting truth
+          for those pins though it is a tad out of date.
+
 - [ ] Investigate bge-small's bimodal cosine-similarity distribution in
       test_data/bge-small.png. Every other embedder's pair-cosine
       distribution is unimodal/normal; bge-small has two clear modes.
