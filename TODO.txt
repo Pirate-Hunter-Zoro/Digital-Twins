@@ -1,6 +1,8 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
+FARTHEST NEIGHBORS ALSO CARRY INFORMATION
+
 NOTE TO FUTURE EDITORS (INCLUDING CLAUDE): When work is completed, DELETE the
 corresponding entry from this file. Do not leave checkmarks, "DONE" tags,
 struck-through items, or "(completed YYYY-MM-DD)" annotations. This file

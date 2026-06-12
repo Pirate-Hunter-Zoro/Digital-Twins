@@ -38,7 +38,7 @@ def main():
             ml_results = json.load(f)
             roc_score, roc_score_ci_low, roc_score_ci_high = ml_results['logistic_regression']['roc_score'],\
                 ml_results['logistic_regression']['roc_score_ci_low'],\
-                    ml_results['logistic_regression']['roc_score_ci_high'],\
+                    ml_results['logistic_regression']['roc_score_ci_high']
             scores[i] = np.array([roc_score_ci_low, roc_score, roc_score_ci_high])
             error_bar_lengths[0, i] = roc_score - roc_score_ci_low # How far each error bar should dip below dot
             error_bar_lengths[1, i] = roc_score_ci_high - roc_score # How far each error bar should rise above dot
@@ -82,14 +82,14 @@ def main():
             abl_error_bar_lengths[1, i] = lr_ablation_delta_ci_highs[i, j] - lr_ablation_deltas[i, j]
         # Offset positions spread across entire right plot for this particular ablation
         right_ax.errorbar(lr_ablation_deltas[:, j], positions + (j - (n-1)/2)*bar_width, fmt='o', xerr=abl_error_bar_lengths, capsize=5, label=abl_name)
-    right_ax.legend()
+    right_ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1))
     right_ax.axvline(x=0, color='red', linestyle='--', linewidth=2)
     right_ax.set_xlabel("Δ ROC AUC (ablated − baseline)")
     right_ax.set_yticks(positions, SHORT_NAME_EMBS) 
     right_ax.set_title("(B) Semantic-feature ablation")
     right_ax.invert_yaxis()
     
-    fig.tight_layout()
+    fig.tight_layout(rect=(0,0,0.85,1))
     fig.savefig(ARTIFACTS_DIR / f"cross_embedder_robustness_{VectorSource.EMBEDDED.name}.png")
     plt.close(fig)
     
