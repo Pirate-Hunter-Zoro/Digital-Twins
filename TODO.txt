@@ -11,7 +11,7 @@ completion. Preserve this NOTE block on every edit.
 
 TOP PRIORITY — ACTIVE WORK
 --------------------------------------------------------------------
-- [ ] Author a from-scratch environment setup shell script (setup_env.sh)
+- [ ] Author a from-scratch environment setup shell script (setup_envs.sh)
       for publication/reproducibility, so the referenced GitHub repo builds
       a working pipeline env in one run. Do NOT nuke the live ehr_env. Two
       SEPARATE environments are mandatory, not optional:
@@ -46,16 +46,6 @@ TOP PRIORITY — ACTIVE WORK
           vllm, econml); the existing requirements.txt is the starting truth
           for those pins though it is a tad out of date.
 
-- [ ] Investigate bge-small's bimodal cosine-similarity distribution in
-      test_data/bge-small.png. Every other embedder's pair-cosine
-      distribution is unimodal/normal; bge-small has two clear modes.
-      Gated on the current clean re-embed: all artifacts were wiped before
-      this run, so if the second mode was an artifact of stale or corrupted
-      stored vectors it should not recur on the fresh sample — close the
-      item if the distribution comes back unimodal. If two modes persist on
-      fresh vectors the cause is geometric, not contamination; confirm and
-      identify it.
-
 - [ ] Causal Random Forest + Treatment Heterogeneity notebook
       (causal_forest_analysis.ipynb). Estimates CATE per candidate
       treatment (augmentation, polypharmacy, adequate trial >= 1;
@@ -82,26 +72,11 @@ TOP PRIORITY — ACTIVE WORK
 
 ACTIVE / IMMEDIATE
 --------------------------------------
-- [ ] Run scripts/digital_twins/predictions/plot_cross_embedder.py by hand
-      once all four embedders are backfilled, then repoint manuscript
-      Figure 6. (3 of 4 backfilled — bge-en-icl, Qwen-Qwen3-Embedding-4B,
-      Qwen-Qwen3-Embedding-8B; only bge-small-en-v1.5 remains, embeddings in
-      flight — see DATA INTEGRITY below.) The script is built: standalone
-      (no Slurm), two panels
-      fixed on logistic regression and drawn as point-plus-interval
-      errorbars across the four encoders — (A) embedded LR roc_score with
-      asymmetric CI per encoder from each classical_ml_results_EMBEDDED.
-      json; (B) delta_roc_score with paired-bootstrap CI (read from the
-      delta_roc_score_ci_low/high columns, not recomputed) for
-      permute_psych_history and permute_med_burden per encoder from each
-      ablation_summary.csv. Reads each encoder's results from the live
-      ARTIFACTS_DIR/{embedder}/{VLLM_MODEL_NAME}/ tree (NOT the rsync'd
-      results/ mirror) and fails loud if any embedder's results are absent;
-      writes ARTIFACTS_DIR/cross_embedder_robustness_EMBEDDED.png, which the
-      post-job rsync carries into results/. After it runs, add the
-      ../results/cross_embedder_robustness_EMBEDDED.png link above the
-      Figure 6 caption in writeup/manuscript.md and strike the [PENDING:
-      figure to be generated] clause.
+- [ ] Repoint manuscript Figure 6. The cross-embedder figure is generated
+      (results/cross_embedder_robustness_EMBEDDED.png, all four embedders
+      present). Add the ../results/cross_embedder_robustness_EMBEDDED.png
+      link above the Figure 6 caption in writeup/manuscript.md and strike
+      the [PENDING: figure to be generated] clause.
 
 DATA INTEGRITY
 --------------------------------------------------------------------
@@ -120,18 +95,6 @@ DATA INTEGRITY
       narrative. Note that missing-Race patients (n=21) show ~2x TRD
       prevalence (23.8% vs 10.6% baseline) — the same MAR-correlates-
       with-outcome pattern flagged for Religion.
-
-- [ ] Backfill ml_only.sbatch for bge-small-en-v1.5 — the last remaining
-      embedder. bge-en-icl, Qwen-Qwen3-Embedding-4B, and
-      Qwen-Qwen3-Embedding-8B already have classical_ml_results_EMBEDDED.json
-      + ablation_summary.csv (the categorical-cast FEATURE outputs and the
-      feature_importance.py artifacts landed). Set .env's
-      EMBEDDER_MODEL_NAME to bge-small-en-v1.5; its embedding pipeline is in
-      flight, so run its ml_only.sbatch once embeddings finish. Also run the
-      accompanying neighbor-pipeline pass for bge-small with
-      COMPUTE_LLM_SIMILARITY=0 (LLM semantic weighting OFF — no vLLM server,
-      only Uniform/Cosine strategies), which is far faster than the
-      LLM-judged pass.
 
 - [ ] When this work becomes a paper, format to JMIR Mental Health's
       submission template (TRIPOD-AI prediction-model reporting
