@@ -1,8 +1,6 @@
 PATIENT VECTOR & ML BASELINE — REMAINING WORK
 ================================================
 
-FARTHEST NEIGHBORS ALSO CARRY INFORMATION
-
 NOTE TO FUTURE EDITORS (INCLUDING CLAUDE): When work is completed, DELETE the
 corresponding entry from this file. Do not leave checkmarks, "DONE" tags,
 struck-through items, or "(completed YYYY-MM-DD)" annotations. This file
@@ -70,13 +68,21 @@ TOP PRIORITY — ACTIVE WORK
           moderators).
         * Save plots with treatment-tagged filenames.
 
-ACTIVE / IMMEDIATE
+MANUSCRIPT WRITE-UP NOTES
 --------------------------------------
-- [ ] Repoint manuscript Figure 6. The cross-embedder figure is generated
-      (results/cross_embedder_robustness_EMBEDDED.png, all four embedders
-      present). Add the ../results/cross_embedder_robustness_EMBEDDED.png
-      link above the Figure 6 caption in writeup/manuscript.md and strike
-      the [PENDING: figure to be generated] clause.
+- [ ] Farthest-neighbor scheme scored BELOW chance (~0.39 ROC AUC), not
+      near 0.5 — maximally-dissimilar neighbors carry inverse predictive
+      signal, evidence that the embedding space is label-informative in
+      both directions, not only locally. Decide whether to surface this in
+      the Discussion (currently only the nearest >> random >> farthest
+      ordering is stated).
+- [ ] Decide whether to state explicitly in the Discussion that ROC AUC
+      flatters performance while AUPRC (no-skill baseline = prevalence
+      0.106) exposes the false-positive burden: under the ~8:1 class
+      imbalance, capturing high TRD recall forces low precision, so the
+      representation fits triage / risk-stratification rather than
+      standalone rule-in. Currently implied by the Table 4 numbers but
+      never stated.
 
 DATA INTEGRITY
 --------------------------------------------------------------------

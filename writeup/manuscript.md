@@ -251,20 +251,33 @@ predictable, and uninformative.
 ## Statistical analysis and performance metrics
 <!-- TRIPOD+AI 11, 12 (evaluation) -->
 
-Discrimination was summarized by the area under the receiver operating
-characteristic curve (ROC AUC), with 95% confidence intervals from a
-bootstrap of the test set, and by the area under the precision–recall
-curve (AUPRC). Calibration was summarized by the Brier score, a
-weighted calibration error, and the calibration slope and intercept.
-For the ablation study, deltas versus baseline were accompanied by
-paired-bootstrap confidence intervals: within each bootstrap draw a
-single resampling index was applied to both the baseline and the
-ablated probability vectors, yielding a paired delta-AUC distribution
-(paired bootstrap is required because the same patients are scored by
-both models, so their AUCs are positively correlated and independent
-intervals would be inflated). An optimal operating point was identified
-by Youden's J statistic with associated sensitivity, specificity, and
-likelihood ratios.
+Model performance was characterized along four axes.
+
+**Discrimination.** The area under the receiver operating characteristic
+curve (ROC AUC) and the area under the precision–recall curve (AUPRC);
+the AUPRC no-skill baseline is the 10.6% positive rate, not 0.5.
+
+**Calibration.** The Brier score, a weighted calibration error, and the
+calibration slope and intercept (ideal slope 1, intercept 0).
+
+**Operating point.** Continuous risk scores were converted to a binary
+classification at the threshold maximizing Youden's J statistic; from
+the resulting confusion matrix we report sensitivity, specificity, and
+positive and negative likelihood ratios.
+
+**Uncertainty.** Confidence intervals were obtained by bootstrapping the
+test set — resampling patients with replacement and recomputing the
+metric. For the ablation, every patient carries two predicted
+probabilities, one from the baseline embedding and one from the ablated
+embedding, so the interval on the change in AUC used a *paired*
+bootstrap: each draw resampled patients once, applied that same resample
+to both the baseline and the ablated predictions, and recomputed both
+AUCs and their difference. The 2.5th and 97.5th percentiles of the
+resulting distribution of differences gave the interval, with the point
+estimate taken as the difference on the full test set. Applying one
+resample to both models preserves the correlation from scoring the same
+patients twice; bootstrapping them independently would overstate the
+uncertainty of the difference.
 
 ## Reproducibility and software
 <!-- TRIPOD+AI 13 (availability) -->
