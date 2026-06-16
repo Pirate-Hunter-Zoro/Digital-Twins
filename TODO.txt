@@ -11,24 +11,6 @@ completion. Preserve this NOTE block on every edit.
 
 TOP PRIORITY — ACTIVE WORK
 --------------------------------------------------------------------
-- [ ] Author a discovery cell in cohort_investigation.ipynb, placed
-      directly ABOVE the bge-small bimodality verification cell ("Notice
-      of a bimodal cosine similarity distribution"). The verification cell
-      hardcodes buzz_word="recurrent"; this new cell must DISCOVER that
-      word from scratch instead of asserting it. Self-contained load (the
-      verification cell's own load block is the template): pull
-      patient_id/embedding/text from embeddings.db, rebuild the float32
-      matrix, L2-normalize rows, lowercase texts. Then:
-        * KMeans (sklearn.cluster.KMeans, n_clusters=2) on the normalized
-          embeddings -> per-patient cluster labels splitting the two modes.
-        * Word-presence probabilities per cluster: CountVectorizer with
-          binary=True over the lowercased texts -> doc-term presence matrix;
-          per-cluster column means = P(word present | cluster).
-        * Rank vocabulary by absolute cross-cluster probability gap;
-          display the top words with their per-cluster probabilities.
-          "recurrent" should top the list on its own, confirming it as
-          the shared word driving the bimodality.
-
 - [ ] Author a from-scratch environment setup shell script (setup_envs.sh)
       for publication/reproducibility, so the referenced GitHub repo builds
       a working pipeline env in one run. Do NOT nuke the live ehr_env. Two
