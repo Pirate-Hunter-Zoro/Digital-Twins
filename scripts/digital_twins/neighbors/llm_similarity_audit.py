@@ -48,7 +48,6 @@ SELECT text FROM embeddings WHERE patient_id=?
 SELECT id_a, id_b, full_response FROM llm_judgements ORDER BY overall_score DESC LIMIT 5;
 ''')
     rows = scorer.cursor.fetchall()
-    rows = scorer.cursor.fetchall()
     for row in rows:
         # Create report including the first narrative, the second narrative, and the third narrative
         patient_id_a, patient_id_b, response = row

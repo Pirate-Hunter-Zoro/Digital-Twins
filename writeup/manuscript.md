@@ -12,8 +12,11 @@ template (writeup/JMIR_template.docx) at submission time.
 
 [PENDING] markers flag content that depends on pipeline artifacts not
 yet regenerated. Cohort-characterization numbers are final (from
-notebooks/figures/). Performance numbers are from a prior run; see the
-provenance note under Results.
+notebooks/figures/). Classical-ML, cross-embedder, and ablation
+performance numbers are from the current pipeline run (9,724-patient
+cohort, Qwen3-Embedding-8B). The neighbor-weighted results (Table 6,
+Figures 4-5) are pending a full-grid re-run; see the provenance note
+under Results.
 -->
 
 # Methods
@@ -132,13 +135,12 @@ size was fixed by the eligibility cascade. We report events per
 variable (EPV) against the conventional threshold of ≥10. The shared
 training-set TRD-positive numerator is 827 events. For the
 high-dimensional EMBEDDED representation, EPV is far below threshold by
-construction (827 events against thousands of embedding dimensions;
-e.g., 827/4096 ≈ 0.2 for the 4096-dimensional encoder), and the
-EMBEDDED models are accordingly interpreted as high-dimensional
-learners rather than as low-dimensional regression models.
-**[PENDING: exact post-ColumnTransformer feature width and the
-resulting FEATURE-side EPV ratio, computed from the cached fitted
-transformers.]**
+construction (827 events against 4,096 embedding dimensions, ≈ 0.2),
+and the EMBEDDED models are accordingly interpreted as
+high-dimensional learners rather than as low-dimensional regression
+models. On the FEATURE side the dtype-routed column transformer
+expands to 91 encoded features, giving an EPV of 827/91 ≈ 9.1, just
+below the conventional ≥10 threshold.
 
 ## Train/test split
 <!-- TRIPOD+AI 5b / analysis -->
@@ -147,19 +149,23 @@ A single stratified 80/20 train/test split was created once and shared
 across every evaluation arm to ensure fair comparison. The split
 preserved the natural class imbalance: 7,779 training patients (827
 TRD-positive, 10.6%) and 1,945 test patients (207 TRD-positive, 10.6%).
-Test patient identifiers were persisted for reproducibility. In the
-neighbor-weighted pipeline, test patients were excluded from one
-another's neighbor pools at retrieval time to prevent leakage, while
-remaining available as query anchors. Train-versus-test comparability
+In the
+neighbor-weighted pipeline the searchable neighbor pool was restricted
+to training-set patients: every test patient served as a query anchor,
+but all test identifiers were removed from the retrieval index, so each
+anchor's neighbors — and therefore the labels driving its prediction —
+were drawn exclusively from the training set. This prevents any test
+label from informing another test patient's prediction and prevents an
+anchor from retrieving itself. Train-versus-test comparability
 was confirmed by per-predictor standardized mean differences (SMD),
 all small in magnitude (maximum absolute SMD ≈ 0.07; Table 3).
 
 ## Model development
 <!-- TRIPOD+AI 10 (model development), 11 (analysis methods) -->
 
-**Classical machine learning.** Four classifiers — logistic regression
-(`max_iter`=1000), random forest, gradient boosting, and XGBoost
-(`eval_metric`=logloss) — were trained on each representation. Each
+**Classical machine learning.** Four classifiers — logistic regression,
+random forest, gradient boosting, and XGBoost — were trained on each
+representation. Each
 classifier was wrapped in a pipeline with a dtype-routed column
 transformer: the numeric block was standardized; the categorical block
 was one-hot encoded (binary categories collapsed, unknown categories
@@ -167,41 +173,80 @@ ignored at inference); the boolean block was cast to integer and passed
 through. The embedded representation is a single all-numeric block and
 flows through the numeric branch only. Every classifier was tuned by
 five-fold cross-validated grid search optimizing ROC AUC; the refit
-best estimator supplied predicted probabilities. Logistic-regression
-grids were partitioned by penalty to respect solver compatibility.
-Fitted searchers were cached to disk so that re-runs are robust to
-downstream failure.
+best estimator supplied predicted probabilities. Because the column
+transformer was bundled with the estimator in a single pipeline, all
+data-dependent preprocessing — standardization parameters and one-hot
+category levels — was fit only on each fold's training partition and
+applied to the held-out fold, so the cross-validated estimates carry no
+preprocessing leakage; with no imputation anywhere in the pipeline, the
+scaler and encoder are the only fitted preprocessing steps.
 
 **Neighbor-weighted retrieval prediction.** On the EMBEDDED
-representation only, a neighbor-weighted predictor retrieved each
-anchor's top-*K* neighbors by cosine similarity, scored each
-anchor–neighbor pair for clinical similarity with a large language
-model judge (cached to a judgements database), and computed a weighted
-TRD probability under four weighting strategies (uniform, cosine, LLM,
-and the harmonic mean of cosine and LLM). Four retrieval schemes
-(nearest, farthest, random, and a two-stage subsampled mode) were
-evaluated to isolate predictive lift against negative and random
-baselines. This pipeline is embedding-only because cosine similarity is
-not well defined over mixed categorical/numeric features.
+representation only, each anchor patient's predicted TRD probability was
+computed from its $K = 50$ retrieved neighbors as a weighted average of
+the neighbors' binary TRD labels,
 
-**Semantic-feature ablation.** To attribute embedding-based predictive
-signal to named clinical concepts, we perturbed individual narrative
-sections or fields, re-embedded the cohort, and re-scored using the
-*frozen* baseline classifiers (no retraining). Freezing the baseline
-answers an input-perturbation attribution question — "does the
-embedder's encoding of concept *X* drive predictions?" — rather than
-"could a retrained model route around the ablation?" Perturbation used
-cohort-wide donor permutation (each patient donates its value for the
-perturbed field exactly once per specification), preserving the
-marginal distribution of the perturbed field while severing its link to
-the individual patient. The pre-registered ablation slate comprised
-five specifications: race/ethnicity (field permutation), psychiatric
-history (section permutation), medication burden (section permutation),
-treatment contraindications (section permutation), and social
-determinants of health (field permutation). The treatment-exposure
-section was deliberately excluded because prior adequate antidepressant
-trials are constitutive of the TRD definition, so its ablation delta
-would be large, predictable, and uninformative.
+$$\hat{P}(\mathrm{TRD}) = \frac{\sum_{i=1}^{K} w_i\, y_i}{\sum_{i=1}^{K} w_i},$$
+
+where $y_i \in \{0,1\}$ is the TRD label of neighbor $i$ and $w_i$ its
+weight. Four schemes defined the per-neighbor weight: uniform (every
+$w_i = 1$, so the prediction is the unweighted TRD fraction among
+neighbors), cosine (the anchor–neighbor cosine similarity), LLM (a
+clinical-similarity score assigned to each anchor–neighbor pair by a
+large language model judge and rescaled to the unit interval), and
+combined (the harmonic mean of the cosine and LLM weights). As a
+neighborhood-confidence diagnostic we also report the effective sample
+size,
+
+$$\mathrm{ESS} = \frac{\left(\sum_{i=1}^{K} w_i\right)^2}{\sum_{i=1}^{K} w_i^2},$$
+
+which equals $K$ under uniform weighting and falls as weight
+concentrates on fewer neighbors. The LLM judge (`MedGemma-27B`) scored
+each pair by comparing the two deterministic narratives against a fixed
+six-dimension clinical-similarity rubric and returning structured JSON;
+only the overall 0–100 similarity, rescaled to the unit interval,
+entered the weighting. The verbatim prompts, scoring rubric, and worked
+high- and low-similarity examples are provided in Supplement S1. Each
+weighting was evaluated under four retrieval schemes
+(nearest, farthest, random, and a two-stage subsampled mode) to isolate
+predictive lift against negative and random baselines. This pipeline is
+embedding-only because cosine similarity is not well defined over mixed
+categorical/numeric features.
+
+**Semantic-feature ablation.** The deterministic narrative is built
+from labeled sections and fields — a psychiatric-history section, a
+medication-burden section, a race/ethnicity field, and so on — which
+lets us probe how much the embedding's predictive signal depends on
+each clinical concept individually. For one target concept at a time we
+overwrote that concept's content in every patient's narrative with
+content taken from another patient, re-embedded the resulting perturbed
+narratives, applied the already-trained baseline classifiers without
+retraining them, and measured the resulting drop in discrimination
+(ΔROC AUC) against the unperturbed baseline. A large drop indicates the
+embedder's representation of that concept was carrying real predictive
+weight. Holding the classifiers *frozen* is deliberate: it answers the
+input-perturbation question "does the embedder's encoding of concept
+*X* drive predictions?" rather than "could a retrained model find a
+substitute signal and route around the ablation?" — a retrained
+baseline would mask the very dependence we set out to measure.
+
+The overwrite used cohort-wide donor permutation: for a given concept,
+each patient's value was replaced by that of one other patient under a
+random one-to-one shuffle across the cohort. This preserves the
+cohort-wide distribution of the concept (the same set of values is
+present, merely reassigned to different patients) while severing the
+link between each patient's concept value and their own outcome, so any
+discrimination lost is attributable to that broken link rather than to
+injecting artificial or out-of-distribution text. Section-level
+specifications swap an entire narrative section between donor and
+recipient; field-level specifications swap a single field. The
+pre-specified slate comprised five specifications: race/ethnicity
+(field), psychiatric history (section), medication burden (section),
+treatment contraindications (section), and social determinants of
+health (field). The treatment-exposure section was deliberately
+excluded because prior adequate antidepressant trials are constitutive
+of the TRD definition, so its ablation delta would be large,
+predictable, and uninformative.
 
 ## Statistical analysis and performance metrics
 <!-- TRIPOD+AI 11, 12 (evaluation) -->
@@ -226,10 +271,7 @@ likelihood ratios.
 
 All randomness was seeded. Models were implemented in Python with
 scikit-learn and XGBoost; embeddings used sentence-transformer
-encoders. The pipeline is organized into discrete, independently
-re-runnable stages (data loading, narrative and feature-vector
-generation, embedding, retrieval/scoring, and prediction/evaluation),
-with cached intermediate artifacts. **[PENDING: code-availability
+encoders. **[PENDING: code-availability
 statement and repository/DOI link for submission.]**
 
 # Results
@@ -357,57 +399,61 @@ are provided in the supplement.
 
 ## Provenance of performance results
 
-The performance results in the remaining subsections are drawn from a
-complete prior pipeline run on a 9,725-patient cohort — one more than
-the current 9,724-patient characterization cohort above, the difference
-being a single TRD-negative training patient since excluded for
-insufficient pre-anchor history — sharing the identical 1,945-patient
-held-out test split used for the cohort characterization above, with
-the `Qwen3-Embedding-8B` encoder and a
-`MedGemma-27B` similarity judge. They are reported here as the current
-best available evidence and carry three caveats that the planned re-run
-will resolve. First, the FEATURE-side classical-ML numbers were
-computed on a 64-column feature matrix that still included the three
-vital columns and a psychotherapy-count column that the current
-pipeline removes; those specific FEATURE AUCs will therefore shift on
-re-run, whereas the EMBEDDED, neighbor-weighted, and ablation results
-(which never depended on the vital columns) are unaffected. Second, the
-ablation specifications were named `swap_*` in this run and map
-one-to-one onto the current `permute_*` names (`swap_safety`
-corresponds to `permute_treatment_contraindications`). Third, this run
-predates the paired-bootstrap delta-AUC confidence intervals, so the
-ablation deltas below are point estimates. **[PENDING: refresh across
-all four embedders with paired-bootstrap delta CIs.]**
+The classical-ML discrimination and calibration results, the
+cross-embedder comparison, and the semantic-feature ablation below are
+from the current pipeline run on the 9,724-patient cohort, sharing the
+1,945-patient held-out test split used for the cohort characterization
+above, with the `Qwen3-Embedding-8B` encoder and a `MedGemma-27B`
+similarity judge. The FEATURE-side classical-ML numbers were computed
+on the production 91-column matrix (the three cohort-averaged vital
+columns and a legacy psychotherapy-count column have been removed; no
+NaN cells reach any transformer), and the feature vector is
+embedder-independent, so the FEATURE numbers are identical across
+encoders. Ablation deltas carry paired-bootstrap delta-AUC confidence
+intervals. One section is not yet refreshed: the neighbor-weighted
+results (Table 6, Figures 4-5) are reported from the full-grid
+retrieval run (nearest / farthest / random / subsampled × four
+weighting strategies, with the LLM judge active); a later trimmed
+re-run overwrote the machine-readable neighbor outputs, so those
+values are being regenerated and will be updated on completion.
+**[PENDING: refresh Table 6 / Figures 4-5 from the full-grid 8B KNN
+re-run.]**
 
 ## Model discrimination
 <!-- TRIPOD+AI 13b -->
 
 On the embedded representation, logistic regression achieved the
-highest discrimination (ROC AUC 0.704, 95% CI 0.666–0.744; AUPRC
-0.268), followed by XGBoost (0.691), random forest (0.677), and
-gradient boosting (0.661). On the rule-based feature vector, random
-forest led (0.688, 95% CI 0.651–0.729), with the remaining classifiers
-between 0.651 and 0.675. Embedded logistic regression thus exceeded
-both its feature-vector counterpart (0.704 vs 0.651) and the best
-feature-vector model (random forest, 0.688), while every model's
-discrimination remained modest — consistent with a difficult target and
-a 10.6% positive rate (Table 4).
+highest discrimination (ROC AUC 0.688, 95% CI 0.647–0.724; AUPRC
+0.248), followed by XGBoost (0.680), random forest (0.667), and
+gradient boosting (0.660). On the rule-based feature vector, random
+forest led (0.691, 95% CI 0.649–0.730), with XGBoost close behind
+(0.690) and logistic regression and gradient boosting at 0.688 and
+0.676. The two representations were thus essentially equivalent in
+discrimination on this encoder: embedded logistic regression (0.688)
+matched its feature-vector counterpart exactly (0.688) and fell
+marginally short of the best feature-vector model (random forest,
+0.691), with all confidence intervals broadly overlapping. Every
+model's discrimination remained modest — consistent with a difficult
+target and a 10.6% positive rate (Table 4). Embedded logistic
+regression was the strongest classifier on the embedded representation
+for every encoder evaluated, and on the Qwen3-Embedding-4B encoder it
+exceeded the best feature-vector model (0.703 vs 0.691; Figure 6).
 
 ***Table 4.** Discrimination of the four classifiers on each
 representation (held-out test set). 95% CIs are bootstrap percentile
-intervals. FEATURE-side values are from the legacy 64-column matrix
-(see provenance note).*
+intervals. FEATURE-side values are from the production 91-column matrix
+and are embedder-independent (see provenance note).*
 
 | Representation | Classifier | ROC AUC (95% CI) | AUPRC |
 | --- | --- | :---: | ---: |
-| EMBEDDED | Logistic regression | 0.704 (0.666–0.744) | 0.268 |
-| EMBEDDED | Random forest | 0.677 (0.635–0.715) | 0.224 |
-| EMBEDDED | Gradient boosting | 0.661 (0.624–0.701) | 0.182 |
-| EMBEDDED | XGBoost | 0.691 (0.650–0.734) | 0.235 |
-| FEATURE | Logistic regression | 0.651 (0.607–0.694) | 0.218 |
-| FEATURE | Random forest | 0.688 (0.651–0.729) | 0.242 |
-| FEATURE | Gradient boosting | 0.655 (0.610–0.696) | 0.227 |
-| FEATURE | XGBoost | 0.675 (0.634–0.715) | 0.244 |
+| EMBEDDED | Logistic regression | 0.688 (0.647–0.724) | 0.248 |
+| EMBEDDED | Random forest | 0.667 (0.629–0.707) | 0.219 |
+| EMBEDDED | Gradient boosting | 0.660 (0.620–0.700) | 0.230 |
+| EMBEDDED | XGBoost | 0.680 (0.642–0.717) | 0.232 |
+| FEATURE | Logistic regression | 0.688 (0.649–0.727) | 0.235 |
+| FEATURE | Random forest | 0.691 (0.649–0.730) | 0.248 |
+| FEATURE | Gradient boosting | 0.676 (0.634–0.716) | 0.228 |
+| FEATURE | XGBoost | 0.690 (0.650–0.731) | 0.242 |
 
 ![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/roc_curves/roc_curve_logistic_regression_EMBEDDED.png){width=80%}
 ![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/roc_curves/roc_curve_random_forest_FEATURE.png){width=80%}
@@ -427,15 +473,17 @@ for the best classifier on each representation (held-out test set).
 
 ## Model calibration
 
-Calibration varied substantially by classifier (Table 5). The embedded
-logistic regression was the best-calibrated discriminative model (Brier
-0.088, weighted calibration error 0.007, slope 1.47, intercept −0.10);
-its slope above 1 indicates mildly under-confident probabilities.
-Gradient boosting was poorly calibrated on the embedded representation
-(slope 0.05), reflecting severely compressed probability estimates, and
-the tree ensembles were generally less reliable than the linear model.
-No model placed any test prediction above 0.9, and a large fraction
-fell below 0.1, as expected given the low base rate.
+Calibration varied by classifier and representation (Table 5). On the
+embedded representation, random forest was the best-calibrated model
+(slope 0.95, weighted calibration error 0.006); logistic regression was
+mildly under-confident (slope 1.17, its slope above 1 indicating
+probabilities pulled toward the base rate) but carried low absolute
+error (Brier 0.090), while gradient boosting and XGBoost showed steeper
+slopes (1.86 and 1.58). On the feature vector, logistic regression was
+well-behaved (slope 0.80, weighted calibration error 0.006). Brier
+scores were uniformly near 0.089–0.091 across all eight models,
+reflecting the low base rate. No model placed any test prediction above
+0.9, and a large fraction fell below 0.1, as expected.
 
 ***Table 5.** Calibration of the four classifiers on each
 representation (held-out test set). Brier and weighted calibration
@@ -444,14 +492,14 @@ ideal is 0.*
 
 | Representation | Classifier | Brier | WCE | Slope | Intercept |
 | --- | --- | ---: | ---: | ---: | ---: |
-| EMBEDDED | Logistic regression | 0.088 | 0.007 | 1.47 | −0.10 |
-| EMBEDDED | Random forest | 0.090 | 0.011 | 0.84 | 0.03 |
-| EMBEDDED | Gradient boosting | 0.094 | 0.023 | 0.05 | 0.17 |
-| EMBEDDED | XGBoost | 0.089 | 0.015 | 0.41 | 0.12 |
-| FEATURE | Logistic regression | 0.091 | 0.007 | 0.72 | 0.06 |
-| FEATURE | Random forest | 0.090 | 0.011 | 1.36 | −0.04 |
-| FEATURE | Gradient boosting | 0.090 | 0.009 | 0.43 | 0.13 |
-| FEATURE | XGBoost | 0.089 | 0.008 | 1.62 | −0.11 |
+| EMBEDDED | Logistic regression | 0.090 | 0.020 | 1.17 | −0.07 |
+| EMBEDDED | Random forest | 0.091 | 0.006 | 0.95 | 0.02 |
+| EMBEDDED | Gradient boosting | 0.091 | 0.007 | 1.86 | −0.14 |
+| EMBEDDED | XGBoost | 0.090 | 0.015 | 1.58 | −0.09 |
+| FEATURE | Logistic regression | 0.090 | 0.006 | 0.80 | 0.04 |
+| FEATURE | Random forest | 0.089 | 0.014 | 1.39 | −0.05 |
+| FEATURE | Gradient boosting | 0.090 | 0.019 | 1.16 | −0.08 |
+| FEATURE | XGBoost | 0.090 | 0.020 | 1.15 | −0.01 |
 
 Calibration curves for all classifiers are provided in the supplement.
 
@@ -499,7 +547,9 @@ neighbor-weighted predictor was competitive with the feature-vector
 classifiers but did not match the embedded logistic regression.
 
 ***Table 6.** Neighbor-weighted ROC AUC by retrieval scheme and
-weighting strategy (embedded representation, held-out test set).*
+weighting strategy (embedded representation, held-out test set). Values
+are from the full-grid retrieval run and are being regenerated; see the
+provenance note. **[PENDING: refresh from the full-grid 8B KNN re-run.]***
 
 | Retrieval scheme | Uniform | Cosine | LLM | Combined |
 | --- | ---: | ---: | ---: | ---: |
@@ -526,17 +576,41 @@ for the LLM-weighted neighbor predictor (embedded representation).
 
 ## Embedder comparison
 
-**[PENDING: head-to-head discrimination/calibration across the four
-encoders (bge-small-en-v1.5, bge-en-icl, Qwen3-Embedding-4B,
-Qwen3-Embedding-8B). Only Qwen3-Embedding-8B has been run to date; the
-remaining three require backfill through ml_only.sbatch.]**
+Across the four encoders the embedded logistic-regression model
+occupied a narrow discrimination band (ROC AUC 0.684–0.703; Table 8,
+Figure 6A). Qwen3-Embedding-4B was highest (0.703, 95% CI 0.663–0.740)
+and bge-small-en-v1.5 lowest (0.684); the larger Qwen3-Embedding-8B
+(0.688) did not improve on the 4B variant. Logistic regression was the
+best-discriminating classifier on the embedded representation for every
+encoder. The semantic-feature ablation reproduced across encoders
+(Figure 6B): permuting psychiatric history and medication burden
+produced the largest discrimination losses for all four (psychiatric
+history ΔROC AUC −0.033 to −0.050; medication burden −0.037 to −0.048),
+each with paired-bootstrap intervals excluding zero, whereas the
+sociodemographic permutations moved AUC little. The principal
+conclusions — modest discrimination led by the linear model, and
+reliance on clinical rather than sociodemographic content — therefore
+hold beyond the Qwen3-Embedding-8B encoder.
 
-***Figure 6.** Cross-embedder robustness: best-classifier ROC AUC and the
-largest semantic-feature ablation deltas across all four encoders
+***Table 8.** Embedded logistic-regression discrimination by encoder
+(held-out test set). 95% CIs are bootstrap percentile intervals.*
+
+| Encoder | ROC AUC (95% CI) | AUPRC |
+| --- | :---: | ---: |
+| bge-small-en-v1.5 | 0.684 (0.644–0.723) | 0.204 |
+| bge-en-icl | 0.690 (0.649–0.728) | 0.232 |
+| Qwen3-Embedding-4B | 0.703 (0.663–0.740) | 0.236 |
+| Qwen3-Embedding-8B | 0.688 (0.647–0.724) | 0.248 |
+
+![](../results/cross_embedder_robustness_EMBEDDED.png){width=95%}
+
+***Figure 6.** Cross-embedder robustness: embedded logistic-regression
+ROC AUC (A) and the two largest semantic-feature ablation deltas
+(psychiatric history, medication burden; B) across all four encoders
 (bge-small-en-v1.5, bge-en-icl, Qwen3-Embedding-4B, Qwen3-Embedding-8B),
 demonstrating that the principal conclusions hold beyond the
-Qwen3-Embedding-8B encoder. **[PENDING: figure to be generated once
-ml_only.sbatch has been run for all four encoders.]***
+Qwen3-Embedding-8B encoder. Error bars are bootstrap (A) and
+paired-bootstrap (B) 95% confidence intervals.*
 
 ## Semantic-feature ablation
 
@@ -544,31 +618,37 @@ Permuting individual narrative concepts and re-scoring with the frozen
 baseline classifiers localized the embedding's predictive signal to
 clinical content (Table 7). Permuting the psychiatric-history section
 produced the largest discrimination loss (logistic-regression ΔROC AUC
-−0.072; losses of −0.022 to −0.055 for the other classifiers), followed
-by medication burden (−0.031 to −0.055). In contrast, permuting
+−0.042; losses of −0.036 to −0.053 for the other classifiers), followed
+by medication burden (−0.010 to −0.044). In contrast, permuting
 race/ethnicity, social determinants, or treatment contraindications
-produced small deltas (approximately −0.01 to −0.035), indicating that
-the embedding relied comparatively little on sociodemographic content
-for TRD prediction. The embedded signal was not sparse in this run: the
-best logistic-regression fit retained all 4,096 embedding dimensions
-with nonzero coefficients, and its cumulative-importance curve was
-diffuse (80% of the coefficient magnitude was spread across roughly
-2,067 of 4,096 dimensions, and 90% across 2,659), indicating that
-TRD-relevant information is distributed broadly across the embedding
-rather than concentrated in a few dimensions.
+produced negligible deltas (within ±0.008 for every classifier),
+indicating that the embedding relied comparatively little on
+sociodemographic content for TRD prediction. Paired-bootstrap
+delta-AUC confidence intervals excluded zero for psychiatric history
+across all four classifiers and for medication burden in three of four
+(gradient boosting's interval included zero); none of the
+sociodemographic permutations produced an interval excluding zero. The
+embedded signal was not sparse: the best logistic-regression fit
+retained all 4,096 embedding dimensions with nonzero coefficients, and
+its cumulative-importance curve was diffuse (80% of the coefficient
+magnitude was spread across roughly 2,067 of 4,096 dimensions, and 90%
+across 2,659), indicating that TRD-relevant information is distributed
+broadly across the embedding rather than concentrated in a few
+dimensions.
 
 ***Table 7.** Semantic-feature ablation: change in ROC AUC versus the
 frozen baseline when each narrative concept is permuted across donors
 (embedded representation). More negative = larger reliance on that
-concept. Point estimates; paired-bootstrap CIs pending re-run.*
+concept. Point estimates; paired-bootstrap delta-AUC CIs are shown in
+Figures 6B and 7.*
 
 | Permuted concept | LR | RF | GB | XGB |
 | --- | ---: | ---: | ---: | ---: |
-| Psychiatric history | −0.072 | −0.022 | −0.052 | −0.055 |
-| Medication burden | −0.055 | −0.031 | −0.034 | −0.050 |
-| Race/ethnicity | −0.015 | −0.022 | −0.035 | −0.010 |
-| Social determinants (SDOH) | −0.014 | −0.017 | −0.023 | −0.011 |
-| Treatment contraindications | −0.019 | −0.020 | −0.016 | −0.007 |
+| Psychiatric history | −0.042 | −0.036 | −0.047 | −0.053 |
+| Medication burden | −0.037 | −0.022 | −0.010 | −0.044 |
+| Race/ethnicity | −0.002 | −0.003 | 0.000 | −0.003 |
+| Social determinants (SDOH) | −0.003 | +0.002 | −0.002 | −0.002 |
+| Treatment contraindications | 0.000 | −0.004 | +0.005 | −0.008 |
 
 ![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/ablation_roc_ci_EMBEDDED.png){width=95%}
 
@@ -588,16 +668,20 @@ permutations move AUC comparatively little (deltas in Table 7).*
 EHR-derived patient representations carried modest but real signal for
 incident TRD at the point of first adequate antidepressant exposure. A
 neural embedding of a deterministic patient narrative, classified by
-logistic regression, gave the best discrimination (ROC AUC 0.70) and
-the best calibration among discriminative models, exceeding logistic
-regression on the rule-based feature vector (0.65) and edging the best
-feature-vector model (random forest, 0.69). That the linear model on
-the embedding outperformed the tree ensembles suggests the predictive
-structure is approximately linear; the signal was not, however,
-low-dimensional — the logistic-regression fit used all 4,096 embedding
-dimensions, with 80% of the coefficient magnitude spread across roughly
-half of them, so the embedding distributes TRD-relevant information
-broadly rather than concentrating it in a few latent directions. The
+logistic regression, achieved discrimination essentially equivalent to
+the best rule-based model on the primary encoder (embedded logistic
+regression ROC AUC 0.688 versus rule-based random forest 0.691;
+embedded and rule-based logistic regression were identical at 0.688).
+Logistic regression was the strongest embedded classifier on all four
+encoders evaluated, and on the Qwen3-Embedding-4B encoder embedded
+logistic regression (0.703) exceeded the best rule-based model; that a
+linear model on the embedding matched or beat the tree ensembles
+suggests the predictive structure is approximately linear. The signal
+was not, however, low-dimensional — the logistic-regression fit used
+all 4,096 embedding dimensions, with 80% of the coefficient magnitude
+spread across roughly half of them, so the embedding distributes
+TRD-relevant information broadly rather than concentrating it in a few
+latent directions. The
 semantic-feature ablation attributed this
 signal predominantly to psychiatric history and medication burden
 rather than to sociodemographic content — a reassuring result both
@@ -606,7 +690,14 @@ embedding leaning on race or social determinants to predict TRD. The
 neighbor-weighted predictor's nearest ≫ random ≫ farthest ordering
 confirmed that the embedding space is label-informative, though
 LLM-based reweighting added only marginal lift over raw cosine
-similarity.
+similarity — consistent with the weighting strategy being second-order
+to the retrieval scheme, since discrimination tracked which neighbors
+were retrieved rather than how they were weighted. The judge's overall
+similarity scores were well-behaved and were the only quantity entering
+the weighting; its per-dimension sub-scores and free-text rationales, by
+contrast, were unreliable (they referenced symptom data absent from the
+narrative and occasionally flagged identical fields as mismatches;
+Supplement S1), so we treat the sub-scores as diagnostic only.
 
 ## Clinical and methodological context
 
@@ -637,22 +728,27 @@ temporal or external validation was performed, and the high-dimensional
 EMBEDDED models operate far below the conventional events-per-variable
 threshold. Fourth, the ablation attributes signal to named concepts but
 cannot resolve co-correlation between clinically related features
-without joint multi-field perturbation. Fifth, **[PENDING: any
-limitations arising from the refreshed performance results.]**
+without joint multi-field perturbation. Fifth, the embedded
+representation did not deliver a discrimination advantage over the
+transparent rule-based feature vector on the primary encoder (the two
+were within 0.003 ROC AUC and their logistic-regression models were
+identical); the embedding's appeal therefore rests on achieving parity
+without hand-engineered features and on consistency across encoders,
+not on an accuracy gain.
 
 ## Conclusions
 
 Routinely collected EHR data carry modest, clinically coherent signal
 for incident TRD that is detectable at the point of first adequate
 antidepressant exposure. A neural embedding of a deterministic
-narrative was at least competitive with, and under logistic regression
-superior to, a transparent rule-based feature vector, while relying on
-clinical rather than sociodemographic content. The absolute
-discrimination (ROC AUC ≈ 0.70) is too modest for standalone clinical
-deployment but supports the representation as a component of risk
-stratification, pending external validation and the planned re-run
-across all four embedders. **[PENDING: final numeric conclusions once
-the current pipeline is re-run.]**
+narrative achieved discrimination essentially equivalent to a
+transparent rule-based feature vector (both ROC AUC ≈ 0.69 on the
+primary encoder), with logistic regression the strongest embedded model
+across all four encoders evaluated and relying on clinical rather than
+sociodemographic content. The absolute discrimination (ROC AUC ≈ 0.69)
+is too modest for standalone clinical deployment but supports the
+representation as a component of risk stratification, pending external
+validation.
 
 # Declarations
 
