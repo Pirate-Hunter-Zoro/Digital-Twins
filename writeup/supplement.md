@@ -187,7 +187,154 @@ should be read as illustrative only:
 
 Because only `overall_similarity` enters the neighbor weighting, these
 sub-score artifacts do not propagate into the predictions; they are reported
-here for transparency. Consistent with the main-text result, LLM weighting
-added only marginal discrimination over cosine weighting, which we attribute to
-the weighting strategy being second-order to the retrieval scheme rather than to
-any deficiency in the overall similarity score.
+here for transparency. Consistent with the main-text result, the weighting
+strategy was second-order to the retrieval scheme: where the nearest neighbors
+were already maximally similar, LLM weighting added no discrimination over
+cosine weighting (both ROC AUC ≈ 0.624), and it lifted discrimination only
+under random or subsampled retrieval, where the overall similarity score could
+recover the few congruent neighbors a non-targeted draw happened to include —
+behavior attributable to the retrieval geometry rather than to any deficiency
+in the overall similarity score.
+
+# Supplement S2. Effective dimensionality of the embedded representation
+
+Individual embedding dimensions carry no clinical meaning, so per-feature
+interpretability — available for the rule-based vector in main-text Figure 4 —
+does not transfer to the 4,096-dimensional embedded representation. Instead we
+characterize *how many* latent dimensions carry the predictive signal, using
+three complementary views. All figures are for the primary
+`Qwen3-Embedding-8B` encoder on the held-out test set.
+
+## S2.1 Sparsity and cumulative built-in importance
+
+The best logistic-regression fit retained all 4,096 embedding dimensions with
+nonzero coefficients (no L1 sparsity: 4,096 of 4,096 coefficients nonzero), so
+the signal is not concentrated in a small subset of dimensions. Ranking
+dimensions by each fitted classifier's native importance (`|coef|` for logistic
+regression, `feature_importances_` for the tree ensembles) and accumulating the
+importance mass confirms a diffuse distribution: for logistic regression, 80%
+of the coefficient magnitude is spread across roughly 2,067 of the 4,096
+dimensions and 90% across roughly 2,659 (Figure S1). TRD-relevant information
+is therefore distributed broadly across the embedding rather than localized.
+
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_cumulative_EMBEDDED.png){width=80%}
+
+***Figure S1.** Cumulative built-in feature importance for the four embedded
+classifiers. Each curve plots the cumulative fraction of total importance mass
+against dimension rank (dimensions sorted by descending native importance); the
+K₈₀ / K₉₀ knees are reported in the legend. A diagonal-like curve indicates a
+diffuse, high-effective-rank signal.*
+
+## S2.2 Cumulative univariate correlation
+
+An importance ranking is model-specific. As a model-agnostic check we ranked
+dimensions by the absolute Spearman correlation between each dimension and the
+outcome, |ρ(dim, y)|, and overlaid that baseline against per-classifier curves
+ranking dimensions by |ρ(dim, risk score)| (Figure S2). Divergence between the
+model-agnostic baseline and a classifier's curve would flag dimensions the
+classifier weights through regularization or interactions that a univariate
+ranking cannot see; the curves were broadly concordant and similarly diffuse,
+consistent with the approximately linear, high-effective-rank structure. Only
+|ρ| is used — the sign of a correlation on an unnamed latent dimension is not
+interpretable.
+
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_correlation_cumulative_EMBEDDED.png){width=80%}
+
+***Figure S2.** Cumulative absolute univariate (Spearman) correlation. One
+model-agnostic baseline curve ranks dimensions by |ρ(dim, outcome)|; the four
+per-classifier curves rank by |ρ(dim, predicted risk)|. Cumulative fraction of
+total |ρ| mass versus rank, with K₈₀ / K₉₀ knees in the legend.*
+
+## S2.3 PCA-K discrimination sweep
+
+To locate the geometric plateau, each classifier was retrained on the top
+K ∈ {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024} principal components of the
+embedding and its held-out ROC AUC plotted against K (Figure S3).
+Discrimination rose steeply over the first handful of components and then
+plateaued, with no single low-dimensional projection recovering the full-rank
+performance — the same broadly-distributed-signal conclusion reached from the
+cumulative-importance and correlation curves.
+
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_pca_sweep_logistic_regression_EMBEDDED.png){width=80%}
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_pca_sweep_random_forest_EMBEDDED.png){width=80%}
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_pca_sweep_gradient_boosting_EMBEDDED.png){width=80%}
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/feature_importance/feature_importance_pca_sweep_xgboost_EMBEDDED.png){width=80%}
+
+***Figure S3.** ROC AUC versus number of retained principal components, one
+panel per classifier: (A) logistic regression, (B) random forest,
+(C) gradient boosting, (D) XGBoost. The plateau marks the effective number of
+principal directions beyond which added components do not improve
+discrimination.*
+
+# Supplement S3. Precision–recall performance
+
+The main text reports discrimination as ROC AUC. Under the cohort's ~8:1 class
+imbalance (10.6% TRD-positive), ROC AUC can flatter apparent performance
+because the true-negative-dominated specificity term stays high regardless of
+how the positive class is ranked. The area under the precision–recall curve
+(AUPRC) is the complementary view: its no-skill baseline is the positive rate
+itself (0.106), not 0.5, and it exposes the precision cost of capturing TRD
+cases. We report it here rather than in the main text.
+
+AUPRC tracked ROC AUC closely and remained modest for every model (Table S1),
+consistent with a representation suited to triage and risk-stratification
+rather than standalone rule-in: at this base rate, capturing high TRD recall
+necessarily forces low precision.
+
+***Table S1.** AUPRC of the four classifiers on each representation (held-out
+test set). No-skill baseline = 0.106 (the positive rate).*
+
+| Representation | Classifier | AUPRC |
+| --- | --- | ---: |
+| EMBEDDED | Logistic regression | 0.248 |
+| EMBEDDED | Random forest | 0.219 |
+| EMBEDDED | Gradient boosting | 0.230 |
+| EMBEDDED | XGBoost | 0.232 |
+| FEATURE | Logistic regression | 0.235 |
+| FEATURE | Random forest | 0.248 |
+| FEATURE | Gradient boosting | 0.228 |
+| FEATURE | XGBoost | 0.242 |
+
+***Table S2.** Embedded logistic-regression AUPRC by encoder (held-out test
+set). No-skill baseline = 0.106.*
+
+| Encoder | AUPRC |
+| --- | ---: |
+| bge-small-en-v1.5 | 0.204 |
+| bge-en-icl | 0.232 |
+| Qwen3-Embedding-4B | 0.236 |
+| Qwen3-Embedding-8B | 0.248 |
+
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/pr_curves/pr_curve_logistic_regression_EMBEDDED.png){width=80%}
+![](../results/Qwen-Qwen3-Embedding-8B/google_medgemma-27b-text-it/pr_curves/pr_curve_random_forest_FEATURE.png){width=80%}
+
+***Figure S4.** Precision–recall curves for the best classifier on each
+representation (held-out test set; primary `Qwen3-Embedding-8B` encoder).
+(A) Embedded logistic regression; (B) rule-based random forest. The horizontal
+reference is the no-skill baseline (0.106, the positive rate).*
+
+# Supplement S4. Calibration absolute-error metrics
+
+The main text reports calibration shape via the calibration slope and intercept
+(Table 5) and the calibration curves (Figure 3). Here we report the two
+absolute-error summaries: the Brier score and a weighted calibration error
+(WCE), both lower-is-better (Table S3). Brier scores were uniformly near
+0.089–0.091 across all eight models, dominated by the low base rate (10.6%
+positive); the WCE separated the models more, with random forest on the
+embedded representation and logistic regression on the feature vector the
+lowest (0.006 each), consistent with their near-ideal slopes in Table 5.
+
+***Table S3.** Brier score and weighted calibration error (WCE) of the four
+classifiers on each representation (held-out test set). Lower is better for
+both. Calibration slope and intercept are in main-text Table 5.*
+
+| Representation | Classifier | Brier | WCE |
+| --- | --- | ---: | ---: |
+| EMBEDDED | Logistic regression | 0.090 | 0.020 |
+| EMBEDDED | Random forest | 0.091 | 0.006 |
+| EMBEDDED | Gradient boosting | 0.091 | 0.007 |
+| EMBEDDED | XGBoost | 0.090 | 0.015 |
+| FEATURE | Logistic regression | 0.090 | 0.006 |
+| FEATURE | Random forest | 0.089 | 0.014 |
+| FEATURE | Gradient boosting | 0.090 | 0.019 |
+| FEATURE | XGBoost | 0.090 | 0.020 |

@@ -70,19 +70,23 @@ TOP PRIORITY — ACTIVE WORK
 
 MANUSCRIPT WRITE-UP NOTES
 --------------------------------------
+- [ ] Manuscript body curated through the Results section "Density and
+      chronology checks". The main text now carries only the headline
+      metrics (ROC AUC, confusion matrices, calibration curves +
+      slope/intercept, feature importance for the four FEATURE
+      classifiers, semantic-feature ablation, cross-embedder); secondary
+      analyses moved to writeup/supplement.md — S2 (embedded effective
+      dimensionality: sparsity, cumulative |Spearman rho|, PCA-K sweep),
+      S3 (precision-recall / AUPRC), S4 (calibration absolute error:
+      Brier, weighted calibration error). NEXT REVIEW PASS: "Provenance
+      of performance results" onward (Discussion not yet re-checked
+      against the relocated metrics).
 - [ ] Farthest-neighbor scheme scored BELOW chance (~0.39 ROC AUC), not
       near 0.5 — maximally-dissimilar neighbors carry inverse predictive
       signal, evidence that the embedding space is label-informative in
       both directions, not only locally. Decide whether to surface this in
       the Discussion (currently only the nearest >> random >> farthest
       ordering is stated).
-- [ ] Decide whether to state explicitly in the Discussion that ROC AUC
-      flatters performance while AUPRC (no-skill baseline = prevalence
-      0.106) exposes the false-positive burden: under the ~8:1 class
-      imbalance, capturing high TRD recall forces low precision, so the
-      representation fits triage / risk-stratification rather than
-      standalone rule-in. Currently implied by the Table 4 numbers but
-      never stated.
 
 DATA INTEGRITY
 --------------------------------------------------------------------
