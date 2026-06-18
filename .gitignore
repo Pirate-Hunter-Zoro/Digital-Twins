@@ -13,3 +13,4 @@ results/
 figures/
 *.json
 node_modules/
+writeup/
