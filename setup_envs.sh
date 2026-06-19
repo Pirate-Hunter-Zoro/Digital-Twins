@@ -26,6 +26,10 @@ python -m pip install scikit-learn==1.7.1\
                         numpy==2.2.6\
                         torch==2.7.1\
                         vllm==0.10.0\
+                        fastapi==0.116.1\
+                        starlette==0.47.2\
+                        uvicorn==0.35.0\
+                        prometheus-fastapi-instrumentator==7.1.0\
                         transformers==4.55.4\
                         pandas==2.3.1\
                         scipy==1.16.1\
