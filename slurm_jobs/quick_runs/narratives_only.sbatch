@@ -10,7 +10,7 @@
 
 set -e
 
-CONDA_ENV=ehr_env
+CONDA_ENV=/media/studies/ehr_study/analysis/mferguson/venvs/embedder_pipeline
 
 module purge
 module load Anaconda3/2025.06-0

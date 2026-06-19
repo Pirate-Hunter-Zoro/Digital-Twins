@@ -13,7 +13,7 @@
 set -e
 
 # ---- Conda configuration ----
-CONDA_ENV=ehr_env
+CONDA_ENV=/media/studies/ehr_study/analysis/mferguson/venvs/embedder_pipeline
 
 # ---- Boilerplate env/bootstrap ----
 module purge

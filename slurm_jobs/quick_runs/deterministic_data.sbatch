@@ -12,7 +12,7 @@
 set -e
 
 # ---- Conda configuration ----
-CONDA_ENV=ehr_env
+CONDA_ENV=/media/studies/ehr_study/analysis/mferguson/venvs/embedder_pipeline
 N_THREADS="${SLURM_CPUS_PER_TASK}"
 
 # ---- Boilerplate env/bootstrap ----

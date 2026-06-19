@@ -10,7 +10,7 @@
 #SBATCH --gres=gpu:3
   
 GPUS=2                      
-CONDA_ENV=ehr_env
+CONDA_ENV=/media/studies/ehr_study/analysis/mferguson/venvs/embedder_pipeline
 TP_SIZE=$GPUS  
 PP_SIZE=1                   
 PORT=8000
@@ -20,7 +20,7 @@ DTYPE=bfloat16
 module purge
 module load Anaconda3/2025.06-0
 eval "$(conda shell.bash hook)"
-conda activate ehr_env
+conda activate "${CONDA_ENV}"
 
 # Ensure proper gpu availability
 nvidia-smi -L

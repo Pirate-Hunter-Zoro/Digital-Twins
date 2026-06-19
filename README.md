@@ -395,6 +395,15 @@ These three `0`/`1` flags scope what the neighbor-weighted KNN pipeline computes
 * `LOW_CONFIDENCE_ESS_THRESHOLD`: 20
 * `NUM_PAIRS_SANITY_CHECK`: 1000
 
+## Environment Setup
+
+The pipeline runs in two **separate** conda environments, both built from scratch by the `setup_envs.sh` script (run it once from the repository root on an allocated compute node; it creates the env prefixes under `/media/studies/ehr_study/analysis/mferguson/venvs/`, installs into each prefix, and ends with an import smoke check so a green run proves the env works):
+
+* **`embedder_pipeline`** — the main pipeline environment. Hard-pinned to **scikit-learn 1.7.1** (the version the cached `trained_models/*.joblib` transformers were pickled under) and carrying the heavy stack: torch, vLLM, transformers, sentence-transformers, xgboost, pandas, pyarrow, and the rest. Every Slurm job and the `cohort_investigation` notebook run under this env.
+* **`causal_forest_env`** — a lean, separate environment for the causal random forest work (`econml` with **scikit-learn 1.6.1**, plus shap, lightgbm, statsmodels). It is isolated on purpose: econml hard-caps scikit-learn below 1.7, which is incompatible with the main env's 1.7.1, and forcing them into one env corrupts the joblib caches. No torch/vLLM here.
+
+The two environments cannot share one interpreter — keep them distinct.
+
 ## Usage
 
 **To Launch the Full Pipeline:**
@@ -428,19 +437,19 @@ The analysis notebooks (e.g. `notebooks/cohort_investigation.ipynb`) sweep the f
 
 Per-session process (VS Code / Cursor Remote):
 
-1. From a shell on an allocated compute node — request an interactive Slurm allocation first if you are not already on one — activate `ehr_env`.
+1. From a shell on an allocated compute node — request an interactive Slurm allocation first if you are not already on one — activate the main pipeline environment (`embedder_pipeline`, by its prefix path under `/media/studies/ehr_study/analysis/mferguson/venvs/`).
 2. Start a Jupyter server from that shell and leave the terminal open. It prints a URL containing an access token.
 3. In the notebook's kernel picker, choose *Select Another Kernel -> Existing Jupyter Server* and paste that URL, token included. When the VS Code remote session is attached to the same node, the printed loopback URL connects as-is; if the editor is attached to a different host, substitute the node's name for the loopback host (or forward the port).
-4. Select the **Python (ehr_env)** kernel.
+4. Select the **Python (embedder_pipeline)** kernel.
 
-One-time setup: the **Python (ehr_env)** kernel has to be registered once as a user-level Jupyter kernelspec pinned to `ehr_env`'s interpreter (via its `ipykernel` module); it persists across sessions afterward. This matters because the `jupyter` binary on the default PATH can resolve to a system install running a different Python — the registered kernelspec is what guarantees cells execute under `ehr_env` (Python 3.11.13) regardless of which server process is serving the notebook.
+One-time setup: the **Python (embedder_pipeline)** kernel has to be registered once as a user-level Jupyter kernelspec pinned to `embedder_pipeline`'s interpreter (via its `ipykernel` module); it persists across sessions afterward. This matters because the `jupyter` binary on the default PATH can resolve to a system install running a different Python — the registered kernelspec is what guarantees cells execute under `embedder_pipeline` (Python 3.11) regardless of which server process is serving the notebook.
 
 Closing the server's terminal or losing the allocation tears down the server and every kernel under it, so keep that session alive for the duration of your work.
 
 ## Downloading Models
 
 ```bash
-conda activate ehr_env
+conda activate /media/studies/ehr_study/analysis/mferguson/venvs/embedder_pipeline
 export HF_HOME=/media/studies/ehr_study/analysis/mferguson/models/hf_cache
 cd /media/studies/ehr_study/analysis/mferguson/models/
 hf download BAAI/bge-en-icl --local-dir bge-en-icl
