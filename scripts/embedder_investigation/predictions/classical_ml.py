@@ -18,8 +18,8 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.compose import ColumnTransformer, make_column_selector
 from xgboost import XGBClassifier
 
-from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
-from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
+from scripts.embedder_investigation.predictions.trd_predictor import TRDPredictor
+from scripts.embedder_investigation.predictions.create_train_test_split import create_train_test_split
 from scripts.shared.plots import (
     plot_receiving_operator_characteristic,
     plot_precision_recall,
@@ -32,7 +32,7 @@ from scripts.shared.utils import (
     VITAL_COLUMNS,
     cast_to_int8
 )
-from scripts.digital_twins.predictions.trd_prediction_computation import compute_metrics
+from scripts.embedder_investigation.predictions.trd_prediction_computation import compute_metrics
 
 def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATURE) -> Tuple[pd.DataFrame, np.ndarray]:
     """Load all the patient vectors and find their labels

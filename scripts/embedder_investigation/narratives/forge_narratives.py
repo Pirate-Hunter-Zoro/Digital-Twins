@@ -1,4 +1,4 @@
-from scripts.digital_twins.vectors.runner import run
+from scripts.embedder_investigation.narratives.runner import run
 
 def main() -> None:
     run()

@@ -1,4 +1,4 @@
-from scripts.digital_twins.vectors.generator import generate_feature_vectors
+from scripts.embedder_investigation.vectors.generator import generate_feature_vectors
 
 def run() -> None:
     print("Running feature vector generation...", flush=True)

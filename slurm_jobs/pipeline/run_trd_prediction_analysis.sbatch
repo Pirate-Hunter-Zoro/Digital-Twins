@@ -31,16 +31,16 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-python -m scripts.digital_twins.embeddings.embedding_audit
+python -m scripts.embedder_investigation.embeddings.embedding_audit
 
 if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
-  python -m scripts.digital_twins.neighbors.llm_similarity_audit
+  python -m scripts.embedder_investigation.neighbors.llm_similarity_audit
 fi
 
-python -m scripts.digital_twins.predictions.analyze_trd_prediction
-python -m scripts.digital_twins.predictions.classical_ml
-python -m scripts.digital_twins.predictions.feature_importance
-python -m scripts.digital_twins.predictions.ablation_runner
+python -m scripts.embedder_investigation.predictions.analyze_trd_prediction
+python -m scripts.embedder_investigation.predictions.classical_ml
+python -m scripts.embedder_investigation.predictions.feature_importance
+python -m scripts.embedder_investigation.predictions.ablation_runner
 
 # Copy all files from the RESULTS_DIR to the local results/ directory for easier access
 LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"

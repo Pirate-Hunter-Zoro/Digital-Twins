@@ -1,7 +1,7 @@
 
-# Digital Twins: Patient Representation & Embedding Pipeline
+# Embedder Investigation: Patient Representation & Embedding Pipeline
 
-This repository contains the pipeline for converting Electronic Health Record (EHR) data into "Digital Twins"---vectorized representations of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
+This repository contains the pipeline for converting Electronic Health Record (EHR) data into vectorized patient representations---embedded and rule-based feature vectors of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
 
 The pipeline produces two independent patient vector representations (rule-based feature vectors and neural embedded vectors) and evaluates TRD risk prediction across an asymmetric evaluation matrix:
 
@@ -62,21 +62,21 @@ The foundation. These scripts ingest raw EHR exports and structure them into usa
 * **`features.py`**: Extractors for specific clinical features.
 * **Definitions**: `diagnoses_definitions.py` (includes `get_mdd_components()` for extracting MDD recurrence and severity as separate fields), `med_definitions.py`, etc., map codes to clinical text.
 
-### 2a. Stage 1a: Narrative Generation (`scripts/digital_twins/narratives`)
+### 2a. Stage 1a: Narrative Generation (`scripts/embedder_investigation/narratives`)
 
 Transforms the structured JSONs into textual narratives.
 
 * **`generator.py`**: Iterates through the cohort, applies the `deterministic_narrative` logic, and saves `.md` files to the `NARRATIVES_DIR`. Reconciliation runs **before** generation, not after: once the cohort is established it deletes any top-level `.md` whose patient is no longer in the cohort (per-spec ablation subdirectories are reconciled separately, at embed time by `forge_embeddings` — see Stage 2), then writes the pre-anchor history-length CSV (`narrative_pre_anchor_history_days.csv` in `ARTIFACTS_DIR`) directly from the cohort's sliced JSONs — both steps complete before the multiprocessing pool writes a single narrative. Ordering it this way keeps the on-disk narrative set a subset of the cohort and the length CSV a full cover of the cohort at all times, so even an interrupted generation run cannot leave the downstream embedding pass an orphaned narrative or one missing its length row (the `KeyError` source in `patient_embedder.embed`). The pool loop now only drives `.md` generation and progress logging; the CSV no longer depends on its return values.
 * **`runner.py`**: Orchestrates the generation job via Slurm.
 
-### 2b. Stage 1b: Feature Vector Generation (`scripts/digital_twins/vectors`)
+### 2b. Stage 1b: Feature Vector Generation (`scripts/embedder_investigation/vectors`)
 
 Constructs a typed, cohort-wide pandas DataFrame of features directly from the structured patient JSONs, bypassing the narrative/embedding pipeline entirely. This DataFrame serves as a classical ML baseline to compare against the high-dimensional embedded vectors.
 
 * **`generator.py`**: First performs a single cohort-wide JSON scan to discover all categorical levels and cache them to `categorical_levels.json` (replaces the former `patient_attributes.json`). Then uses multiprocessing to iterate the cohort and call `generate_feature_vector` for each patient, collecting per-patient Series into a single DataFrame and persisting it to parquet. Produces a sanity check report sampling 10 random rows alongside their narratives and the column dtype schema.
 * **`runner.py`**: Thin orchestrator that invokes the generator.
 
-### 3. Stage 2: Vector Embedding (`scripts/digital_twins/embeddings`)
+### 3. Stage 2: Vector Embedding (`scripts/embedder_investigation/embeddings`)
 
 Converts text narratives into high-dimensional vectors using the `PatientEmbedder`.
 
@@ -98,7 +98,7 @@ Converts text narratives into high-dimensional vectors using the `PatientEmbedde
     2. **Metric Monotonicity**: Tests if Euclidean distance offers distinct ranking signals compared to Cosine similarity.
   * **Output**: `vector_norms.png`, `cos_vs_euclidean.png`.
 
-### 4. Stage 3: Retrieval & Scoring (`scripts/digital_twins/neighbors`)
+### 4. Stage 3: Retrieval & Scoring (`scripts/embedder_investigation/neighbors`)
 
 Finds and scores patient similarity on the embedded vectors.
 
@@ -125,7 +125,7 @@ Finds and scores patient similarity on the embedded vectors.
   * **Extremes Sampling**: Queries the top 5 highest and bottom 5 lowest similarity scores to isolate and demonstrate the model's behavior at the margins.
   * **Reporting**: Generates isolated `.txt` files containing both compared narratives alongside the formatted JSON output for readable human analysis.
 
-### 5. Stage 4: Prediction & Evaluation (`scripts/digital_twins/predictions`)
+### 5. Stage 4: Prediction & Evaluation (`scripts/embedder_investigation/predictions`)
 
 #### 5a. Neighbor-Weighted KNN Prediction
 
@@ -164,7 +164,7 @@ graph TD
 
 * **`trd_prediction_computation.py`**:
   * Loads neighborhood CSV data (embedding source only) and computes weighted TRD risk predictions.
-  * **Digital Twin Matcher Logic**:
+  * **Neighbor-Weighted Matcher Logic**:
       1. Groups neighbors by anchor patient.
       2. Scores neighbors via the weighting strategies in `RELEVANT_WEIGHTING_STRATS` (Uniform, Cosine, and — only when `COMPUTE_LLM_SIMILARITY=1` — LLM and Combined (Harmonic Mean of Cosine and LLM)).
       3. Computes weighted probability of TRD risk ($P(TRD)=\frac{w\bullet f}{\sum_w w_i}$).
@@ -277,7 +277,7 @@ pytest tests/
 
 Work outside the current pipeline surface, tracked in `TODO.txt`:
 
-* **Feature Importance** — Sibling module `scripts/digital_twins/predictions/feature_importance.py`, consumed by `classical_ml.py` (or runnable standalone against persisted fits). The module loops over both `VectorSource` values but answers a different question per source. The two paths share `load_best_params` / `refit_best_model` plumbing and a shared univariate-correlation helper, but produce different outputs because feature-level interpretability does not exist on the embedded side. **Status:** all primitives, `main()` orchestrator, and sbatch integration (both `run_trd_prediction_analysis.sbatch` and `ml_only.sbatch`) landed. Module runs after `classical_ml.py` and reads `grid_search_ml_results_{source}.json`. The EMBEDDED LR sparsity diagnostic is emitted as `feature_importance_sparsity.json` (keys: `nonzero_coefficients`, `total_coefficients`); the predictions package is fully JSON-only, no `results.txt` writers remain. The cumulative-overlay helper `plot_cumulative_magnitude_overlay` takes any per-dim magnitude array paired with caller-supplied xlabel/ylabel/title/filename. EMBEDDED pass emits two cumulative-overlay PNGs: `feature_correlation_cumulative_EMBEDDED.png` (5 curves: model-agnostic baseline ranking dims by `|ρ(dim, y_true)|` plus four per-classifier curves ranking dims by `|ρ(dim, risk_score)|`) and `feature_importance_cumulative_EMBEDDED.png` (4 curves: per-classifier built-in importance, populated from an `importances_by_label` dict built during the classifier loop — LR via `coef_[0]`, tree models via `feature_importances_`). FEATURE pass runs a single loop over the four classifiers — no strategy axis. Outputs: 4 `feature_importance_{classifier}.png` and a single `feature_importance_summary.json`.
+* **Feature Importance** — Sibling module `scripts/embedder_investigation/predictions/feature_importance.py`, consumed by `classical_ml.py` (or runnable standalone against persisted fits). The module loops over both `VectorSource` values but answers a different question per source. The two paths share `load_best_params` / `refit_best_model` plumbing and a shared univariate-correlation helper, but produce different outputs because feature-level interpretability does not exist on the embedded side. **Status:** all primitives, `main()` orchestrator, and sbatch integration (both `run_trd_prediction_analysis.sbatch` and `ml_only.sbatch`) landed. Module runs after `classical_ml.py` and reads `grid_search_ml_results_{source}.json`. The EMBEDDED LR sparsity diagnostic is emitted as `feature_importance_sparsity.json` (keys: `nonzero_coefficients`, `total_coefficients`); the predictions package is fully JSON-only, no `results.txt` writers remain. The cumulative-overlay helper `plot_cumulative_magnitude_overlay` takes any per-dim magnitude array paired with caller-supplied xlabel/ylabel/title/filename. EMBEDDED pass emits two cumulative-overlay PNGs: `feature_correlation_cumulative_EMBEDDED.png` (5 curves: model-agnostic baseline ranking dims by `|ρ(dim, y_true)|` plus four per-classifier curves ranking dims by `|ρ(dim, risk_score)|`) and `feature_importance_cumulative_EMBEDDED.png` (4 curves: per-classifier built-in importance, populated from an `importances_by_label` dict built during the classifier loop — LR via `coef_[0]`, tree models via `feature_importances_`). FEATURE pass runs a single loop over the four classifiers — no strategy axis. Outputs: 4 `feature_importance_{classifier}.png` and a single `feature_importance_summary.json`.
   * **FEATURE — per-feature interpretability.** Each fitted classifier emits a feature-importance ranking aligned to the post-`ColumnTransformer` feature names (`ColumnTransformer.get_feature_names_out()`). Magnitude comes from the model's native attribute: tree models (Random Forest, Gradient Boosting, XGBoost) use `feature_importances_`; Logistic Regression uses *signed* `coef_[0]` (sign preserved so direction is recoverable). Direction-of-effect for tree models is recovered separately via univariate Spearman correlation between each post-encode feature column and the outcome `y` — sign of the correlation = direction. SHAP is no longer required and is treated as an optional gold-standard pass; the correlation overlay sidesteps the `shap` env-availability question entirely. Caveat: univariate correlation is interaction-blind, but the model's native importance still drives magnitude — correlation only informs sign. Output: top-K horizontal bar chart at `feature_importance/feature_importance_{classifier}.png` in `RESULTS_DIR`, color-coded by direction (steelblue = raises TRD, firebrick = lowers TRD), plus a consolidated `feature_importance_summary.json`.
   * **EMBEDDED — effective-rank interpretability.** Per-dim importance on 4096 unnamed latents is uninterpretable (no clinical meaning attaches to a single latent dim), so the module instead estimates *how many* dims carry predictive signal: (a) **L1 sparsity count** — nonzero coefficient count from the best elasticnet/L1 LR fit (free; falls out of the existing grid search); (b1) **cumulative correlation curve** — overlay of five cumulative |Spearman ρ| curves: one model-agnostic baseline (dims ranked by `|ρ(dim, y_true)|`) plus one per fitted classifier (dims ranked by `|ρ(dim, risk_score)|`). Each curve plots cumulative fraction of total |ρ| mass vs rank, with K₈₀ / K₉₀ knees reported in the legend. The baseline answers "how much intrinsic signal does the embedding carry per dim?"; the per-classifier curves answer "what dims does each trained classifier read?"; divergence between baseline and any classifier exposes that the classifier is redistributing weight via regularization or interactions the univariate ranking can't see (caveat: interaction-blind, undercounts dims that contribute purely through interactions); (b2) **cumulative built-in importance curve** — overlay of four cumulative |importance| curves, one per fitted classifier, ranked by each model's native attribute (`|coef_[0]|` for Logistic Regression, `feature_importances_` for tree models). Plots cumulative fraction of total |importance| mass vs rank, with K₈₀ / K₉₀ knees reported in the legend. No model-agnostic baseline exists for this variant — built-in importance is by definition a model-specific quantity. Answers "what dims does each trained classifier weigh by its own internal accounting?"; cross-checking against (b1) flags dims the classifier weighs heavily but that lack standalone univariate signal — a regularization/interaction redistribution flag; (c) **PCA-K-vs-ROC sweep** — classifier retrained on K ∈ {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024} truncated principal components, plotting ROC AUC vs K to locate the geometric plateau. Sign of the correlation is meaningless on unnamed latents — only `|correlation|` is used here. Output: `feature_correlation_cumulative_EMBEDDED.png` (overlay of 5 correlation curves), `feature_importance_cumulative_EMBEDDED.png` (overlay of 4 built-in-importance curves), `feature_importance_pca_sweep_EMBEDDED.png`, and `feature_importance_summary_EMBEDDED.json` (sparsity count, knee K, plateau K) in `RESULTS_DIR`.
   * **Concept-probe work** (correlating surviving embedded dims with named clinical features from the feature vector) is **out of scope** for this module — deferred to a sibling notebook if/when interest arises.

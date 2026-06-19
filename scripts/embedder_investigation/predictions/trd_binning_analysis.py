@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.shared.utils import load_neighborhood_data
-from scripts.digital_twins.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
-from scripts.digital_twins.predictions.weighting_strategy import RELEVANT_WEIGHTING_STRATS
+from scripts.embedder_investigation.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
+from scripts.embedder_investigation.predictions.weighting_strategy import RELEVANT_WEIGHTING_STRATS
 
 def load_and_merge_data() -> pd.DataFrame:
     """Loads the neighbor data for each anchor patient, as well as the evaluation results for each anchor patient and merges them into a single array

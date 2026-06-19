@@ -4,9 +4,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.digital_twins.neighbors.retriever import Retriever
-from scripts.digital_twins.neighbors.scorer import Scorer
-from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
+from scripts.embedder_investigation.neighbors.retriever import Retriever
+from scripts.embedder_investigation.neighbors.scorer import Scorer
+from scripts.embedder_investigation.neighbors.neighbor_scheme import NeighborScheme
 
 class TRDPredictor:
     

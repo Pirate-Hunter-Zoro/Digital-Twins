@@ -39,7 +39,7 @@ export CUDA_VISIBLE_DEVICES="${FREE_GPU}"
 echo "Pinning to GPU ${CUDA_VISIBLE_DEVICES} on $(hostname)"
 nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
 
-python -m scripts.digital_twins.narratives.forge_narratives
-python -m scripts.digital_twins.vectors.forge_vectors
-python -m scripts.digital_twins.embeddings.forge_embeddings
-python -m scripts.digital_twins.embeddings.forge_ablated_embeddings
+python -m scripts.embedder_investigation.narratives.forge_narratives
+python -m scripts.embedder_investigation.vectors.forge_vectors
+python -m scripts.embedder_investigation.embeddings.forge_embeddings
+python -m scripts.embedder_investigation.embeddings.forge_ablated_embeddings

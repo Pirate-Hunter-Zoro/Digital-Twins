@@ -5,8 +5,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 
-from scripts.digital_twins.neighbors.retriever import Retriever
-from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
+from scripts.embedder_investigation.neighbors.retriever import Retriever
+from scripts.embedder_investigation.neighbors.neighbor_scheme import NeighborScheme
 from scripts.shared.utils import load_neighborhood_data
 
 from dotenv import load_dotenv

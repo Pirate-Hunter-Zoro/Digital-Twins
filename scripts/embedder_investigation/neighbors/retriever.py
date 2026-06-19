@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.digital_twins.neighbors.neighbor_scheme import NeighborScheme
+from scripts.embedder_investigation.neighbors.neighbor_scheme import NeighborScheme
 
 EMBEDDINGS_DIR = Path(os.environ['EMBEDDINGS_DIR'])
 

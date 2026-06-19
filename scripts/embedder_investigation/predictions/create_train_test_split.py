@@ -3,7 +3,7 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 import pandas as pd
 
-from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
+from scripts.embedder_investigation.predictions.trd_predictor import TRDPredictor
 
 test_ids_path = Path(os.environ['ANALYSIS_DIR']) / 'test_patient_ids.txt'
 

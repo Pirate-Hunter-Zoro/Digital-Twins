@@ -14,8 +14,8 @@ load_dotenv()
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
-from scripts.digital_twins.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
+from scripts.embedder_investigation.predictions.trd_predictor import TRDPredictor
+from scripts.embedder_investigation.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
 from scripts.shared.utils import load_neighborhood_data
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])

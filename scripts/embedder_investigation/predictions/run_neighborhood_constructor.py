@@ -4,9 +4,9 @@ import os
 import multiprocessing
 import numpy as np
 
-from scripts.digital_twins.predictions.trd_predictor import TRDPredictor
-from scripts.digital_twins.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
-from scripts.digital_twins.predictions.create_train_test_split import create_train_test_split
+from scripts.embedder_investigation.predictions.trd_predictor import TRDPredictor
+from scripts.embedder_investigation.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
+from scripts.embedder_investigation.predictions.create_train_test_split import create_train_test_split
 
 from dotenv import load_dotenv
 load_dotenv()
