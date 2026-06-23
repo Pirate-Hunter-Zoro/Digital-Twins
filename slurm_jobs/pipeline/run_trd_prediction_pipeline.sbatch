@@ -31,4 +31,4 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-python -m scripts.embedder_investigation.predictions.run_neighborhood_constructor
+python -m scripts.pipeline.predictions.run_neighborhood_constructor

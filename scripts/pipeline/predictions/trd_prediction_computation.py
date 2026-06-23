@@ -15,9 +15,9 @@ from sklearn.linear_model import LinearRegression
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.embedder_investigation.predictions.trd_predictor import TRDPredictor
-from scripts.embedder_investigation.predictions.weighting_strategy import WeightingStrategy, RELEVANT_WEIGHTING_STRATS
-from scripts.embedder_investigation.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
+from scripts.pipeline.predictions.trd_predictor import TRDPredictor
+from scripts.pipeline.predictions.weighting_strategy import WeightingStrategy, RELEVANT_WEIGHTING_STRATS
+from scripts.pipeline.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
 from scripts.shared.plots import (
     plot_receiving_operator_characteristic,
     plot_precision_recall,

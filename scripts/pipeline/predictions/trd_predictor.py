@@ -4,9 +4,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.embedder_investigation.neighbors.retriever import Retriever
-from scripts.embedder_investigation.neighbors.scorer import Scorer
-from scripts.embedder_investigation.neighbors.neighbor_scheme import NeighborScheme
+from scripts.pipeline.neighbors.retriever import Retriever
+from scripts.pipeline.neighbors.scorer import Scorer
+from scripts.pipeline.neighbors.neighbor_scheme import NeighborScheme
+from scripts.shared.utils import load_trd_set
 
 class TRDPredictor:
     
@@ -21,8 +22,7 @@ class TRDPredictor:
         self.judge_sims = int(os.environ['COMPUTE_LLM_SIMILARITY'])==1 
         self.scorer = Scorer(require_client=self.judge_sims, save_time_hist=save_time_hist)
         self.trd_set = set()
-        trd_file = Path(os.environ['TRD_LIST_PATH'])
-        self.trd_set = set([l.strip('"') for l in trd_file.read_text().splitlines()])
+        self.trd_set = load_trd_set()
         
     def get_trd_status(self, candidate_patient_id: str) -> int:
         """

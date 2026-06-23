@@ -32,8 +32,8 @@ fi
 set -a; source "${ENV_FILE}"; set +a
 
 python -m scripts.data_loading.build_jsons
-python -m scripts.embedder_investigation.narratives.forge_narratives
-python -m scripts.embedder_investigation.vectors.forge_vectors
+python -m scripts.pipeline.narratives.forge_narratives
+python -m scripts.pipeline.vectors.forge_vectors
 
 # Copy all files from the RESULTS_DIR to the local test_data directory for easier access
 LOCAL_RESULTS_DIR="test_data/"

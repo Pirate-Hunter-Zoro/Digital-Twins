@@ -25,7 +25,7 @@ def main():
         
         # With all the proper .env changes made, forge the embeddings with the given ablation
         subprocess.run(
-            ["python", '-m', 'scripts.embedder_investigation.embeddings.forge_embeddings'],
+            ["python", '-m', 'scripts.pipeline.embeddings.forge_embeddings'],
             check=True,
         )
         

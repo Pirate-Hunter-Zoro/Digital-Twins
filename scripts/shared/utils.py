@@ -31,3 +31,28 @@ def cast_to_int8(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Changed dataframe with np.int8 types
     """
     return df.astype(np.int8)
+
+def load_trd_set() -> set[str]:
+    """Return the set of patient IDs who are TRD positive
+
+    Returns:
+        set[str]: Resulting set of patient IDs
+    """
+    return set([s.strip('\"') for s in Path(os.environ['TRD_LIST_PATH']).read_text().splitlines()])
+
+def load_feature_matrix(patient_ids: set[str]) -> pd.DataFrame:
+    """Load and return all of the patient feature vectors in a dataframe
+
+    Args:
+        patient_ids (set[str]): Relevant patient IDs
+
+    Returns:
+        pd.DataFrame: Resulting features of all patient IDs
+    """
+    parquet_path = Path(os.environ['FEATURE_DATAFRAME_PATH'])
+    cohort_df = pd.read_parquet(parquet_path)
+    obj_cols = cohort_df.select_dtypes(include='object').columns
+    cohort_df[obj_cols] = cohort_df[obj_cols].astype('category')
+    X = cohort_df.loc[sorted(list(patient_ids))]
+    X = X.drop(columns=list(VITAL_COLUMNS))
+    return X

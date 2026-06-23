@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from scripts.data_loading.ablation_registry import ABLATIONS
-from scripts.embedder_investigation.predictions.create_train_test_split import create_train_test_split
+from scripts.pipeline.predictions.create_train_test_split import create_train_test_split
 from scripts.shared.utils import VectorSource
 from scripts.shared.plots import (
     plot_receiving_operator_characteristic,
@@ -17,8 +17,8 @@ from scripts.shared.plots import (
     plot_optimal_confusion_matrix,
     display_ablated_roc_deltas
 )
-from scripts.embedder_investigation.predictions.trd_prediction_computation import compute_metrics
-from scripts.embedder_investigation.predictions.classical_ml import load_data_set
+from scripts.pipeline.predictions.trd_prediction_computation import compute_metrics
+from scripts.pipeline.predictions.classical_ml import load_data_set
 
 def plot_ablation_deltas(rows: list[dict], baseline_results_dir: Path):
     """Write one bar-chart PNG per delta metric into baseline_results_dir, x-axis = ablation specs, hue = classifiers.

@@ -38,9 +38,9 @@ export CUDA_VISIBLE_DEVICES="${FREE_GPU}"
 echo "Pinning to GPU ${CUDA_VISIBLE_DEVICES} on $(hostname)"
 nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
 
-python -m scripts.embedder_investigation.predictions.classical_ml
-python -m scripts.embedder_investigation.predictions.feature_importance
-python -m scripts.embedder_investigation.predictions.ablation_runner
+python -m scripts.pipeline.predictions.classical_ml
+python -m scripts.pipeline.predictions.feature_importance
+python -m scripts.pipeline.predictions.ablation_runner
 
 # Copy all files from the RESULTS_DIR to the local results/ directory for easier access
 LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"

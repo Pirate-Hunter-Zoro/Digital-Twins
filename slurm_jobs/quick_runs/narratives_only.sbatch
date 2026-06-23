@@ -27,4 +27,4 @@ set -a; source "${ENV_FILE}"; set +a
 
 export SCRUB_NARRATIVES=1
 
-python -m scripts.embedder_investigation.narratives.forge_narratives
+python -m scripts.pipeline.narratives.forge_narratives

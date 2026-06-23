@@ -18,8 +18,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.compose import ColumnTransformer, make_column_selector
 from xgboost import XGBClassifier
 
-from scripts.embedder_investigation.predictions.trd_predictor import TRDPredictor
-from scripts.embedder_investigation.predictions.create_train_test_split import create_train_test_split
+from scripts.pipeline.predictions.create_train_test_split import create_train_test_split
 from scripts.shared.plots import (
     plot_receiving_operator_characteristic,
     plot_precision_recall,
@@ -29,10 +28,11 @@ from scripts.shared.plots import (
 )
 from scripts.shared.utils import (
     VectorSource,
-    VITAL_COLUMNS,
-    cast_to_int8
+    cast_to_int8,
+    load_feature_matrix,
+    load_trd_set
 )
-from scripts.embedder_investigation.predictions.trd_prediction_computation import compute_metrics
+from scripts.pipeline.predictions.trd_prediction_computation import compute_metrics
 
 def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATURE) -> Tuple[pd.DataFrame, np.ndarray]:
     """Load all the patient vectors and find their labels
@@ -44,14 +44,8 @@ def load_data_set(patient_ids: set[str], source: VectorSource=VectorSource.FEATU
     Returns:
         Tuple[pd.DataFrame, np.ndarray]: Features paired with labels
     """
-    predictor = TRDPredictor(save_time_hist=False) # We don't care about ID exclusion - only the ability to flag patients as TRD positive or negative
     if source == VectorSource.FEATURE:
-        parquet_path = Path(os.environ['FEATURE_DATAFRAME_PATH'])
-        cohort_df = pd.read_parquet(parquet_path)
-        obj_cols = cohort_df.select_dtypes(include='object').columns
-        cohort_df[obj_cols] = cohort_df[obj_cols].astype('category')
-        X = cohort_df.loc[sorted(list(patient_ids))]
-        X = X.drop(columns=list(VITAL_COLUMNS))
+        X = load_feature_matrix(patient_ids)
     else:
         embeddings_db_path = Path(os.environ['EMBEDDINGS_DIR']) / 'embeddings.db'
         connection = sqlite3.connect(embeddings_db_path)
@@ -66,7 +60,8 @@ f"SELECT embedding FROM embeddings WHERE patient_id IN ({placeholders}) ORDER BY
             X.append(np.frombuffer(row[0], dtype=np.float32))
         X = pd.DataFrame(np.array(X))
         connection.close()
-    y = np.array([predictor.get_trd_status(id) for id in sorted(list(patient_ids))])
+    trd_ids = load_trd_set()
+    y = np.array([1 if id in trd_ids else 0 for id in sorted(list(patient_ids))])
     print(f"Shape of X from source {source.name}: {X.shape}; Shape of y: {y.shape}", flush=True)
     return (X, y)
 

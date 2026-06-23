@@ -15,11 +15,11 @@ from sklearn.metrics import roc_auc_score
 from xgboost import XGBClassifier
 from scipy.stats import spearmanr
 
-from scripts.embedder_investigation.predictions.classical_ml import make_classifier
+from scripts.pipeline.predictions.classical_ml import make_classifier
 from scripts.shared.utils import VectorSource
 from scripts.shared.feature_display_names import humanize_feature_names
-from scripts.embedder_investigation.predictions.classical_ml import load_data_set, model_cache_path
-from scripts.embedder_investigation.predictions.create_train_test_split import create_train_test_split
+from scripts.pipeline.predictions.classical_ml import load_data_set, model_cache_path
+from scripts.pipeline.predictions.create_train_test_split import create_train_test_split
 
 from dotenv import load_dotenv
 load_dotenv()

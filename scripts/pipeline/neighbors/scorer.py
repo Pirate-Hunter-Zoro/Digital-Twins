@@ -10,7 +10,7 @@ load_dotenv()
 
 from scripts.models.vllm_client import VllmClient
 from scripts.shared.prompts import PromptLoader
-from scripts.embedder_investigation.neighbors.retriever import Retriever
+from scripts.pipeline.neighbors.retriever import Retriever
 
 class Scorer:
     

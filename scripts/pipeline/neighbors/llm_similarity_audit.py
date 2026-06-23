@@ -6,7 +6,7 @@ import sqlite3
 from dotenv import load_dotenv
 load_dotenv()
 
-from scripts.embedder_investigation.neighbors.scorer import Scorer
+from scripts.pipeline.neighbors.scorer import Scorer
 
 def main():
     # Use a scorer's connection to the judgements database

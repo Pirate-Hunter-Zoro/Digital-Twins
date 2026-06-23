@@ -1,4 +1,4 @@
-from scripts.embedder_investigation.vectors.runner import run
+from scripts.pipeline.narratives.runner import run
 
 def main() -> None:
     run()
