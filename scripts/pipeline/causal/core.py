@@ -198,16 +198,24 @@ def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit
     
 def evaluate_uplift(spec_dict: dict, tester: DRTester, X_fit_train: pd.DataFrame, X_fit_test: pd.DataFrame, save_dir: Path) -> dict:
     """Uplift evaluation creating a cumulative sum analysis of doubly robust estimates over patients sorted by decreasing CATE values
+    
+    Conceptually: 
+    TOC - sort patients by CATE value in descending order, x-axis is the top-k of said patients, y-axis is that respective top-k's group's average doubly-robust value MINUS the overall average doubly-robust value
+    e.g. - TOC(q) = (avg DR in top-q) − (avg DR over everyone, or ATE)
+    BY DEFINITION this means TOC(1)=0
+    
+    Qini - Same x-axis
+Qini(q) = q * (avg DR in top-q − ATE)
 
     Args:
         spec_dict (dict): Specified treatment with its columns
         tester (DRTester): Pre-fitted doubly robust tester
         X_fit_train (pd.DataFrame): Training patient matrix
         X_fit_test (pd.DataFrame): Testing patient matrix
-        save_dir (Path): Save directory for resulting .csv outputs
+        save_dir (Path): Save directory for resulting .png outputs
 
     Returns:
-        dict: Qini results
+        dict: Qini and AUTOC/TOC results
     """
     qini_result = tester.evaluate_uplift(
         metric='qini',
