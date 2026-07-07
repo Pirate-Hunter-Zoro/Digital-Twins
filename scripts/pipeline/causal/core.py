@@ -195,3 +195,43 @@ def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit
         'blp_se': err,
         'blp_pval': pval
     }
+    
+def evaluate_uplift(spec_dict: dict, tester: DRTester, X_fit_train: pd.DataFrame, X_fit_test: pd.DataFrame, save_dir: Path) -> dict:
+    """Uplift evaluation creating a cumulative sum analysis of doubly robust estimates over patients sorted by decreasing CATE values
+
+    Args:
+        spec_dict (dict): Specified treatment with its columns
+        tester (DRTester): Pre-fitted doubly robust tester
+        X_fit_train (pd.DataFrame): Training patient matrix
+        X_fit_test (pd.DataFrame): Testing patient matrix
+        save_dir (Path): Save directory for resulting .csv outputs
+
+    Returns:
+        dict: Qini results
+    """
+    qini_result = tester.evaluate_uplift(
+        metric='qini',
+        Xval=X_fit_test,
+        Xtrain=X_fit_train
+    )
+    qini_ax = qini_result.plot_uplift(tmt=1)
+    qini_ax.figure.savefig(save_dir / f"qini_{spec_dict['key']}.png", bbox_inches='tight')
+    plt.close(qini_ax.figure)
+    
+    toc_result = tester.evaluate_uplift(
+        metric='toc',
+        Xval=X_fit_test,
+        Xtrain=X_fit_train
+    )
+    toc_ax = toc_result.plot_uplift(tmt=1)
+    toc_ax.figure.savefig(save_dir / f"toc_{spec_dict['key']}.png", bbox_inches='tight')
+    plt.close(toc_ax.figure)
+    
+    return {
+        "qini_est": float(qini_result.params[0]),
+        "qini_se": float(qini_result.errs[0]),
+        "qini_pval": float(qini_result.pvals[0]),
+        "autoc_est": float(toc_result.params[0]),
+        "autoc_se": float(toc_result.errs[0]),
+        "autoc_pval": float(toc_result.pvals[0])
+    }
