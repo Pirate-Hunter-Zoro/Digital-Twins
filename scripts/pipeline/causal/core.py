@@ -7,6 +7,7 @@ from econml.validate import DRTester
 from typing import Any
 from pathlib import Path
 import matplotlib.pyplot as plt
+from scipy.stats import spearmanr
 
 from scripts.pipeline.predictions.create_train_test_split import create_train_test_split
 from scripts.shared.utils import load_trd_set, load_feature_matrix
@@ -243,3 +244,92 @@ Qini(q) = q * (avg DR in top-q − ATE)
         "autoc_se": float(toc_result.errs[0]),
         "autoc_pval": float(toc_result.pvals[0])
     }
+    
+def evaluate_shap_moderators(fitted_forest: CausalForestDML, X_fit_test: pd.DataFrame, top_k: int=5) -> list[tuple[str, float]]:
+    """For a given treatment, determine the SHAP value for each feature with respect to the fitted forest's CATE values
+
+    Args:
+        fitted_forest (CausalForestDML): Causal random forest estimator
+        X_fit_test (pd.DataFrame): Test patient matrix
+        top_k (int, optional): How many top SHAP-values are to be returned. Defaults to 5.
+
+    Returns:
+        list[tuple[str, float]]: Most important featuers paired with their SHAP values
+    """
+    shap_vals = fitted_forest.shap_values(X=X_fit_test.astype('float64'), feature_names=list(X_fit_test.columns))
+    for outer_dict in shap_vals.values():
+        # Dictionary with only one entry whose value is what what we care about
+        for shap_values in outer_dict.values():
+            # That value is once again a dictionary with only one entry whos value we care about
+            feature_importances = np.abs(shap_values.values).mean(axis=0).tolist() # One non-negative number per feature
+            paired_features_with_importance = [(name, imp) for name, imp in zip(list(X_fit_test.columns), feature_importances)] # Order was preserved since we passed in the same feature name to the 'shap_values' call
+            paired_features_with_importance.sort(key=lambda x: -x[1]) # sort by importance - decreasing order
+            return paired_features_with_importance[:top_k]
+        
+def evaluate_subgroup_ate(spec_dict: dict, cate_test: np.ndarray, X_fit_test: pd.DataFrame, save_dir: Path, features: list[str]=['pre_anchor_history_days', 'AgeInYears', 'in_patient_days', 'num_encounters', 'num_emergency']) -> dict[str, dict[str, float]]:
+    """For the given treatment, find the correlations between a given list of features and the CATE values
+
+    Args:
+        spec_dict (dict): Specified treatment
+        cate_test (np.ndarray): Resulting CATE values
+        X_fit_test (pd.DataFrame): Test patient matrix
+        save_dir (Path): Location to save plots
+        features (list[str], optional): Features whose correlation should be judged. Defaults to ['pre_anchor_history_days', 'AgeInYears', 'in_patient_days', 'num_encounters', 'num_emergency'].
+
+    Returns:
+        dict[str, dict[str, float]]: For each feature, resulting 'spearman_rho' and 'spearman_pval' correlation results
+    """
+    quartiles = 4
+    treatment = spec_dict['key']
+    correlations = {}
+    for feature in features:
+        correlations[feature] = {}
+        X = X_fit_test[feature]
+        quartile_bins = pd.qcut(X, q=quartiles, duplicates='drop')
+        y = cate_test
+        cate_per_quartile = pd.Series(y, index=X_fit_test.index).groupby(quartile_bins).mean()
+        print(f"{spec_dict['display_name']} CATE per quartile:")
+        print(cate_per_quartile)
+        print("\n")
+        cate_per_quartile.name = 'mean_cate'
+        cate_per_quartile.to_csv(save_dir / f"subgroup_ATE_{treatment}_{feature}.csv")
+        
+        # Create quartile-binned histogram of values
+        fig, ax = plt.subplots()
+        ax.bar(cate_per_quartile.index.astype(str), cate_per_quartile.values)
+        ax.axhline(y=0, color='green', linestyle='--', label="No effect")
+        ax.axhline(y=cate_test.mean(), color='red', linestyle='--', label="Average effect")
+        ax.set_xlabel(f"{feature} quartile")
+        ax.set_ylabel("Mean CATE on P(TRD)")
+        ax.set_title(spec_dict['display_name'])
+        ax.legend()
+        fig.savefig(save_dir / f"subgroup_ATE_{treatment}_{feature}.png")
+        plt.close(fig)
+        
+        # Now create raw correlation plot
+        correlation, p_val = spearmanr(X, y)
+        correlations[feature]['spearman_rho'] = float(correlation)
+        correlations[feature]['spearman_pval'] = float(p_val)
+        fitted_line = np.polyfit(X, y, deg=1)
+        fig, ax = plt.subplots()
+        ax.scatter(X, y, alpha=0.5, s=0.15)
+        
+        x_range = np.array([np.min(X), np.max(X)])
+        ax.plot(x_range, np.polyval(fitted_line, x_range), color='red', label=f"slope={fitted_line[0]:.3f}")
+        ax.axhline(y=0, linestyle='--', color='green')
+        ax.set_ylim(np.percentile(y, [1, 99]))
+        ax.set_xlabel(f"{feature}")
+        ax.set_ylabel("CATE on P(TRD)")
+        p_display = "p < 0.001" if p_val < 0.001 else f"p = {p_val:.3f}"
+        ax.set_title(
+            f"{spec_dict['display_name']}\n"
+            fr"Spearman $\rho$ = {correlation:.3f}   ({p_display})",
+            fontsize=11,
+            fontweight='bold',
+            pad=10,
+        )
+        ax.legend()
+        fig.savefig(save_dir / f"CATE_vs_{feature}_{treatment}.png", bbox_inches='tight')
+        plt.close(fig)
+        
+    return correlations
