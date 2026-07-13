@@ -1,12 +1,15 @@
 import pandas as pd
 from pathlib import Path
 import os
-from dotenv import load_dotenv
 import json
 import multiprocessing
 import re
 
+from scripts.data_loading.create_cohort import create_cohort
+
+from dotenv import load_dotenv
 load_dotenv()
+
 PERSON_CSV_PATH = Path(os.environ['PERSON_CSV_PATH'])
 ENCOUNTER_CSV_PATH = Path(os.environ['ENCOUNTER_CSV_PATH'])
 DIAGNOSIS_CSV_PATH = Path(os.environ['DIAGNOSIS_CSV_PATH'])
@@ -215,8 +218,14 @@ def load_all_patient_json():
     global medications_df
     global procedures_df
     
+    cohort_path = Path(os.environ['COHORT_PATH'])
+    if not cohort_path.exists():
+        create_cohort()
+    cohort_df = pd.read_csv(cohort_path, escapechar='\\', low_memory=False)
+    relevant_ids = set(cohort_df['PatientEpicId_SH'])
+    
     existing_patient_json = list(PATIENT_JSON_DIR.glob("*.json"))
-    patient_ids_with_visits = people_df.index
+    patient_ids_with_visits = people_df.index.intersection(relevant_ids)
     print(f"Found {len(patient_ids_with_visits)-(len(existing_patient_json) if not SCRUB else 0)} new patients to create json for...", flush=True)
     
     # Build json for each patient
