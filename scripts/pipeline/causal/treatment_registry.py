@@ -59,4 +59,40 @@ TREATMENT_REGISTRY = [
         "reference_arm": SSRI,
         "comparison_arm": VORTIOXETINE,
     },
+    {
+        "key": "snri_vs_bupropion",
+        "display_name": "SNRI vs bupropion",
+        "reference_arm": SNRI,
+        "comparison_arm": BUPROPION,
+    },
+    {
+        "key": "snri_vs_mirtazapine",
+        "display_name": "SNRI vs mirtazapine",
+        "reference_arm": SNRI,
+        "comparison_arm": MIRTAZAPINE,
+    },
+    {
+        "key": "snri_vs_vortioxetine",
+        "display_name": "SNRI vs vortioxetine",
+        "reference_arm": SNRI,
+        "comparison_arm": VORTIOXETINE,
+    },
+    {
+        "key": "bupropion_vs_mirtazapine",
+        "display_name": "bupropion vs mirtazapine",
+        "reference_arm": BUPROPION,
+        "comparison_arm": MIRTAZAPINE,
+    },
+    {
+        "key": "bupropion_vs_vortioxetine",
+        "display_name": "bupropion vs vortioxetine",
+        "reference_arm": BUPROPION,
+        "comparison_arm": VORTIOXETINE,
+    },
+    {
+        "key": "mirtazapine_vs_vortioxetine",
+        "display_name": "mirtazapine vs vortioxetine",
+        "reference_arm": MIRTAZAPINE,
+        "comparison_arm": VORTIOXETINE,
+    },
 ]

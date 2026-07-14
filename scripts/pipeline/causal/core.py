@@ -16,7 +16,7 @@ from scripts.data_loading.med_definitions import get_med_arm
 from dotenv import load_dotenv
 load_dotenv()
 
-OVERLAP_FLOOR = 0.05
+OVERLAP_FLOOR = 0.1
 OVERLAP_CEILING = 1 - OVERLAP_FLOOR
 
 def get_AD_mappings() -> dict[str, str]:
@@ -91,31 +91,56 @@ def build_treatment(spec_dict: dict, feature_matrix: pd.DataFrame) -> tuple[np.n
     return (keep_mask, compar_flag)
 
 def fit_causal_forest(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: pd.DataFrame, y_train: np.ndarray, seed: int=None) -> tuple[CausalForestDML, Any, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
-    """Return fitted causal forest given the specified treatment and the training data, and return it plus all the information needed for calibration analysis
+    """Fit one active-comparator pairwise causal forest and return everything the eval surface needs.
+
+    The treatment is which antidepressant CLASS was started at the anchor prescription. For this
+    contrast the cohort is filtered to only the two arms named in spec_dict via build_treatment's
+    keep-mask; the reference arm becomes T=0 and the comparison arm T=1, and every other patient is
+    excluded. All feature columns are retained (the old per-candidate source_cols drop is gone in the
+    pairwise design). Overlap is checked WITHIN the kept pair on the training labels: if it fails the
+    OVERLAP_FLOOR/CEILING band the contrast is skipped and None is returned before the fit.
 
     Args:
-        spec_dict (dict): specified treatment with the columns it corresponds to
-        train_matrix (pd.DataFrame): dataframe of train patients
-        test_matrix (pd.DataFrame): dataframe of test patients
-        y_train (np.ndarray): boolean flag of outcome for train patients
-        seed (int, optional): random seed. Defaults to None and will be autoset in that case.
+        spec_dict (dict): The pairwise contrast spec; supplies the two arms via its 'reference_arm'
+            (T=0) and 'comparison_arm' (T=1) keys.
+        train_matrix (pd.DataFrame): Full encoded train patients, indexed by patient_id.
+        test_matrix (pd.DataFrame): Full encoded test patients, indexed by patient_id.
+        y_train (np.ndarray): Binary TRD outcome for the FULL train population, row-aligned to
+            train_matrix (subset to the kept pair internally before fitting).
+        seed (int, optional): Random seed. Defaults to None, in which case the SEED env var is read.
 
     Returns:
-        tuple[CausalForestDML, Any, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]: Resulting fitted forest, cate_test, X_fit_train (with the treatment removed), X_fit_test, T_train (binary treatment flag of patients), T_test
+        tuple[CausalForestDML, Any, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray] | None:
+            None if the kept pair fails the overlap band. Otherwise (fitted_forest, cate_test,
+            X_fit_train, X_fit_test, T_train, T_test), all filtered to the two-arm pair: X_fit_*
+            keep every feature column; T_train/T_test are the 0/1 comparison-arm flags for the kept
+            train/test patients; cate_test is the per-patient CATE over the kept test rows.
     """
     if seed is None:
         seed = int(os.environ['SEED'])
     model_y = RandomForestRegressor(random_state=seed, n_jobs=-1)
     model_t = RandomForestClassifier(random_state=seed, n_jobs=-1)
     n_estimators = 1000
-    treatments_train = build_treatment(spec_dict, train_matrix)
-    treatments_test = build_treatment(spec_dict, test_matrix)
+    
+    # Train data
+    train_keep_mask, train_comparison_flag = build_treatment(spec_dict, train_matrix)
+    X_fit_train = train_matrix[train_keep_mask]
+    T_train = train_comparison_flag[train_keep_mask]
+    
+    # Test data
+    test_keep_mask, test_comparison_flag = build_treatment(spec_dict, test_matrix)
+    X_fit_test = test_matrix[test_keep_mask]
+    T_test = test_comparison_flag[test_keep_mask]
+    
+    if not passes_overlap(T_train):
+        return None
+    
     causal_forest = CausalForestDML(n_estimators=n_estimators, model_y=model_y, model_t=model_t, random_state=seed, n_jobs=-1, discrete_treatment=True)
     # Fit with the train output, and whether this treatment was used on each patient in the training set
-    X_fit_train, X_fit_test = train_matrix.drop(columns=spec_dict['source_cols']), test_matrix.drop(columns=spec_dict['source_cols'])
-    causal_forest.fit(y_train, treatments_train, X=X_fit_train, W=X_fit_train)
+    y_train = y_train[train_keep_mask]
+    causal_forest.fit(y_train, T_train, X=X_fit_train, W=X_fit_train)
     cate_test = causal_forest.effect(X_fit_test)
-    return causal_forest, cate_test, X_fit_train, X_fit_test, treatments_train, treatments_test
+    return causal_forest, cate_test, X_fit_train, X_fit_test, T_train, T_test
 
 def fit_dr_tester(fitted_forest: CausalForestDML, X_fit_train: pd.DataFrame, X_fit_test: pd.DataFrame, treatments_train: np.ndarray, treatments_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray, seed: int=None) -> DRTester:
     """Generate and fit a doubly-robust tester to evaluate the CATE values associated with the given fitted causal random forest
@@ -360,3 +385,58 @@ def evaluate_subgroup_ate(spec_dict: dict, cate_test: np.ndarray, X_fit_test: pd
         plt.close(fig)
         
     return correlations
+
+def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: pd.DataFrame, y_train: np.ndarray, y_test: np.ndarray, seed: int=None) -> dict:
+    """Fit one pairwise contrast's causal forest and run the full evaluation surface over it.
+
+    Orchestrator for a single active-comparator contrast: fits the forest (which self-filters to
+    the two-arm pair and enforces overlap), builds ONE shared doubly-robust tester, and runs all
+    five evals against it. The full-population y_train/y_test are re-selected down to the kept pair
+    by indexing on the already-filtered X, so they align row-for-row with T_train/T_test before the
+    tester sees them. Figures for every eval are written under ARTIFACTS_DIR/causal_pipeline.
+
+    Args:
+        spec_dict (dict): The pairwise contrast spec (its 'key', 'display_name', 'reference_arm',
+            'comparison_arm').
+        train_matrix (pd.DataFrame): Full encoded train patients, indexed by patient_id.
+        test_matrix (pd.DataFrame): Full encoded test patients, indexed by patient_id.
+        y_train (np.ndarray): Binary TRD outcome for the FULL train population, row-aligned to
+            train_matrix.
+        y_test (np.ndarray): Binary TRD outcome for the FULL test population, row-aligned to
+            test_matrix.
+        seed (int, optional): Random seed. Defaults to None, in which case the SEED env var is read.
+
+    Returns:
+        dict: None if the contrast failed overlap (fit_causal_forest returned None). Otherwise a
+            metrics dict: identity ('key', 'display_name'), 'passed_overlap' True, the calibration
+            'cal_r_squared', and the nested BLP / uplift / SHAP-moderator / subgroup-ATE results.
+    """
+    if seed is None:
+        seed = int(os.environ['SEED'])
+    result = fit_causal_forest(spec_dict, train_matrix, test_matrix, y_train, seed)
+    if result is None: # Overlap failed - nothing to evaluate
+        return None 
+    forest, cate_test, X_fit_train, X_fit_test, T_train, T_test = result
+    # Filter the training and testing y to be only the patients used in the causal random forest who were in one of the two treatment groups specified by the spec_dict
+    y_train = pd.Series(y_train, train_matrix.index).loc[X_fit_train.index].to_numpy()
+    y_test = pd.Series(y_test, test_matrix.index).loc[X_fit_test.index].to_numpy()
+    # Now they align with T_train, T_test
+    
+    save_dir = Path(os.environ['ARTIFACTS_DIR']) / 'causal_pipeline'
+    os.makedirs(save_dir, exist_ok=True)
+    tester = fit_dr_tester(forest, X_fit_train, X_fit_test, T_train, T_test, y_train, y_test, seed)
+    cal_r_squared = evaluate_calibration(spec_dict, tester, X_fit_train, X_fit_test, save_dir, seed)
+    blp_res = evaluate_blp(spec_dict, tester, cate_test, X_fit_test, save_dir)
+    uplift_res = evaluate_uplift(spec_dict, tester, X_fit_train, X_fit_test, save_dir)
+    top_shap_moderators = evaluate_shap_moderators(forest, X_fit_test, top_k=5)
+    gate_res = evaluate_subgroup_ate(spec_dict, cate_test, X_fit_test, save_dir)
+    return {
+        'key': spec_dict['key'],
+        'display_name': spec_dict['display_name'],
+        'passed_overlap': True,
+        'cal_r_squared': cal_r_squared,
+        'blp_res': blp_res,
+        'uplift_res': uplift_res,
+        'top_shap_moderators': top_shap_moderators,
+        'gate_res':  gate_res # Group Average Treatment effect correlation
+    }
