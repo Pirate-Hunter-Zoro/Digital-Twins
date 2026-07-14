@@ -37,7 +37,9 @@ def generate_deterministic_narratives():
             p.unlink(missing_ok=True)
     
     narrative_lengths = {'patient_id': [j['patient_id'] for j in sliced_jsons], 'pre_anchor_history_days': [j['pre_anchor_history_days'] for j in sliced_jsons]}
-    pd.DataFrame(narrative_lengths).to_csv(Path(os.environ['ARTIFACTS_DIR']) / 'narrative_pre_anchor_history_days.csv')
+    artifacts_dir = Path(os.environ['ARTIFACTS_DIR'])
+    os.makedirs(artifacts_dir, exist_ok=True)
+    pd.DataFrame(narrative_lengths).to_csv(artifacts_dir / 'narrative_pre_anchor_history_days.csv')
     
     with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_NON_LLM_TASK'])) as thread_pool:
         for i, _ in enumerate(thread_pool.imap_unordered(generate_deterministic_narrative, sliced_jsons)):
