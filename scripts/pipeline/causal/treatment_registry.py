@@ -1,99 +1,62 @@
-"""Ordered, append-only registry of candidate treatments for the causal-forest sweep.
+"""Ordered, append-only registry of pairwise treatment contrasts for the causal-forest sweep.
 
 The SLURM array indexes into TREATMENT_REGISTRY by position. Order is FROZEN once
 the sweep has run against it -- only ever append new specs to the end, never
-reorder or delete, or a resubmitted array maps indices to the wrong treatment.
+reorder or delete, or a resubmitted array maps indices to the wrong contrast.
 
-This file is pure data. Binarization (uniform nonzero-vs-zero) and the
-per-candidate confounder drop both live in core.py -- NOT here. Each spec only
-declares:
-  - key         : short, filename-safe tag; becomes the treatment tag in every
-                  metrics JSON and figure filename run_one writes.
-  - display_name: human string for plot titles.
-  - source_cols : EXACT feature-matrix column names summed to build the binary T.
-                  These same names are dropped from X/W for this candidate's run.
+Each spec is a single ACTIVE-COMPARATOR contrast: the causal-forest treatment is
+which antidepressant CLASS was started at the anchor (index) prescription. For a
+given contrast, build_treatment (core.py) assigns:
+  - T = 0 to patients whose index class is reference_arm,
+  - T = 1 to patients whose index class is comparison_arm,
+  - and EXCLUDES every patient whose index class is neither.
+Overlap is therefore checked WITHIN the compared pair, not against the whole
+cohort. Burden markers and prior-history features stay in X/W as covariates; there
+is no per-candidate column drop in this design.
+
+This file is pure data. Each spec declares:
+  - key           : short, filename-safe tag; becomes the treatment tag in every
+                    metrics JSON and figure filename run_one writes.
+  - display_name  : human string for plot titles.
+  - reference_arm : the T=0 antidepressant class (a med_definitions class constant).
+  - comparison_arm: the T=1 antidepressant class (a med_definitions class constant).
+
+Arm identity comes from the med_definitions constants (the exact strings get_med_arm
+returns), so a contrast's arms can never silently mismatch a patient's mapped index
+class.
 """
+
+from scripts.data_loading.med_definitions import (
+    SSRI,
+    SNRI,
+    BUPROPION,
+    MIRTAZAPINE,
+    VORTIOXETINE,
+)
 
 TREATMENT_REGISTRY = [
     {
-        "key": "polypharmacy",
-        "display_name": "Any medications active at index",
-        "source_cols": [
-            "polypharmacy_count",
-        ],
+        "key": "ssri_vs_snri",
+        "display_name": "SSRI vs SNRI",
+        "reference_arm": SSRI,
+        "comparison_arm": SNRI,
     },
     {
-        "key": "trials_bupropion",
-        "display_name": "Any bupropion trial",
-        "source_cols": [
-            "trials_BUPROPION",
-        ],
+        "key": "ssri_vs_bupropion",
+        "display_name": "SSRI vs bupropion",
+        "reference_arm": SSRI,
+        "comparison_arm": BUPROPION,
     },
     {
-        "key": "trials_mirtazapine",
-        "display_name": "Any mirtazapine trial",
-        "source_cols": [
-            "trials_MIRTAZAPINE",
-        ],
+        "key": "ssri_vs_mirtazapine",
+        "display_name": "SSRI vs mirtazapine",
+        "reference_arm": SSRI,
+        "comparison_arm": MIRTAZAPINE,
     },
     {
-        "key": "trials_snri",
-        "display_name": "Any SNRI trial",
-        "source_cols": [
-            "trials_SNRI",
-        ],
-    },
-    {
-        "key": "trials_ssri",
-        "display_name": "Any SSRI trial",
-        "source_cols": [
-            "trials_SSRI",
-        ],
-    },
-    {
-        "key": "trials_vortioxetine",
-        "display_name": "Any vortioxetine trial",
-        "source_cols": [
-            "trials_VORTIOXETINE",
-        ],
-    },
-    {
-        "key": "adequate_trial",
-        "display_name": "At least one adequate medication trial (any arm)",
-        "source_cols": [
-            "trials_BUPROPION",
-            "trials_MIRTAZAPINE",
-            "trials_SNRI",
-            "trials_SSRI",
-            "trials_VORTIOXETINE",
-        ],
-    },
-    {
-        "key": "augmentation",
-        "display_name": "Augmentation occurred",
-        "source_cols": [
-            "augmentation_occured",
-        ],
-    },
-    {
-        "key": "benzo",
-        "display_name": "Any benzodiazepine coverage",
-        "source_cols": [
-            "benzo_days_coverage",
-        ],
-    },
-    {
-        "key": "hypnotics",
-        "display_name": "Any hypnotics burden",
-        "source_cols": [
-            "hypnotics_burden",
-        ],
-    },
-    {
-        "key": "nsaid",
-        "display_name": "Any NSAID use",
-        "source_cols": [
-            "nsaid_count",
-        ],
+        "key": "ssri_vs_vortioxetine",
+        "display_name": "SSRI vs vortioxetine",
+        "reference_arm": SSRI,
+        "comparison_arm": VORTIOXETINE,
     },
 ]

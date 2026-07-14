@@ -11,12 +11,25 @@ from scipy.stats import spearmanr
 
 from scripts.pipeline.predictions.create_train_test_split import create_train_test_split
 from scripts.shared.utils import load_trd_set, load_feature_matrix
+from scripts.data_loading.med_definitions import get_med_arm
 
 from dotenv import load_dotenv
 load_dotenv()
 
 OVERLAP_FLOOR = 0.05
 OVERLAP_CEILING = 1 - OVERLAP_FLOOR
+
+def get_AD_mappings() -> dict[str, str]:
+    """For every patient, return which antidepressant arm their anchor date prescription belongs to
+
+    Returns:
+        dict[str, str]: Patient ID, AD prescription arm
+    """
+    med_dates = pd.read_csv(Path(os.environ['MDD_MED_DATE_CSV_PATH'])).set_index('PatientEpicId_SH')
+    med_dates = med_dates.sort_values(by='MedStartInstant', ascending=True)
+    earliest_mask = ~med_dates.index.duplicated(keep='first') # Indexed by patient ID
+    med_dates = med_dates[earliest_mask]
+    return med_dates['MedName'].apply(get_med_arm).to_dict()
 
 def passes_overlap(train_treatment_array: np.ndarray) -> bool:
     """Given all of the training population's treatment flags, determine if enough patients were both treated and untreated to warrant CATE analysis
@@ -48,20 +61,34 @@ def load_encoded_data() -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndar
         np.array([int(id in trd_ids) for id in X_reduced_test.index])
     return (X_encoded_train, X_encoded_test, train_y, test_y)
 
-def build_treatment(spec_dict: dict, feature_matrix: pd.DataFrame) -> np.ndarray:
-    """Determine whether a treatment occurred or did not occur over an entire feature matrix - e.g. for each patient, determine if the given treatment occurred or not
+def build_treatment(spec_dict: dict, feature_matrix: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Assign the active-comparator treatment for one pairwise contrast over a feature matrix.
+
+    Each patient's treatment is the antidepressant CLASS started at their anchor (index)
+    prescription. For this contrast, patients whose index class is the comparison arm are
+    labelled 1, those whose index class is the reference arm are labelled 0, and every other
+    patient (any other arm, or a med get_med_arm does not recognise) is EXCLUDED via the mask.
 
     Args:
-        spec_dict (dict): Given treatment specs - specifies the columns relevant to this particular treatment
-        feature_matrix (pd.DataFrame): All relevant patients who need treatment flags
+        spec_dict (dict): The contrast spec; supplies the two arms to compare via its
+            'reference_arm' (labelled 0) and 'comparison_arm' (labelled 1) keys.
+        feature_matrix (pd.DataFrame): Patients to assign, indexed by patient_id (the index is
+            what maps to each patient's anchor-medication class).
 
     Returns:
-        np.ndarray: 0/1 array for whether each patient received the specified treatment
+        tuple[np.ndarray, np.ndarray]: (keep_mask, compar_flag), both aligned to feature_matrix's
+            rows. keep_mask is a boolean array, True for patients whose index class is the
+            reference or comparison arm. compar_flag is a 0/1 array, 1 for the comparison arm and
+            0 for the reference arm; it is only meaningful where keep_mask is True.
     """
-    relevant_cols = spec_dict['source_cols']
-    treatment_info = feature_matrix[relevant_cols]
-    treatment_flags = treatment_info.sum(axis=1) > 0 # One binary flag per patient
-    return treatment_flags.astype(int).to_numpy()
+    ref_arm, compar_arm = spec_dict['reference_arm'], spec_dict['comparison_arm']
+    patient_anchor_med_arm_map = get_AD_mappings()
+    arms = feature_matrix.index.map(patient_anchor_med_arm_map)
+    arms = pd.Series(arms)
+    # We only want the patients whose antidepressant anchor date medication arm is either the reference arm or comparison arm
+    keep_mask = arms.isin([ref_arm, compar_arm]).to_numpy()
+    compar_flag = (arms == compar_arm).astype(int).to_numpy()
+    return (keep_mask, compar_flag)
 
 def fit_causal_forest(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: pd.DataFrame, y_train: np.ndarray, seed: int=None) -> tuple[CausalForestDML, Any, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
     """Return fitted causal forest given the specified treatment and the training data, and return it plus all the information needed for calibration analysis
