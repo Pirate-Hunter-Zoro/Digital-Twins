@@ -1,8 +1,8 @@
 import pandas as pd
 from pathlib import Path
 import os
-import multiprocessing
 import numpy as np
+import asyncio
 
 from scripts.pipeline.predictions.trd_predictor import TRDPredictor
 from scripts.pipeline.neighbors.neighbor_scheme import RELEVANT_NEIGHBOR_SCHEMES
@@ -13,30 +13,11 @@ load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 os.makedirs(RESULTS_DIR, exist_ok=True)
-predictor = None
 test_ids = create_train_test_split()[1]
 
-def init_worker():
-    global predictor # This will be created for each worker
+async def main():
     np.random.seed(int(os.environ['SEED']))
     predictor = TRDPredictor(exclude_ids=test_ids)
-
-def evaluate_patient(patient_id: str):
-    """Obtain all the patient's neighborhood prediction information and save it
-
-    Args:
-        patient_id (str): Id of the patient of interest
-    """
-    global predictor
-    results = []
-    for scheme in RELEVANT_NEIGHBOR_SCHEMES:
-        results.extend(predictor.construct_neighborhood_data(index_id=patient_id, scheme=scheme))
-    return results
-
-def run():
-    """
-    Single worker process to run TRD prediction on a sub-sample of patients
-    """
     
     # Establish deterministic order over the different Slurm workers
     sorted_test_ids = sorted(list(test_ids))
@@ -57,15 +38,44 @@ def run():
         end_index = start_index + chunk_size
     
     chunk_ids = sorted_test_ids[start_index:end_index]
-    results = []
-    with multiprocessing.Pool(processes=int(os.environ['NUM_WORKERS_LLM_TASK']), initializer=init_worker) as pool:
-        done = 0
-        for res in pool.imap_unordered(evaluate_patient, chunk_ids):
-            results.extend(res)
-            done+=1
-            print(f"Completed {done} neighborhood constructions out of {len(chunk_ids)} for and SLURM id {slurm_task_id}...", flush=True)
-    # Save dataframe of results
-    pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results__{slurm_task_id}.csv")
-    
+
+    work_items = []
+    for pid in chunk_ids:
+        index_narrative = predictor.retriever.get_narrative(pid)
+        index_vector = predictor.retriever.get_vector(pid)
+        chronological_length = predictor.retriever.get_chronological_length(pid)
+        for scheme in RELEVANT_NEIGHBOR_SCHEMES:
+            neighbors = predictor.retriever.search(index_vector, scheme)
+            for idx, (neighbor_id, cosine_score) in enumerate(neighbors):
+                if neighbor_id == pid:
+                    # HARD fail - we can't be our own neighbor
+                    raise ValueError(f"Patient {pid} was one of their own neighbors...")
+                neighbor_narrative = predictor.retriever.get_narrative(neighbor_id)
+                record = {
+                    "neighbor_scheme": scheme.name,
+                    "chronological_length": chronological_length,
+                    "anchor_patient_id": pid,
+                    "neighbor_patient_id": neighbor_id,
+                    "cosine_sim": cosine_score,
+                    "neighbor_trd_label": predictor.get_trd_status(neighbor_id),
+                    "rank_cosine": idx+1,
+                    "llm_sim": float('nan')
+                }
+                work_items.append((record, index_narrative, neighbor_narrative, pid, neighbor_id))
+
+    # Now that we have all of the work items, we want to throw them at the server LLM_MAX_CONCURRENCY at a time
+    sem = asyncio.Semaphore(int(os.environ['LLM_MAX_CONCURRENCY']))
+    async def judge_one(item) -> dict:
+        record, index_narrative, neighbor_narrative, pid, neighbor_id = item
+        async with sem: # If the maximum amount are already bombarding the server, we wait
+            judgement = await predictor.scorer.judge_async(index_narrative, neighbor_narrative, pid, neighbor_id)
+            record['llm_sim'] = judgement['overall_similarity']    
+            return record
+        
+    records = await asyncio.gather(*(judge_one(item) for item in work_items))
+    pd.DataFrame(records).to_csv(RESULTS_DIR / f"neighbor_results_{slurm_task_id}.csv")
+    await predictor.scorer.client.async_client.aclose()
+        
+
 if __name__=="__main__":
-    run()
+    asyncio.run(main())

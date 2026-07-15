@@ -4,10 +4,10 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=64G
+#SBATCH --mem=256G
 #SBATCH -o slurm_jobs/pipeline/logs/trd_prediction_pipeline_%a_out.txt
 #SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_pipeline_%a_err.txt
-#SBATCH --array=0-2
+#SBATCH --array=0-0
 
 # Exit immediately if command fails
 set -e

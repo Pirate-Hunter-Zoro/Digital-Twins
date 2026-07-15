@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 import sys
+import httpx
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -11,6 +12,33 @@ load_dotenv()
 from scripts.models.vllm_client import VllmClient
 from scripts.shared.prompts import PromptLoader
 from scripts.pipeline.neighbors.retriever import Retriever
+
+guided_json = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "overall_similarity", 
+        "phenotype", 
+        "psych_comorbidity", 
+        "metabolic_pain", 
+        "treatment_burden",
+        "social_functional",
+        "safety",
+        "top_similarity_drivers",
+        "key_mismatches"    
+    ],
+    "properties": {
+        "overall_similarity": {"type": "integer"},
+        "phenotype": {"type": "integer"},
+        "psych_comorbidity": {"type": "integer"},
+        "metabolic_pain": {"type": "integer"},
+        "treatment_burden": {"type": "integer"},
+        "social_functional": {"type": "integer"},
+        "safety": {"type": "integer"},
+        "top_similarity_drivers": {"type": "array", "items": {"type": "string"}, "maxItems":5},
+        "key_mismatches":  {"type": "array", "items": {"type": "string"}, "maxItems":5},
+    }
+}
 
 class Scorer:
     
@@ -84,21 +112,7 @@ INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response)
         )
         self.connection.commit()
         
-    def judge(self, index_narrative: str, candidate_narrative: str, index_id: str, candidate_id: str) -> Dict[str, Any]:
-        """
-        Query the LLM judge (if necessary) to retrieve a similarity scoring between the two patients
-        
-        :param index_narrative: Narrative of patient of interest
-        :type index_narrative: str
-        :param candidate_narrative: Narrative of neighbor patient
-        :type candidate_narrative: str
-        :param index_id: String id of the patient of interest
-        :type index_id: str
-        :param candidate_id: String id of the neighbor patient
-        :type candidate_id: str
-        :return: LLM response parsed as a dictionary
-        :rtype: Dict[str, Any]
-        """
+    async def judge_async(self, index_narrative: str, candidate_narrative: str, index_id: str, candidate_id: str) -> Dict[str, Any]:
         cached = self._get_cached_judgement(id_a=index_id, id_b=candidate_id)
         if cached != None:
             return cached
@@ -117,43 +131,15 @@ INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response)
         ]
         
         # Try to get a judgement
-        temperatures = [0.0, 0.4, 0.8]
-        for temperature in temperatures: # Multiple attempts at valid response allowed with varying temperatures
+        attempts = 3
+        for _ in range(attempts):
             try:
-                response = self.client.chat(messages=messages, temperature=temperature)
-                cleaned_response = response.strip()
-                if "```json" in cleaned_response:
-                    cleaned_response = cleaned_response.split("```json")[1].split("```")[0]
-                elif "```" in cleaned_response:
-                    cleaned_response = cleaned_response.split("```")[1].split("```")[0]
-                
-                response_json = json.loads(cleaned_response)
+                response = await self.client.chat_async(messages=messages, guided_json=guided_json)
+                response_json = json.loads(response)
                 self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
                 return response_json
-            except json.JSONDecodeError:
-                try:
-                    bracket_idx = cleaned_response.rfind(']')
-                    if bracket_idx == -1:
-                        continue # Try again
-                    else:
-                        # Add curly brackets to close the json, and 
-                        sliced_response = cleaned_response[:bracket_idx+1] + "}"
-                        response_json = json.loads(sliced_response)
-                        sys.stderr.write(f"Model Struggled and Json had to be truncated when judging patient IDs: {index_id} vs {candidate_id}\n")
-                        sys.stderr.write(f"Continuing...\n")
-                        sys.stderr.write(f"===============================\n")
-                        sys.stderr.flush() # Force the output
-                        return response_json
-                except:
-                    sys.stderr.write(f"IDs: {index_id} vs {candidate_id}\n")
-                    sys.stderr.write(f"Response Tail: {cleaned_response[-500:]}\n")
-                    sys.stderr.write(f"===============================\n")
-                    sys.stderr.flush() # Force the output
-                    continue # Try again
-            except Exception:
-                continue # Try again
-        sys.stderr.write(f"COMPLETE REPEATED FAILURE when judging patient IDs: {index_id} vs {candidate_id}\n")
-        sys.stderr.write(f"Removing {candidate_id} from {index_id} neighbors...\n")
-        sys.stderr.write(f"===============================\n")
-        sys.stderr.flush() # Force the output
-        return {}
+            except httpx.HTTPError as e:
+                print(f"{index_id} vs. {candidate_id}: {repr(e)}", file=sys.stderr, flush=True)
+            
+        # If we made it here, we failed
+        raise RuntimeError(f"Failed to judge patients {index_id} and {candidate_id} after {attempts} attempts...")
