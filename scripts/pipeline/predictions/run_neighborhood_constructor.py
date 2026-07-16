@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
+LOG_EVERY = 1000
 os.makedirs(RESULTS_DIR, exist_ok=True)
 test_ids = create_train_test_split()[1]
 
@@ -72,8 +73,16 @@ async def main():
             record['llm_sim'] = judgement['overall_similarity']    
             return record
         
-    records = await asyncio.gather(*(judge_one(item) for item in work_items))
-    pd.DataFrame(records).to_csv(RESULTS_DIR / f"neighbor_results_{slurm_task_id}.csv")
+    total = len(work_items)
+    done = 0
+    coroutines = [judge_one(item) for item in work_items]
+    results = []
+    for res in asyncio.as_completed(coroutines):
+        results.append(await res)
+        done += 1
+        if (done % LOG_EVERY) == 0:
+            print(f"Finished neighborhood construction for {done} patients out of {total} total...", flush=True)
+    pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results_{slurm_task_id}.csv")
     await predictor.scorer.client.async_client.aclose()
         
 
