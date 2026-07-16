@@ -81,7 +81,7 @@ async def main():
         results.append(await res)
         done += 1
         if (done % LOG_EVERY) == 0:
-            print(f"Finished neighborhood construction for {done} patients out of {total} total...", flush=True)
+            print(f"Finished neighborhood construction for {done} judgements out of {total} total...", flush=True)
     pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results_{slurm_task_id}.csv")
     await predictor.scorer.client.async_client.aclose()
         
