@@ -7,7 +7,7 @@
 #SBATCH --mem=64G
 #SBATCH -o slurm_jobs/pipeline/logs/embedding_pipeline_out.txt
 #SBATCH -e slurm_jobs/pipeline/logs/embedding_pipeline_err.txt
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 
 # Exit immediately if command fails
 set -e
@@ -31,13 +31,6 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 11
 fi
 set -a; source "${ENV_FILE}"; set +a
-
-# Pin to the GPU with the most free memory (works around bare-metal squatters slurm cannot see)
-FREE_GPU=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits \
-           | sort -t, -k2 -n -r | head -1 | awk -F, '{print $1}' | tr -d ' ')
-export CUDA_VISIBLE_DEVICES="${FREE_GPU}"
-echo "Pinning to GPU ${CUDA_VISIBLE_DEVICES} on $(hostname)"
-nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
 
 python -m scripts.pipeline.narratives.forge_narratives
 python -m scripts.pipeline.vectors.forge_vectors

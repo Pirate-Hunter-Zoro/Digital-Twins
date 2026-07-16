@@ -10,7 +10,7 @@ class VllmClient:
     def __init__(self) -> None:
         # Save for parity with callers that may introspect these attrs
         self.base_url = os.environ['VLLM_URL']
-        self.async_client = httpx.AsyncClient(timeout=None, limits=httpx.Limits(max_connections=int(os.environ['LLM_MAX_CONCURRENCY']), max_keepalive_connections=int(os.environ['LLM_MAX_CONCURRENCY'])))
+        self.async_client = httpx.AsyncClient(timeout=300, limits=httpx.Limits(max_connections=int(os.environ['LLM_MAX_CONCURRENCY']), max_keepalive_connections=int(os.environ['LLM_MAX_CONCURRENCY'])))
         
     def _clean_response(self, response: str) -> str:
         """Cleans response text from the llm server by removing thought sections

@@ -1,26 +1,24 @@
 #!/bin/bash
-#SBATCH --job-name=trd_prediction_orchestrator
+#SBATCH --job-name=trd_prediction_orchestrator_post_embedding
 #SBATCH --partition=c3_accel
 #SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
-#SBATCH -o slurm_jobs/pipeline/logs/trd_prediction_orchestrator_out.txt
-#SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_orchestrator_err.txt
+#SBATCH -o slurm_jobs/pipeline/logs/trd_prediction_orchestrator_post_embedding_out.txt
+#SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_orchestrator_post_embedding_err.txt
+
+# Post-embedding orchestrator: assumes patient JSON and embeddings already
+# exist on disk. Starts straight at the vLLM servers + prediction + analysis,
+# skipping the ~1h json/embedding re-run.
 
 ENV_FILE="${SLURM_SUBMIT_DIR}/.env"
 # Source the file for NUM_VLLM_SERVERS, ENDPOINTS_DIR, COMPUTE_LLM_SIMILARITY, and other flags.
 set -a; source "${ENV_FILE}"; set +a
 
-CANCEL_SCRIPT="${SLURM_SUBMIT_DIR}/slurm_jobs/pipeline/cancel_pipeline.sh"
+CANCEL_SCRIPT="${SLURM_SUBMIT_DIR}/slurm_jobs/pipeline/cancel_pipeline_post_embedding.sh"
 echo "#!/bin/bash" > "${CANCEL_SCRIPT}"
-echo "echo 'Killing prediction pipeline...'" >> "${CANCEL_SCRIPT}"
+echo "echo 'Killing prediction pipeline (post-embedding)...'" >> "${CANCEL_SCRIPT}"
 chmod +x "${CANCEL_SCRIPT}"
 echo "scancel ${SLURM_JOB_ID} # Orchestrator Job" >> "${CANCEL_SCRIPT}"
-
-JSON_JOB_ID=$(sbatch --parsable slurm_jobs/pipeline/load_patient_json.sbatch)
-echo "scancel ${JSON_JOB_ID} # Json Job" >> "${CANCEL_SCRIPT}"
-
-EMBEDDING_JOB_ID=$(sbatch --parsable --dependency=afterok:$JSON_JOB_ID slurm_jobs/pipeline/run_embedding_pipeline.sbatch)
-echo "scancel ${EMBEDDING_JOB_ID} # Embedding Job" >> "${CANCEL_SCRIPT}"
 
 # Number of vLLM servers to launch (and matching pipeline shards). Default 1.
 NUM_VLLM_SERVERS="${NUM_VLLM_SERVERS:-1}"
@@ -38,8 +36,8 @@ if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
   mkdir -p "${ENDPOINTS_DIR}"
   rm -f "${ENDPOINTS_DIR}"/endpoint_*.url
 
-  echo "Submitting ${NUM_VLLM_SERVERS} vLLM server(s) to begin once the embedding job is done..."
-  VLLM_JOB_ID=$(sbatch --parsable --array="0-${LAST_IDX}" --dependency=afterok:$EMBEDDING_JOB_ID slurm_jobs/pipeline/start_vllm_server.sbatch)
+  echo "Submitting ${NUM_VLLM_SERVERS} vLLM server(s)..."
+  VLLM_JOB_ID=$(sbatch --parsable --array="0-${LAST_IDX}" slurm_jobs/pipeline/start_vllm_server.sbatch)
   echo "scancel ${VLLM_JOB_ID} # vLLM Server Array" >> "${CANCEL_SCRIPT}"
 
   # Wait for every server to publish its endpoint AND answer /health.
@@ -72,7 +70,7 @@ if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
 fi
 
 echo "Launching the prediction pipeline (array ${ARRAY_SPEC})..."
-PREDICTION_JOB_ID=$(sbatch --parsable --array="${ARRAY_SPEC}" --dependency=afterok:$EMBEDDING_JOB_ID slurm_jobs/pipeline/run_trd_prediction_pipeline.sbatch)
+PREDICTION_JOB_ID=$(sbatch --parsable --array="${ARRAY_SPEC}" slurm_jobs/pipeline/run_trd_prediction_pipeline.sbatch)
 echo "scancel ${PREDICTION_JOB_ID} # Prediction Pipeline" >> "${CANCEL_SCRIPT}"
 
 if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then

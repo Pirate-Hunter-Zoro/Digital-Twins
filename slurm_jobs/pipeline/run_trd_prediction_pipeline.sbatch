@@ -31,4 +31,23 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
+# Only resolve a vLLM endpoint when LLM judging is enabled. With similarity
+# off, no servers are launched and no endpoint files exist, so this whole
+# block is skipped.
+if [[ "${COMPUTE_LLM_SIMILARITY}" == 1 ]]; then
+  # Resolve this task's vLLM server from the index-keyed endpoint file the
+  # server job published. Default the index to 0 so a standalone (non-array)
+  # run works even with 'set -u' active.
+  TASK_IDX="${SLURM_ARRAY_TASK_ID:-0}"
+  ENDPOINT_FILE="${ENDPOINTS_DIR}/endpoint_${TASK_IDX}.url"
+
+  if [[ ! -s "${ENDPOINT_FILE}" ]]; then
+    echo "ERROR: endpoint file missing or empty: ${ENDPOINT_FILE}" >&2
+    exit 12
+  fi
+
+  export VLLM_URL="$(cat "${ENDPOINT_FILE}")"
+  echo "Task ${TASK_IDX} targeting vLLM server at ${VLLM_URL}"
+fi
+
 python -m scripts.pipeline.predictions.run_neighborhood_constructor

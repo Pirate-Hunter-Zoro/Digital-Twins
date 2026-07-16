@@ -117,7 +117,7 @@ Finds and scores patient similarity on the embedded vectors.
 * **`scorer.py`**:
   * The LLM Judge. Takes candidate pairs and evaluates clinical similarity using a rigid JSON schema.
   * **Structured decoding**: the output schema is enforced server-side via vLLM guided JSON (the `guided_json` module constant, passed on every request), so the model emits exactly the required object — no chain-of-thought, no prose preamble, and no fence-stripping or bracket-repair on the client. Response length is capped by `MAX_TOKENS` (512); shrinking the emitted object and killing the discarded thinking is the dominant per-call cost lever.
-  * **Async & fail-loud**: `judge_async` awaits the async vLLM client (`chat_async`) — a single call per uncached pair (no temperature-cycling retry). A small transport-only retry guards `httpx.HTTPError`; on repeated failure it raises `RuntimeError` rather than silently dropping a neighbor.
+  * **Async & fail-loud**: `judge_async` awaits the async vLLM client (`chat_async`) — a single call per uncached pair (no temperature-cycling retry). A small transport-only retry guards `httpx.HTTPError`; on repeated failure it raises `RuntimeError` rather than silently dropping a neighbor. The client carries a bounded request timeout so a stuck/dropped request raises `httpx.ReadTimeout` (an `HTTPError` subclass) into that retry instead of hanging forever — without it, a leaked semaphore slot per hang eventually deadlocks the whole run.
   * **Caching**: Stores expensive LLM outputs in `judgements.db` (Table: `llm_judgements`) to prevent redundant inference; the pair key is order-normalized, so the cache is symmetric and a re-run resumes from it almost for free.
   * **Logic**: Checks cache -> Formats Prompt -> `await` guided-JSON completion -> `json.loads` (guaranteed parseable) -> Saves Result.
 
@@ -160,8 +160,9 @@ graph TD
   * Neighborhood construction itself now lives in the async driver below, which reads these members directly (`predictor.retriever`, `predictor.scorer`, `predictor.get_trd_status`). The former synchronous per-patient `construct_neighborhood_data` orchestrator was retired with the move to async.
 
 * **`run_neighborhood_constructor.py`**:
-  * Single-process `asyncio` driver that constructs neighborhoods for all test patients on the embedded vectors, replacing the former `multiprocessing` pool.
-  * Chunks the sorted test set across Slurm array tasks — now a single task (`--array=0-0`), since in-process async concurrency supersedes array fan-out and keeps one process as the sole writer of the shared `judgements.db` cache (no cross-process races).
+  * Per-task `asyncio` driver that constructs neighborhoods for the test patients on the embedded vectors, replacing the former `multiprocessing` pool.
+  * Chunks the sorted test set across Slurm array tasks by `SLURM_ARRAY_TASK_ID` / `SLURM_ARRAY_TASK_COUNT`. The array width is set at submit time by the orchestrator to `NUM_VLLM_SERVERS`, so each task owns a disjoint slice of anchors and drives its own dedicated vLLM server (task *i* → server *i*, via the endpoint file). At `NUM_VLLM_SERVERS=1` this collapses to a single `--array=0-0` task. The per-pair cache key in `judgements.db` is order-normalized and the shards hold disjoint anchors, so shards never contend on the same logical row — though all tasks do write to one SQLite file, so heavy concurrent commit traffic can still hit file-level lock waits.
+  * Skips all LLM work when `COMPUTE_LLM_SIMILARITY=0`: the scorer is built without a client, and the driver writes the pre-built neighbor records straight to CSV with `llm_sim` left as `NaN` rather than calling `judge_async`.
   * Builds one `TRDPredictor` (test set as `exclude_ids`), flattens every (anchor, neighbor, scheme) pair into a work list synchronously (fast cosine retrieval + narrative lookups), then drives all LLM judgements through `asyncio.as_completed`, throttled by an `asyncio.Semaphore(LLM_MAX_CONCURRENCY)` so at most `LLM_MAX_CONCURRENCY` requests are in flight against the vLLM server at once. Draining via `as_completed` rather than a bare `asyncio.gather` lets the driver log throughput as each judgement lands — a flushed progress line every `LOG_EVERY` completions (`{done}/{total}`) — so an otherwise-silent multi-hour run reports progress to the Slurm log. Results accumulate in completion order (no longer input order) and the CSV is written once at the end; durable per-pair progress is independent of the CSV, since each judgement is committed to `judgements.db` the moment it returns, so a killed run resumes from the cache almost for free.
   * **Output**: CSV files (`neighbor_results_{task_id}.csv`).
 
@@ -372,10 +373,13 @@ These three `0`/`1` flags scope what the neighbor-weighted KNN pipeline computes
 
 * `VLLM_MODEL_NAME`: `google_medgemma-27b-text-it`
 * `VLLM_MODEL_PATH`: Local path to the vLLM model.
-* `VLLM_URL`: `http://compute306:8000`
+* `VLLM_URL`: **Resolved at runtime, not from this static value.** Each vLLM server publishes its own `http://<node>:<port>` to an index-keyed endpoint file under `ENDPOINTS_DIR`, and each prediction-pipeline array task reads the file matching its `SLURM_ARRAY_TASK_ID` and exports it. The line still present in `.env` is only a fallback for ad-hoc single-server runs.
 * `MAX_MODEL_LEN`: 32768
 * `MAX_TOKENS`: 512 (Response cap; small because the judge emits a compact guided-JSON object with no chain-of-thought. This is the dominant per-call latency lever.)
-* `LLM_MAX_CONCURRENCY`: 200 (Max in-flight judgement requests against the vLLM server; sizes both the async driver's `Semaphore` and the `httpx` connection pool. Keep at or below the "maximum concurrency" figure vLLM prints at startup.)
+* `LLM_MAX_CONCURRENCY`: 32 (Max in-flight judgement requests against a single vLLM server; sizes the async driver's `Semaphore`, the `httpx` connection pool, **and** the server's `--max-num-seqs`. Set to the real KV-cache ceiling: on a TP=2 MedGemma-27B server across two A40s, the 27B weights leave only ~10 GiB/GPU for KV cache, so vLLM reports "maximum concurrency for 32768 tokens per request: 1.33x" and never runs more than ~29-30 sequences. Overshooting this — the earlier value was 200 — does not add throughput; the excess just queues in vLLM's pending list and, past the KV limit, triggers RECOMPUTE-preemption thrashing.)
+* `NUM_VLLM_SERVERS`: 2 (How many vLLM servers the orchestrator launches, and the matching pipeline array width — task *i* talks to server *i*. The single tunable for scaling: `2` uses all four A40s as two independent TP=2 servers for ~2x aggregate throughput; drop to `1` to free two GPUs for other users, with no code change.)
+
+**Multi-server topology.** `start_vllm_server.sbatch` is a Slurm array (`--array=0-(N-1)`), each task a TP=2 server on its own GPU pair, on a per-task port (`8000 + index`), publishing its URL to `ENDPOINTS_DIR/endpoint_<index>.url`. The server also runs with `--enable-prefix-caching` (each anchor's index narrative is a shared prompt prefix reused across its neighbors), `--enable-chunked-prefill`, and `--max-num-seqs` pinned to `LLM_MAX_CONCURRENCY`. The vLLM `httpx` client uses a bounded timeout so a dropped request surfaces as a retryable `httpx.HTTPError` instead of hanging a semaphore slot forever (an earlier `timeout=None` deadlocked the whole run once enough slots leaked).
 
 ### Storage & Artifacts
 
@@ -385,6 +389,7 @@ These three `0`/`1` flags scope what the neighbor-weighted KNN pipeline computes
 * `EMBEDDINGS_DIR`: Storage for embedded vectors and `embeddings.db`.
 * `JUDGEMENTS_DIR`: Storage for LLM judgements.
 * `RESULTS_DIR`: Storage for analysis results and logs.
+* `ENDPOINTS_DIR`: Directory where each vLLM server publishes its `endpoint_<index>.url` file and each pipeline task reads its server URL. The orchestrator wipes stale files here before every run. (Relative path — resolved against the job's working directory, which is always the repo root / `SLURM_SUBMIT_DIR`.)
 
 ### Hyperparameters & Concurrency
 
@@ -414,7 +419,15 @@ The two environments cannot share one interpreter — keep them distinct.
 sbatch slurm_jobs/pipeline/trd_prediction_orchestrator.sbatch
 ```
 
-The orchestrator sequentially submits: JSON loading, embedding pipeline (narratives + feature vector DataFrame + embedded vectors), vLLM server startup, neighborhood construction (Slurm array on embedded vectors), and analysis (neighbor-weighted evaluation + classical ML on both sources). All results are rsynced to `results/` upon completion.
+The orchestrator sequentially submits: JSON loading, embedding pipeline (narratives + feature vector DataFrame + embedded vectors), the vLLM server array (`NUM_VLLM_SERVERS` servers), neighborhood construction (Slurm array on embedded vectors, one task per server), and analysis (neighbor-weighted evaluation + classical ML on both sources). Before launching servers it wipes `ENDPOINTS_DIR`, and it blocks until **every** server has published its endpoint file and answered `/health` before releasing the prediction array. A dependent kill stub `scancel`s the whole server array once prediction finishes. All results are rsynced to `results/` upon completion.
+
+**To Re-run Only the Post-Embedding Stages:**
+
+```bash
+sbatch slurm_jobs/pipeline/trd_prediction_orchestrator_post_embedding.sbatch
+```
+
+Identical from the vLLM stage onward, but skips JSON loading and embedding (assumes `embeddings.db`, the feature parquet, and narratives are already on disk). Use it when the upstream artifacts are current and you only want to re-judge / re-evaluate — it avoids the ~1 hour the cache-skipping JSON+embedding stages still cost. It writes its own `cancel_pipeline_post_embedding.sh` so it will not clobber a full run's cancel list.
 
 ## Cohort Investigation Notebook
 
