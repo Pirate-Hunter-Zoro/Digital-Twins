@@ -62,9 +62,13 @@ class Scorer:
         Args:
             shard_id (int, optional): Specifies which .db file to create. Defaults to None which implies one canonical file.
         """
+        self.canonical_cursor = None
         if shard_id is None:
             vectors_path = Path(os.environ['JUDGEMENTS_DIR']) / "judgements.db"
         else:
+            canonical_path = Path(os.environ['JUDGEMENTS_DIR']) / "judgements.db"
+            if canonical_path.exists():
+                self.canonical_cursor = sqlite3.connect(f"file:{canonical_path}?mode=ro", uri=True).cursor()
             vectors_path = Path(os.environ['JUDGEMENTS_DIR']) / f"judgements_{shard_id}.db"
         os.makedirs(vectors_path.parent, exist_ok=True)
         self.connection = sqlite3.connect(vectors_path)
@@ -81,15 +85,14 @@ CREATE TABLE IF NOT EXISTS llm_judgements (
 ''')
         
     def _get_cached_judgement(self, id_a: str, id_b: str) -> Optional[Dict]:
-        """
-        Return cached judgement of the pairs if it exists
-        
-        :param id_a: String id of the first patient
-        :type id_a: str
-        :param id_b: String id of the second patient
-        :type id_b: str
-        :return: Resulting judgement if it is present (else None)
-        :rtype: Dict | None
+        """Return cached judgement if it exists
+
+        Args:
+            id_a (str): ID of first patient
+            id_b (str): ID of second patient
+
+        Returns:
+            Optional[Dict]: Resulting judgement if it exists (else None)
         """
         pair = (id_a, id_b) if id_a <= id_b else (id_b, id_a)
         self.cursor.execute('''
@@ -99,7 +102,18 @@ SELECT full_response FROM llm_judgements WHERE id_a=? AND id_b=?
         if row != None:
             return json.loads(row[0])
         else:
-            return None
+            # Check the canonical cursor (merged .db) as well
+            if self.canonical_cursor is not None:
+                self.canonical_cursor.execute('''
+SELECT full_response FROM llm_judgements WHERE id_a=? AND id_b=?
+''', pair)
+                row = self.canonical_cursor.fetchone()
+                if row != None:
+                    return json.loads(row[0])
+                else:
+                    return None
+            else:
+                return None
     
     def _cache_judge(self, id_a: str, id_b: str, response_json: Dict):
         """

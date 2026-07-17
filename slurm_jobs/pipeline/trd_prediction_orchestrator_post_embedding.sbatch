@@ -73,6 +73,9 @@ echo "Launching the prediction pipeline (array ${ARRAY_SPEC})..."
 PREDICTION_JOB_ID=$(sbatch --parsable --array="${ARRAY_SPEC}" slurm_jobs/pipeline/run_trd_prediction_pipeline.sbatch)
 echo "scancel ${PREDICTION_JOB_ID} # Prediction Pipeline" >> "${CANCEL_SCRIPT}"
 
+# Analysis waits on the prediction array by default; the LLM path reinserts the merge below.
+ANALYSIS_DEP=$PREDICTION_JOB_ID
+
 if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
 
   VLLM_KILL_JOB_ID=$(
@@ -83,10 +86,16 @@ if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
   )
   echo "scancel ${VLLM_KILL_JOB_ID} # vLLM Kill Stub" >> "${CANCEL_SCRIPT}"
 
+  # Merge the per-shard judgements_{i}.db into the canonical judgements.db before analysis reads it.
+  echo "Chaining judgements merge (afterok on the full prediction array)..."
+  MERGE_JOB_ID=$(sbatch --parsable --dependency=afterok:$PREDICTION_JOB_ID slurm_jobs/pipeline/merge_judgements.sbatch)
+  echo "scancel ${MERGE_JOB_ID} # Judgements Merge" >> "${CANCEL_SCRIPT}"
+  ANALYSIS_DEP=$MERGE_JOB_ID
+
 fi
 
 echo "Launching evaluation pipeline to run once prediction is complete..."
-ANALYSIS_JOB_ID=$(sbatch --parsable --dependency=afterok:$PREDICTION_JOB_ID slurm_jobs/pipeline/run_trd_prediction_analysis.sbatch)
+ANALYSIS_JOB_ID=$(sbatch --parsable --dependency=afterok:$ANALYSIS_DEP slurm_jobs/pipeline/run_trd_prediction_analysis.sbatch)
 echo "scancel ${ANALYSIS_JOB_ID} # Analysis Pipeline" >> "${CANCEL_SCRIPT}"
 
 # Add self to kill list
