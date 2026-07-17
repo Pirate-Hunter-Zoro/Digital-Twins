@@ -6,7 +6,7 @@ scratch/
 .DS_Store
 *.pyc
 .pytest_cache/
-cancel_pipeline*.sh
+*cancel*.sh
 endpoints/
 results/
 .claude/
