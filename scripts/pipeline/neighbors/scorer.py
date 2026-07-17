@@ -42,21 +42,30 @@ guided_json = {
 
 class Scorer:
     
-    def __init__(self, require_client:bool = True, save_time_hist:bool = True):
+    def __init__(self, require_client:bool = True, save_time_hist:bool = True, shard_id:int = None):
         """Initialize vllm client and internal database
 
         Args:
             require_client (bool, optional): Boolean for whether or not to load the VLLM server. Defaults to True.
             save_time_hist (bool, optional): Boolean for whether or not to create the time histogram. Defaults to True.
+            shard_id (int, optional): Per-shard judgements DB file. Defaults to None which indicates single canonical file
         """
         if require_client:
             self.client = VllmClient()
         self.prompt_loader = PromptLoader()
         self.retriever = Retriever(save_time_hist=save_time_hist)
-        self._init_db()
+        self._init_db(shard_id)
         
-    def _init_db(self):
-        vectors_path = Path(os.environ['JUDGEMENTS_DIR']) / "judgements.db"
+    def _init_db(self, shard_id: int=None):
+        """Initialize database for judgement scores - dependent on shard ID
+
+        Args:
+            shard_id (int, optional): Specifies which .db file to create. Defaults to None which implies one canonical file.
+        """
+        if shard_id is None:
+            vectors_path = Path(os.environ['JUDGEMENTS_DIR']) / "judgements.db"
+        else:
+            vectors_path = Path(os.environ['JUDGEMENTS_DIR']) / f"judgements_{shard_id}.db"
         os.makedirs(vectors_path.parent, exist_ok=True)
         self.connection = sqlite3.connect(vectors_path)
         self.cursor = self.connection.cursor()

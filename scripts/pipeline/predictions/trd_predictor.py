@@ -6,21 +6,21 @@ load_dotenv()
 
 from scripts.pipeline.neighbors.retriever import Retriever
 from scripts.pipeline.neighbors.scorer import Scorer
-from scripts.pipeline.neighbors.neighbor_scheme import NeighborScheme
 from scripts.shared.utils import load_trd_set
 
 class TRDPredictor:
     
-    def __init__(self, exclude_ids: set[str]=set(), save_time_hist:bool = True):
+    def __init__(self, exclude_ids: set[str]=set(), save_time_hist:bool = True, shard_id:int = None):
         """Create necessary retrievers and scorers and TRD-positive set
 
         Args:
             exclude_ids (set[str]): Set of anchor patients which are not allowed to be considered neighbors
             save_time_hist (bool, optional): Boolean for whether or not to create the time histogram. Defaults to True.
+            shard_id (int, optional): Specifies which .db file to create. Defaults to None which implies one canonical file.
         """
         self.retriever = Retriever(exclude_ids=exclude_ids, save_time_hist=save_time_hist)
         self.judge_sims = int(os.environ['COMPUTE_LLM_SIMILARITY'])==1 
-        self.scorer = Scorer(require_client=self.judge_sims, save_time_hist=save_time_hist)
+        self.scorer = Scorer(require_client=self.judge_sims, save_time_hist=save_time_hist, shard_id=shard_id)
         self.trd_set = set()
         self.trd_set = load_trd_set()
         

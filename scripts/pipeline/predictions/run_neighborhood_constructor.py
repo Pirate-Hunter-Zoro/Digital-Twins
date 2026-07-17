@@ -18,7 +18,6 @@ test_ids = create_train_test_split()[1]
 
 async def main():
     np.random.seed(int(os.environ['SEED']))
-    predictor = TRDPredictor(exclude_ids=test_ids)
     
     # Establish deterministic order over the different Slurm workers
     sorted_test_ids = sorted(list(test_ids))
@@ -28,6 +27,8 @@ async def main():
     slurm_task_count = int(os.environ['SLURM_ARRAY_TASK_COUNT'])
     chunk_size = len(test_ids) // slurm_task_count
     num_with_extra = len(test_ids) % slurm_task_count
+    
+    predictor = TRDPredictor(exclude_ids=test_ids, shard_id=slurm_task_id)
     
     # Grab this worker's chunk of sorted_test_ids
     # start_index inclusive, end_index exclusive
