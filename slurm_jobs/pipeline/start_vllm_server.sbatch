@@ -53,7 +53,7 @@ printf '%s\n' "http://${HEAD_NODE}:${PORT}" > "${ENDPOINT_FILE}.tmp"
 mv "${ENDPOINT_FILE}.tmp" "${ENDPOINT_FILE}"
 echo "Published endpoint ${IDX}: http://${HEAD_NODE}:${PORT} -> ${ENDPOINT_FILE}"
 
-# ---- Start the server ----
+# ---- Start the server (Given the same kind of prompt over and over again, just store the prefix - that's what prefix-caching is) ----
 python -m vllm.entrypoints.openai.api_server \
   --model "${VLLM_MODEL_PATH}" \
   --tensor-parallel-size "${TP_SIZE}" \

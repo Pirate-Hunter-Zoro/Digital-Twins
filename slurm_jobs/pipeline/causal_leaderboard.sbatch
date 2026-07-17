@@ -37,3 +37,9 @@ fi
 set -a; source "${ENV_FILE}"; set +a
 
 python -m scripts.pipeline.causal.build_leaderboard
+
+# Copy all causal artifacts from ARTIFACTS_DIR to the local results/ directory for easier access.
+# The causal arm never touches embeddings, so this is a flat mirror (no embedder/VLLM nesting).
+LOCAL_RESULTS_DIR="results/causal_pipeline"
+mkdir -p "${LOCAL_RESULTS_DIR}"
+rsync -av "${ARTIFACTS_DIR}/causal_pipeline/" "${LOCAL_RESULTS_DIR}/"

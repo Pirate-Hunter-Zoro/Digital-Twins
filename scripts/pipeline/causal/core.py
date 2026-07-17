@@ -167,6 +167,7 @@ def fit_dr_tester(fitted_forest: CausalForestDML, X_fit_train: pd.DataFrame, X_f
         cv=5, # Cross validation sweep
     )
     # Estimate m_1(x), m_2(x), e(x)
+    # TODO - Clusters seem to show up - are they treatment groups? Try to investigate
     tester.fit_nuisance(
         Xval=X_fit_test.to_numpy(), # Patients with the treatment attribute removed and all others kept
         Dval=treatments_test, # Binary treatment flags
@@ -386,6 +387,30 @@ def evaluate_subgroup_ate(spec_dict: dict, cate_test: np.ndarray, X_fit_test: pd
         
     return correlations
 
+def plot_cate_distribution(spec_dict: dict, cate_test: np.ndarray, save_dir: Path) -> None:
+    """Render the marginal distribution of the forest's per-patient CATE values for one contrast.
+
+    A companion to the BLP / subgroup plots: shows whether the forest found real spread in the
+    treatment effect or just a tight spike at the ATE. Purely a side-effect plot, no returned metric.
+    The x-axis is clipped to the 1st/99th percentile so a handful of extreme CATE values cannot
+    stretch the axis into a useless spike (same outlier guard evaluate_blp/evaluate_subgroup_ate use).
+
+    Args:
+        spec_dict (dict): The pairwise contrast spec (its 'key', 'display_name').
+        cate_test (np.ndarray): Per-patient CATE values over the kept test rows.
+        save_dir (Path): Directory to write the figure into.
+    """
+    fig, ax = plt.subplots()
+    ax.hist(cate_test, bins=50, range=tuple(np.percentile(cate_test, [1, 99])))
+    ax.axvline(x=0, color='green', linestyle='--', label="No effect")
+    ax.axvline(x=cate_test.mean(), color='red', linestyle='--', label="Average effect")
+    ax.set_xlabel("CATE on P(TRD)")
+    ax.set_ylabel("Number of patients")
+    ax.set_title(spec_dict['display_name'])
+    ax.legend()
+    fig.savefig(save_dir / f"CATE_histogram_{spec_dict['key']}.png")
+    plt.close(fig)
+
 def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: pd.DataFrame, y_train: np.ndarray, y_test: np.ndarray, seed: int=None) -> dict:
     """Fit one pairwise contrast's causal forest and run the full evaluation surface over it.
 
@@ -430,6 +455,7 @@ def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: p
     uplift_res = evaluate_uplift(spec_dict, tester, X_fit_train, X_fit_test, save_dir)
     top_shap_moderators = evaluate_shap_moderators(forest, X_fit_test, top_k=5)
     gate_res = evaluate_subgroup_ate(spec_dict, cate_test, X_fit_test, save_dir)
+    plot_cate_distribution(spec_dict, cate_test, save_dir)
     return {
         'key': spec_dict['key'],
         'display_name': spec_dict['display_name'],
