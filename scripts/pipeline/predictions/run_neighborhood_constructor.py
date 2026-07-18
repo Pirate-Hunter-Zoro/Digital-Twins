@@ -83,7 +83,7 @@ async def main():
             results.append(await res)
             done += 1
             if (done % LOG_EVERY) == 0:
-                print(f"Finished neighborhood construction for {done} judgements out of {total} total...", flush=True)
+                print(f"Finished {done} judgements out of {total} total...", flush=True)
         await predictor.scorer.client.async_client.aclose()
     else:
         results = [item[0] for item in work_items]

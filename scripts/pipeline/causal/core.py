@@ -226,10 +226,11 @@ def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit
     blp_res = tester.evaluate_blp(
         Xval=X_fit_test,
     )
-    param, err, pval = float(blp_res.params[0]), float(blp_res.errs[0]), float(blp_res.pvals[0])
+    param, err, dr_pval = float(blp_res.params[0]), float(blp_res.errs[0]), float(blp_res.pvals[0])
     # Obtain dr estimates pertaining to test patients
     dr_vals = tester.dr_val_[:, 0]
     assert cate_test.shape == dr_vals.shape, f"Expected shapes of CATE values and DR values to match, but received {cate_test.shape} and {dr_vals.shape} respectively..."
+    dr_rho, dr_rho_pval = spearmanr(cate_test, dr_vals)
     fitted_line = np.polyfit(cate_test, dr_vals, deg=1) # Returns slope and intercept
     assert np.isclose(fitted_line[0], param), f"Inconsistent slope values from BLP: {param} and numpy polyfit: {fitted_line[0]}..."
     fig, ax = plt.subplots()
@@ -247,7 +248,9 @@ def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit
     return {
         'blp_est': param,
         'blp_se': err,
-        'blp_pval': pval
+        'blp_pval': dr_pval,
+        'dr_spearman_rho': float(dr_rho),
+        'dr_spearman_pval': float(dr_rho_pval)
     }
     
 def evaluate_uplift(spec_dict: dict, tester: DRTester, X_fit_train: pd.DataFrame, X_fit_test: pd.DataFrame, save_dir: Path) -> dict:
@@ -456,6 +459,16 @@ def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: p
     top_shap_moderators = evaluate_shap_moderators(forest, X_fit_test, top_k=5)
     gate_res = evaluate_subgroup_ate(spec_dict, cate_test, X_fit_test, save_dir)
     plot_cate_distribution(spec_dict, cate_test, save_dir)
+    
+    average_cate = float(forest.ate(X_fit_test))
+    lower, upper = forest.ate_interval(X_fit_test, alpha=0.05) # 95% confidence interval
+    lower, upper = float(lower), float(upper)
+    ate_res = {
+        "ate": average_cate,
+        "ate_ci_low": lower,
+        "ate_ci_high": upper,
+    }
+    
     return {
         'key': spec_dict['key'],
         'display_name': spec_dict['display_name'],
@@ -464,5 +477,6 @@ def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: p
         'blp_res': blp_res,
         'uplift_res': uplift_res,
         'top_shap_moderators': top_shap_moderators,
-        'gate_res':  gate_res # Group Average Treatment effect correlation
+        'gate_res':  gate_res, # Group Average Treatment effect correlation
+        'ate_res': ate_res, # Confidence interval for average treatment effect
     }

@@ -34,20 +34,20 @@ from scripts.data_loading.med_definitions import (
 
 TREATMENT_REGISTRY = [
     {
-        "key": "ssri_vs_snri",
-        "display_name": "SSRI vs SNRI",
+        "key": "snri_vs_ssri",
+        "display_name": "SNRI vs SSRI",
         "reference_arm": SSRI,
         "comparison_arm": SNRI,
     },
     {
-        "key": "ssri_vs_bupropion",
-        "display_name": "SSRI vs bupropion",
+        "key": "bupropion_vs_ssri",
+        "display_name": "bupropion vs SSRI",
         "reference_arm": SSRI,
         "comparison_arm": BUPROPION,
     },
     {
-        "key": "snri_vs_bupropion",
-        "display_name": "SNRI vs bupropion",
+        "key": "bupropion_vs_snri",
+        "display_name": "bupropion vs SNRI",
         "reference_arm": SNRI,
         "comparison_arm": BUPROPION,
     },
