@@ -431,6 +431,14 @@ sbatch slurm_jobs/pipeline/trd_prediction_orchestrator_post_embedding.sbatch
 
 Identical from the vLLM stage onward, but skips JSON loading and embedding (assumes `embeddings.db`, the feature parquet, and narratives are already on disk). Use it when the upstream artifacts are current and you only want to re-judge / re-evaluate — it avoids the ~1 hour the cache-skipping JSON+embedding stages still cost. It writes its own `cancel_pipeline_post_embedding.sh` so it will not clobber a full run's cancel list.
 
+**To Launch the Short (c3_short, no-judging) Pipeline:**
+
+```bash
+sbatch slurm_jobs/short_pipeline/trd_prediction_orchestrator_short.sbatch
+```
+
+A judging-free copy of the pipeline wired for the `c3_short` partition (9-hour wall), meant to turn around classical-ML and nearest-neighbor prediction results fast — including on alternate encoders — while the slow neighbor-judging run occupies `c3_accel`. Its chain is embedding → prediction (array `0-0`) → analysis; the JSON build is skipped because the sliced patient JSONs are model-independent and already on disk (rebuilding them is what previously hit the Isilon quota). It never edits the real `.env`: each job sources `.env` and then `slurm_jobs/short_pipeline/short_overrides.env` with `set -a`, so those exports win in the shell and, because every `load_dotenv()` here uses `override=False`, survive into Python. The overrides force `COMPUTE_LLM_SIMILARITY`, `NEIGHBOR_FARTHEST`, and `NEIGHBOR_SUBSAMPLE` to `0` and redirect the whole `ARTIFACTS_DIR` tree to an isolated `${ANALYSIS_DIR}/artifacts_short` sandbox (embeddings, feature parquet, narratives, results), so the live run's artifacts and its pending analysis are untouched; the repo-side mirror lands under `results/short_pipeline/` rather than the main `results/<encoder>/<judge>/` path. Resource asks respect c3_short's `MaxMemPerCPU=12000 MB` (the prediction job uses 32 CPUs for its 256 GB, since the main pipeline's 2-CPU/256 GB ask would be rejected). The semantic-feature ablation is off by default (`RUN_ABLATIONS=0` in the overrides) because re-embedding the cohort once per spec would overrun the wall; setting it to `1` re-enables both the ablated embeddings and `ablation_runner`. To evaluate a different encoder, override `EMBEDDER_MODEL_NAME` / `EMBEDDER_MODEL_PATH` in `short_overrides.env` and the sandbox paths follow automatically. It writes its own `cancel_short_pipeline.sh`. LLM judging is intentionally unsupported here — it cannot clear a 9-hour wall.
+
 ## Cohort Investigation Notebook
 
 `notebooks/cohort_investigation.ipynb` is the population-characterization surface backing the TRIPOD-AI reporting checklist; its outputs feed Table 1 and the supporting tables/figures at manuscript time. A roadmap table at the top of the notebook maps each TRIPOD-AI item to the cell that produces it. All artifacts land in `notebooks/figures/`:
