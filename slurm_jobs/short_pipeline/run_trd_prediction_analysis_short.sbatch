@@ -50,9 +50,10 @@ if [[ "${RUN_ABLATIONS}" == 1 ]]; then
   python -m scripts.pipeline.predictions.ablation_runner
 fi
 
-# Mirror the sandbox results into the repo under results/short_pipeline/ so they
-# never collide with the main run's results/${EMBEDDER_MODEL_NAME}/... mirror.
-LOCAL_RESULTS_DIR="results/short_pipeline/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
+# Mirror results into the repo under the normal results/<encoder>/<judge> path,
+# same as the main pipeline. The 4B encoder name keeps this distinct from the
+# live 8B run's mirror, so it is a first-class result, not a sandbox copy.
+LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
 mkdir -p "${LOCAL_RESULTS_DIR}"
 rsync -av "${RESULTS_DIR}/" "${LOCAL_RESULTS_DIR}/"
 

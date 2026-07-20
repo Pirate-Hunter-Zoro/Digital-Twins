@@ -90,7 +90,7 @@ def build_treatment(spec_dict: dict, feature_matrix: pd.DataFrame) -> tuple[np.n
     compar_flag = (arms == compar_arm).astype(int).to_numpy()
     return (keep_mask, compar_flag)
 
-def fit_causal_forest(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: pd.DataFrame, y_train: np.ndarray, seed: int=None) -> tuple[CausalForestDML, Any, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
+def fit_causal_forest(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: pd.DataFrame, y_train: np.ndarray, seed: int=None) -> tuple[CausalForestDML, np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
     """Fit one active-comparator pairwise causal forest and return everything the eval surface needs.
 
     The treatment is which antidepressant CLASS was started at the anchor prescription. For this
@@ -110,7 +110,7 @@ def fit_causal_forest(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: 
         seed (int, optional): Random seed. Defaults to None, in which case the SEED env var is read.
 
     Returns:
-        tuple[CausalForestDML, Any, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray] | None:
+        tuple[CausalForestDML, np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray] | None:
             None if the kept pair fails the overlap band. Otherwise (fitted_forest, cate_test,
             X_fit_train, X_fit_test, T_train, T_test), all filtered to the two-arm pair: X_fit_*
             keep every feature column; T_train/T_test are the 0/1 comparison-arm flags for the kept
