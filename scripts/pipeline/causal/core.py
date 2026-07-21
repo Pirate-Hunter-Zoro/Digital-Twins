@@ -178,10 +178,33 @@ def fit_dr_tester(fitted_forest: CausalForestDML, X_fit_train: pd.DataFrame, X_f
     )
     return tester
 
+def contrast_output_dir(key: str, subdir: str=None) -> Path:
+    """Return (and create) the per-contrast output directory for one pairwise contrast.
+
+    Single source of truth for the causal_pipeline on-disk layout: everything for a
+    contrast lives under ARTIFACTS_DIR/causal_pipeline/<key>/, with optional per-family
+    subfolders (e.g. 'subgroup_ate', 'cate_vs_feature'). Global artifacts
+    (leaderboard.csv, validation_report.json) stay at the causal_pipeline root and do
+    not use this helper.
+
+    Args:
+        key (str): The contrast key (spec_dict['key']), e.g. 'bupropion_vs_snri'.
+        subdir (str, optional): A per-family subfolder under the contrast dir. Defaults
+            to None (the contrast root).
+
+    Returns:
+        Path: The created directory.
+    """
+    out = Path(os.environ['ARTIFACTS_DIR']) / 'causal_pipeline' / key
+    if subdir is not None:
+        out = out / subdir
+    os.makedirs(out, exist_ok=True)
+    return out
+
 def evaluate_calibration(spec_dict: dict,
                          tester: DRTester,
-                         X_fit_train: pd.DataFrame, 
-                         X_fit_test: pd.DataFrame, 
+                         X_fit_train: pd.DataFrame,
+                         X_fit_test: pd.DataFrame,
                          save_dir: Path,
                          seed: int=None
                          ) -> float:
@@ -207,7 +230,7 @@ def evaluate_calibration(spec_dict: dict,
         Xtrain=X_fit_train,
         n_groups=10,
     )
-    cal_result.plot_cal(tmt=1).figure.savefig(save_dir / f"{spec_dict['key']}_calibration.png")
+    cal_result.plot_cal(tmt=1).figure.savefig(save_dir / "calibration.png")
     return float(cal_result.cal_r_squared[0])
 
 def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit_test: pd.DataFrame, save_dir: Path) -> dict:
@@ -243,7 +266,7 @@ def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit
     ax.set_ylabel("DR pseudo-outcome")
     ax.set_title(spec_dict["display_name"])
     ax.legend()
-    fig.savefig(save_dir / f"BLP_scatter_{spec_dict['key']}.png")
+    fig.savefig(save_dir / "BLP_scatter.png")
     plt.close(fig)
     return {
         'blp_est': param,
@@ -280,7 +303,7 @@ Qini(q) = q * (avg DR in top-q − ATE)
         Xtrain=X_fit_train
     )
     qini_ax = qini_result.plot_uplift(tmt=1)
-    qini_ax.figure.savefig(save_dir / f"qini_{spec_dict['key']}.png", bbox_inches='tight')
+    qini_ax.figure.savefig(save_dir / "qini.png", bbox_inches='tight')
     plt.close(qini_ax.figure)
     
     toc_result = tester.evaluate_uplift(
@@ -289,7 +312,7 @@ Qini(q) = q * (avg DR in top-q − ATE)
         Xtrain=X_fit_train
     )
     toc_ax = toc_result.plot_uplift(tmt=1)
-    toc_ax.figure.savefig(save_dir / f"toc_{spec_dict['key']}.png", bbox_inches='tight')
+    toc_ax.figure.savefig(save_dir / "toc.png", bbox_inches='tight')
     plt.close(toc_ax.figure)
     
     return {
@@ -336,7 +359,10 @@ def evaluate_subgroup_ate(spec_dict: dict, cate_test: np.ndarray, X_fit_test: pd
         dict[str, dict[str, float]]: For each feature, resulting 'spearman_rho' and 'spearman_pval' correlation results
     """
     quartiles = 4
-    treatment = spec_dict['key']
+    subgroup_dir = save_dir / 'subgroup_ate'
+    cate_vs_dir = save_dir / 'cate_vs_feature'
+    os.makedirs(subgroup_dir, exist_ok=True)
+    os.makedirs(cate_vs_dir, exist_ok=True)
     correlations = {}
     for feature in features:
         correlations[feature] = {}
@@ -348,7 +374,7 @@ def evaluate_subgroup_ate(spec_dict: dict, cate_test: np.ndarray, X_fit_test: pd
         print(cate_per_quartile)
         print("\n")
         cate_per_quartile.name = 'mean_cate'
-        cate_per_quartile.to_csv(save_dir / f"subgroup_ATE_{treatment}_{feature}.csv")
+        cate_per_quartile.to_csv(subgroup_dir / f"subgroup_ATE_{feature}.csv")
         
         # Create quartile-binned histogram of values
         fig, ax = plt.subplots()
@@ -359,7 +385,7 @@ def evaluate_subgroup_ate(spec_dict: dict, cate_test: np.ndarray, X_fit_test: pd
         ax.set_ylabel("Mean CATE on P(TRD)")
         ax.set_title(spec_dict['display_name'])
         ax.legend()
-        fig.savefig(save_dir / f"subgroup_ATE_{treatment}_{feature}.png")
+        fig.savefig(subgroup_dir / f"subgroup_ATE_{feature}.png")
         plt.close(fig)
         
         # Now create raw correlation plot
@@ -385,7 +411,7 @@ def evaluate_subgroup_ate(spec_dict: dict, cate_test: np.ndarray, X_fit_test: pd
             pad=10,
         )
         ax.legend()
-        fig.savefig(save_dir / f"CATE_vs_{feature}_{treatment}.png", bbox_inches='tight')
+        fig.savefig(cate_vs_dir / f"CATE_vs_{feature}.png", bbox_inches='tight')
         plt.close(fig)
         
     return correlations
@@ -403,15 +429,25 @@ def plot_cate_distribution(spec_dict: dict, cate_test: np.ndarray, save_dir: Pat
         cate_test (np.ndarray): Per-patient CATE values over the kept test rows.
         save_dir (Path): Directory to write the figure into.
     """
+    mean_cate = float(cate_test.mean())
     fig, ax = plt.subplots()
     ax.hist(cate_test, bins=50, range=tuple(np.percentile(cate_test, [1, 99])))
     ax.axvline(x=0, color='green', linestyle='--', label="No effect")
-    ax.axvline(x=cate_test.mean(), color='red', linestyle='--', label=f"Average effect ({cate_test.mean():.4f})")
+    ax.axvline(x=mean_cate, color='red', linestyle='--', label=f"Average effect ({mean_cate:.4f})")
+    # Print the mean value directly on the plot at the red line, so the ATE is readable
+    # off the figure itself and not only from the legend (and unambiguous when the mean
+    # sits close to the zero line). Placed at mid-height to clear the upper-right legend.
+    y_top = ax.get_ylim()[1]
+    ax.text(
+        mean_cate, y_top * 0.55, f" ATE = {mean_cate:.4f}",
+        color='red', ha='left', va='center', fontweight='bold', fontsize=10,
+        bbox=dict(boxstyle='round,pad=0.25', facecolor='white', edgecolor='red', alpha=0.85),
+    )
     ax.set_xlabel("CATE on P(TRD)")
     ax.set_ylabel("Number of patients")
     ax.set_title(spec_dict['display_name'])
-    ax.legend()
-    fig.savefig(save_dir / f"CATE_histogram_{spec_dict['key']}.png")
+    ax.legend(loc='upper right')
+    fig.savefig(save_dir / "CATE_histogram.png")
     plt.close(fig)
 
 def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: pd.DataFrame, y_train: np.ndarray, y_test: np.ndarray, seed: int=None) -> dict:
@@ -450,8 +486,7 @@ def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: p
     y_test = pd.Series(y_test, test_matrix.index).loc[X_fit_test.index].to_numpy()
     # Now they align with T_train, T_test
     
-    save_dir = Path(os.environ['ARTIFACTS_DIR']) / 'causal_pipeline'
-    os.makedirs(save_dir, exist_ok=True)
+    save_dir = contrast_output_dir(spec_dict['key'])
     tester = fit_dr_tester(forest, X_fit_train, X_fit_test, T_train, T_test, y_train, y_test, seed)
     cal_r_squared = evaluate_calibration(spec_dict, tester, X_fit_train, X_fit_test, save_dir, seed)
     blp_res = evaluate_blp(spec_dict, tester, cate_test, X_fit_test, save_dir)

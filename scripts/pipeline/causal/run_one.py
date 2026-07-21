@@ -5,9 +5,10 @@ import json
 
 from scripts.pipeline.causal.treatment_registry import TREATMENT_REGISTRY
 from scripts.pipeline.causal.core import (
-    load_encoded_data, 
+    load_encoded_data,
     build_treatment,
     fit_and_evaluate,
+    contrast_output_dir,
 )
 
 from dotenv import load_dotenv
@@ -38,8 +39,6 @@ record = {
 }
 
 result = fit_and_evaluate(spec_dict, train_matrix, test_matrix, train_labels, test_labels)
-results_path = Path(os.environ['ARTIFACTS_DIR']) / 'causal_pipeline'
-os.makedirs(results_path, exist_ok=True)
 if result is None:
     metrics = {
         'key': spec_dict['key'],
@@ -56,5 +55,5 @@ else:
         **record,
         **result
     }
-with open(results_path / f"results_{spec_dict['key']}.json", 'w') as f:
+with open(contrast_output_dir(spec_dict['key']) / "results.json", 'w') as f:
     json.dump(metrics, f, indent=4)

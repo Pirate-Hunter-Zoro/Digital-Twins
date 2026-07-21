@@ -68,7 +68,7 @@ to_predict = "bupropion_vs_snri"
 # bupropion_vs_snri ~ bupropion_vs_ssri - snri_vs_ssri, both of which reduce to bup - snri treatment effect
 for spec in TREATMENT_REGISTRY:
     key = spec['key']
-    with open(results_path / f"results_{key}.json", 'r') as f:
+    with open(results_path / key / "results.json", 'r') as f:
         spec_res = json.load(f)
         assert spec_res['passed_overlap'], f"Error: spec {key} did not pass overlap conditions"
         ate_est = spec_res['ate_res']['ate']

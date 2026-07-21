@@ -39,7 +39,9 @@ set -a; source "${ENV_FILE}"; set +a
 python -m scripts.pipeline.causal.validate
 
 # Copy all causal artifacts from ARTIFACTS_DIR to the local results/ directory for easier access.
-# The causal arm never touches embeddings, so this is a flat mirror (no embedder/VLLM nesting).
+# --delete keeps the mirror an EXACT copy of the source: files removed or renamed in
+# ARTIFACTS_DIR (e.g. old-key figures from a prior registry) are pruned here too, instead
+# of accumulating as stale orphans (the whole causal_pipeline tree is a derived artifact).
 LOCAL_RESULTS_DIR="results/causal_pipeline"
 mkdir -p "${LOCAL_RESULTS_DIR}"
-rsync -av "${ARTIFACTS_DIR}/causal_pipeline/" "${LOCAL_RESULTS_DIR}/"
+rsync -av --delete "${ARTIFACTS_DIR}/causal_pipeline/" "${LOCAL_RESULTS_DIR}/"

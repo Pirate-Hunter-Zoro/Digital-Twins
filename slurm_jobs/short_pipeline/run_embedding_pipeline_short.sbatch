@@ -34,13 +34,13 @@ set -a; source "${ENV_FILE}"; set +a
 OVERRIDES_FILE="${SLURM_SUBMIT_DIR}/slurm_jobs/short_pipeline/short_overrides.env"
 set -a; source "${OVERRIDES_FILE}"; set +a
 
-# Rebuild narratives + feature vectors + embeddings into the artifacts_short
-# sandbox, reading the existing (shared, model-independent) sliced patient JSONs.
+# Baseline pass: rebuild narratives + feature vectors + the BASELINE embeddings,
+# reading the shared, model-independent sliced patient JSONs. forge_narratives
+# also writes every per-spec ABLATED narrative dir (CPU-only), so the ablation
+# embedding array downstream has narratives to read. The GPU-heavy ablation
+# EMBEDDING itself is split out into run_ablation_embedding_array_short.sbatch
+# (one spec per array task) so no single job embeds the whole cohort more than
+# once -- that repeated full-cohort embed is what blew the c3_short wall before.
 python -m scripts.pipeline.narratives.forge_narratives
 python -m scripts.pipeline.vectors.forge_vectors
 python -m scripts.pipeline.embeddings.forge_embeddings
-
-# Semantic-feature ablation: OFF by default (see RUN_ABLATIONS in short_overrides.env).
-if [[ "${RUN_ABLATIONS}" == 1 ]]; then
-  python -m scripts.pipeline.embeddings.forge_ablated_embeddings
-fi
