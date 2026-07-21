@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=16G
-#SBATCH -o slurm_jobs/pipeline/logs/causal_leaderboard_out.txt
-#SBATCH -e slurm_jobs/pipeline/logs/causal_leaderboard_err.txt
+#SBATCH -o slurm_jobs/pipeline/causal/logs/causal_leaderboard_out.txt
+#SBATCH -e slurm_jobs/pipeline/causal/logs/causal_leaderboard_err.txt
 
 # afterok reduce for causal_forest_sweep.sbatch: globs every results_*.json the
 # sweep wrote, BH-corrects across the passed contrasts, and writes the single
@@ -38,8 +38,6 @@ set -a; source "${ENV_FILE}"; set +a
 
 python -m scripts.pipeline.causal.build_leaderboard
 
-# Copy all causal artifacts from ARTIFACTS_DIR to the local results/ directory for easier access.
-# The causal arm never touches embeddings, so this is a flat mirror (no embedder/VLLM nesting).
-LOCAL_RESULTS_DIR="results/causal_pipeline"
-mkdir -p "${LOCAL_RESULTS_DIR}"
-rsync -av "${ARTIFACTS_DIR}/causal_pipeline/" "${LOCAL_RESULTS_DIR}/"
+# NOTE: no results/ mirror here. The single rsync of the whole causal_pipeline
+# dir (incl. this leaderboard.csv) lives in causal_validate.sbatch, which the
+# orchestrator chains to run strictly last.

@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/pipeline/logs/vllm_%a_out.txt
-#SBATCH -e slurm_jobs/pipeline/logs/vllm_%a_err.txt
+#SBATCH -o slurm_jobs/pipeline/trd_prediction/logs/vllm_%a_out.txt
+#SBATCH -e slurm_jobs/pipeline/trd_prediction/logs/vllm_%a_err.txt
 #SBATCH --gres=gpu:2
 #SBATCH --array=0-0
 

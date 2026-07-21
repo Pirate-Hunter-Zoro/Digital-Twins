@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=16G
-#SBATCH -o slurm_jobs/pipeline/logs/merge_judgements_out.txt
-#SBATCH -e slurm_jobs/pipeline/logs/merge_judgements_err.txt
+#SBATCH -o slurm_jobs/pipeline/trd_prediction/logs/merge_judgements_out.txt
+#SBATCH -e slurm_jobs/pipeline/trd_prediction/logs/merge_judgements_err.txt
 
 # Exit immediately if command fails
 set -e

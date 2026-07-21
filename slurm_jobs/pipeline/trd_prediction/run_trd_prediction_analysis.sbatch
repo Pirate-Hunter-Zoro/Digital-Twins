@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=192G
-#SBATCH -o slurm_jobs/pipeline/logs/trd_prediction_analysis_out.txt
-#SBATCH -e slurm_jobs/pipeline/logs/trd_prediction_analysis_err.txt
+#SBATCH -o slurm_jobs/pipeline/trd_prediction/logs/trd_prediction_analysis_out.txt
+#SBATCH -e slurm_jobs/pipeline/trd_prediction/logs/trd_prediction_analysis_err.txt
 
 # Exit immediately if command fails
 set -e
@@ -48,4 +48,4 @@ mkdir -p "${LOCAL_RESULTS_DIR}"
 rsync -av "${RESULTS_DIR}/" "${LOCAL_RESULTS_DIR}/"
 
 # Cancel the job
-bash slurm_jobs/pipeline/cancel_pipeline.sh
+bash slurm_jobs/pipeline/trd_prediction/cancel_pipeline.sh

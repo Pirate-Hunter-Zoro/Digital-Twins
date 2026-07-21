@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=64G
-#SBATCH -o slurm_jobs/pipeline/logs/causal_forest_sweep_%a_out.txt
-#SBATCH -e slurm_jobs/pipeline/logs/causal_forest_sweep_%a_err.txt
+#SBATCH -o slurm_jobs/pipeline/causal/logs/causal_forest_sweep_%a_out.txt
+#SBATCH -e slurm_jobs/pipeline/causal/logs/causal_forest_sweep_%a_err.txt
 #SBATCH --array=0-2
 
 # NOTE: no --gres=gpu on purpose. This sweep is CPU-only (CausalForestDML /

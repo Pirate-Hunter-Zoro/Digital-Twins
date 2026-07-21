@@ -406,7 +406,7 @@ def plot_cate_distribution(spec_dict: dict, cate_test: np.ndarray, save_dir: Pat
     fig, ax = plt.subplots()
     ax.hist(cate_test, bins=50, range=tuple(np.percentile(cate_test, [1, 99])))
     ax.axvline(x=0, color='green', linestyle='--', label="No effect")
-    ax.axvline(x=cate_test.mean(), color='red', linestyle='--', label="Average effect")
+    ax.axvline(x=cate_test.mean(), color='red', linestyle='--', label=f"Average effect ({cate_test.mean():.4f})")
     ax.set_xlabel("CATE on P(TRD)")
     ax.set_ylabel("Number of patients")
     ax.set_title(spec_dict['display_name'])
