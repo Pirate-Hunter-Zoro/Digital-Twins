@@ -233,7 +233,7 @@ def evaluate_calibration(spec_dict: dict,
     cal_result.plot_cal(tmt=1).figure.savefig(save_dir / "calibration.png")
     return float(cal_result.cal_r_squared[0])
 
-def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit_test: pd.DataFrame, save_dir: Path) -> dict:
+def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit_test: pd.DataFrame, save_dir: Path, treatments_test: np.ndarray) -> dict:
     """Evaluate best linear fit of the input DRTester's doubly-robust estimates versus the CATE values associated with the causal random forest in question
 
     Args:
@@ -242,6 +242,7 @@ def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit
         cate_test (np.ndarray): Forest's CATE values
         X_fit_test (pd.DataFrame): Testing patient matrix
         save_dir (Path): Path to save BLP scatterplot
+        treatments_test (np.ndarray): Binary array for treatments of patients (1 = comparison arm, 0 = reference arm)
         
     Returns:
         dict: Resulting slope, error, and pvalue associated with correlation
@@ -258,7 +259,10 @@ def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit
     assert np.isclose(fitted_line[0], param), f"Inconsistent slope values from BLP: {param} and numpy polyfit: {fitted_line[0]}..."
     fig, ax = plt.subplots()
     x_range = np.array([np.min(cate_test), np.max(cate_test)])
-    ax.scatter(cate_test, dr_vals, alpha=0.5, s=0.15)
+    comparison_arm_mask = (treatments_test == 1)
+    ax.scatter(cate_test[comparison_arm_mask], dr_vals[comparison_arm_mask], alpha=0.5, s=0.15, color='tab:orange', label=spec_dict['comparison_arm'])
+    reference_arm_mask = ~comparison_arm_mask
+    ax.scatter(cate_test[reference_arm_mask], dr_vals[reference_arm_mask], alpha=0.5, s=0.15, color='tab:blue', label=spec_dict['reference_arm'])
     ax.plot(x_range, np.polyval(fitted_line, x_range), color='red', label=f"slope={fitted_line[0]:.3f}")
     ax.axhline(y=0, linestyle='--', color='green')
     ax.set_ylim(np.percentile(dr_vals, [1, 99]))
@@ -276,7 +280,7 @@ def evaluate_blp(spec_dict: dict, tester: DRTester, cate_test: np.ndarray, X_fit
         'dr_spearman_pval': float(dr_rho_pval)
     }
     
-def evaluate_uplift(spec_dict: dict, tester: DRTester, X_fit_train: pd.DataFrame, X_fit_test: pd.DataFrame, save_dir: Path) -> dict:
+def evaluate_uplift(tester: DRTester, X_fit_train: pd.DataFrame, X_fit_test: pd.DataFrame, save_dir: Path) -> dict:
     """Uplift evaluation creating a cumulative sum analysis of doubly robust estimates over patients sorted by decreasing CATE values
     
     Conceptually: 
@@ -288,7 +292,6 @@ def evaluate_uplift(spec_dict: dict, tester: DRTester, X_fit_train: pd.DataFrame
 Qini(q) = q * (avg DR in top-q − ATE)
 
     Args:
-        spec_dict (dict): Specified treatment with its columns
         tester (DRTester): Pre-fitted doubly robust tester
         X_fit_train (pd.DataFrame): Training patient matrix
         X_fit_test (pd.DataFrame): Testing patient matrix
@@ -529,8 +532,8 @@ def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: p
     save_dir = contrast_output_dir(spec_dict['key'])
     tester = fit_dr_tester(forest, X_fit_train, X_fit_test, T_train, T_test, y_train, y_test, seed)
     cal_r_squared = evaluate_calibration(spec_dict, tester, X_fit_train, X_fit_test, save_dir, seed)
-    blp_res = evaluate_blp(spec_dict, tester, cate_test, X_fit_test, save_dir)
-    uplift_res = evaluate_uplift(spec_dict, tester, X_fit_train, X_fit_test, save_dir)
+    blp_res = evaluate_blp(spec_dict, tester, cate_test, X_fit_test, save_dir, T_test)
+    uplift_res = evaluate_uplift(tester, X_fit_train, X_fit_test, save_dir)
     top_shap_moderators = evaluate_shap_moderators(forest, X_fit_test, top_k=5)
     gate_res = evaluate_subgroup_ate(spec_dict, cate_test, X_fit_test, save_dir)
     plot_cate_distribution(spec_dict, cate_test, save_dir)
