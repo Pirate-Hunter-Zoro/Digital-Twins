@@ -6,7 +6,9 @@ from scipy.stats import linregress
 
 from scripts.pipeline.causal.core import (
     load_encoded_data,
-    fit_causal_forest
+    fit_causal_forest,
+    contrast_output_dir,
+    plot_cate_overlay,
 )
 from scripts.pipeline.causal.treatment_registry import TREATMENT_REGISTRY
 
@@ -34,14 +36,30 @@ for i, (spec, reverse_spec) in enumerate(zip(TREATMENT_REGISTRY, reverse_specs))
     assert cate_fwd.shape == cate_rev.shape, f"Received forward CATE shape {cate_fwd.shape}, reverse CATE shape {cate_rev.shape}"
     assert X_fwd.index.equals(X_rev.index), f"Test patients are not identical or are not in identical order for forward and reverse specs..."
     assert np.array_equal(T_rev, 1 - T_fwd), f"Treatments not perfectly complementary for forward and reverse specs..."
-    pairs.append((spec['key'], cate_fwd.ravel(), cate_rev.ravel()))
+    pairs.append((spec['key'], spec['display_name'], reverse_spec['display_name'],
+                  cate_fwd.ravel(), cate_rev.ravel()))
     print(f"Spec {spec['key']}: Mean forward CATE = {cate_fwd.mean()}, Mean reverse CATE = {cate_rev.mean()}", flush=True)
-    
+
+# Overlay 1: all three forward contrasts on one axis, each mean tagged in the legend
+results_root = Path(os.environ['ARTIFACTS_DIR']) / 'causal_pipeline'
+os.makedirs(results_root, exist_ok=True)
+plot_cate_overlay(
+    [(display_name, cate_fwd) for (_, display_name, _, cate_fwd, _) in pairs],
+    title="CATE distributions across contrasts",
+    save_path=results_root / "CATE_histograms_all_contrasts.png",
+)
+# Overlay 2: per contrast, the forward CATE against its sign-flipped reverse mirror
+for (key, fwd_name, rev_name, cate_fwd, cate_rev) in pairs:
+    plot_cate_overlay(
+        [(fwd_name, cate_fwd), (rev_name, cate_rev)],
+        title=f"{fwd_name}: forward vs reverse mirror",
+        save_path=contrast_output_dir(key) / "CATE_histogram_mirror.png",
+    )
+
 # We should hope that for all pairs, we have strong negative correlation between the CATE and reverse CATE
-results_path = Path(os.environ['ARTIFACTS_DIR']) / 'causal_pipeline'
-os.makedirs(results_path, exist_ok=True)
+results_path = results_root
 results = {}
-for (key, cate_fwd, cate_rev) in pairs:
+for (key, _fwd_name, _rev_name, cate_fwd, cate_rev) in pairs:
     corr_result = linregress(cate_fwd, cate_rev)
     pearson_r = float(corr_result.rvalue)
     m = float(corr_result.slope)

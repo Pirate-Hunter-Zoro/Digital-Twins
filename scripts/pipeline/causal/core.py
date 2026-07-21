@@ -450,6 +450,46 @@ def plot_cate_distribution(spec_dict: dict, cate_test: np.ndarray, save_dir: Pat
     fig.savefig(save_dir / "CATE_histogram.png")
     plt.close(fig)
 
+def plot_cate_overlay(series: list[tuple[str, np.ndarray]], title: str, save_path: Path,
+                      xlabel: str="CATE on P(TRD)") -> None:
+    """Overlay several CATE distributions on one axis, each with its mean called out in the legend.
+
+    Companion to plot_cate_distribution for the cross-distribution views that a single-contrast
+    histogram cannot show: (a) all three forward contrasts side by side, and (b) one contrast against
+    its sign-flipped reverse mirror. Every distribution is drawn as a translucent step-filled histogram
+    over a SHARED set of bin edges (so the bars line up and stacked distributions are comparable), and
+    each carries a dashed mean line in its own color plus a "(mean = ...)" tag in the legend, so the
+    per-group ATEs are all readable off the one figure. The x-range is clipped to the 1st/99th
+    percentile of the POOLED values (same outlier guard the other plots use) so a few extreme CATEs in
+    any one distribution cannot stretch the axis.
+
+    Args:
+        series (list[tuple[str, np.ndarray]]): One (label, cate_values) pair per distribution to overlay.
+            The label is the legend text (typically a contrast display_name); cate_values is the 1-D
+            per-patient CATE array for that distribution.
+        title (str): Figure title.
+        save_path (Path): Full path (including filename) to write the PNG to.
+        xlabel (str): X-axis label. Defaults to "CATE on P(TRD)".
+    """
+    pooled = np.concatenate([np.asarray(vals).ravel() for _, vals in series])
+    lo, hi = np.percentile(pooled, [1, 99])
+    edges = np.linspace(lo, hi, 51)
+    fig, ax = plt.subplots()
+    ax.axvline(x=0, color='black', linestyle='--', linewidth=1, label="No effect")
+    for label, vals in series:
+        vals = np.asarray(vals).ravel()
+        mean_cate = float(vals.mean())
+        _, _, patches = ax.hist(vals, bins=edges, histtype='stepfilled', alpha=0.45,
+                                label=f"{label} (mean = {mean_cate:.4f})")
+        color = patches[0].get_facecolor()
+        ax.axvline(x=mean_cate, color=color, linestyle='--', linewidth=1.5, alpha=0.9)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Number of patients")
+    ax.set_title(title)
+    ax.legend(loc='upper right', fontsize=9)
+    fig.savefig(save_path)
+    plt.close(fig)
+
 def fit_and_evaluate(spec_dict: dict, train_matrix: pd.DataFrame, test_matrix: pd.DataFrame, y_train: np.ndarray, y_test: np.ndarray, seed: int=None) -> dict:
     """Fit one pairwise contrast's causal forest and run the full evaluation surface over it.
 
