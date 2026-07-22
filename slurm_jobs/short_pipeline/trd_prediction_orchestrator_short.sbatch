@@ -66,7 +66,6 @@ echo "scancel ${PREDICTION_JOB_ID} # Prediction Pipeline" >> "${CANCEL_SCRIPT}"
 
 # 3) Ablations: one spec per array task, serialized on one GPU (%1). Array width
 #    is derived from the registry so adding/removing a spec needs no edit here.
-ANALYSIS_DEP="afterok:$PREDICTION_JOB_ID"
 if [[ "${RUN_ABLATIONS}" == 1 ]]; then
   N_SPECS=$(python -c "from scripts.data_loading.ablation_registry import ABLATIONS; print(len(ABLATIONS))")
   if [[ -z "${N_SPECS}" || "${N_SPECS}" -lt 1 ]]; then
@@ -77,13 +76,35 @@ if [[ "${RUN_ABLATIONS}" == 1 ]]; then
   echo "Launching the ablation embedding array (0-${LAST_IDX}%1, one spec per task, one GPU at a time)..."
   ABLATION_JOB_ID=$(sbatch --parsable --array=0-${LAST_IDX}%1 --dependency=afterok:$EMBEDDING_JOB_ID slurm_jobs/short_pipeline/run_ablation_embedding_array_short.sbatch)
   echo "scancel ${ABLATION_JOB_ID} # Ablation Embedding Array" >> "${CANCEL_SCRIPT}"
-  ANALYSIS_DEP="${ANALYSIS_DEP}:$ABLATION_JOB_ID"
 fi
 
-# 4) Analysis: runs once prediction (and, if run, every ablation task) succeeds.
-echo "Launching the analysis pipeline (dependency: ${ANALYSIS_DEP})..."
-ANALYSIS_JOB_ID=$(sbatch --parsable --dependency=${ANALYSIS_DEP} slurm_jobs/short_pipeline/run_trd_prediction_analysis_short.sbatch)
-echo "scancel ${ANALYSIS_JOB_ID} # Analysis Pipeline" >> "${CANCEL_SCRIPT}"
+# 4) Neighbor analysis (light): embedding_audit + analyze_trd_prediction. Needs
+#    the baseline neighborhoods, so it depends on prediction ONLY -- not on the
+#    ablation array (it never reads the per-spec embeddings). Split from the
+#    classical-ML arm 2026-07-22 so the ~2.5h GridSearchCV no longer shares its
+#    wall.
+echo "Launching the neighbor-analysis job (dependency: afterok:$PREDICTION_JOB_ID)..."
+ANALYSIS_JOB_ID=$(sbatch --parsable --dependency=afterok:$PREDICTION_JOB_ID slurm_jobs/short_pipeline/run_trd_prediction_analysis_short.sbatch)
+echo "scancel ${ANALYSIS_JOB_ID} # Neighbor Analysis" >> "${CANCEL_SCRIPT}"
+
+# 5) Classical ML (the grid-search wall-hitter) + feature importance + ablation
+#    report, in its own dedicated 9h job. Independent of the neighbor arm, so it
+#    runs in PARALLEL with prediction/analysis. Needs the baseline embed, plus
+#    every per-spec ablation embeddings.db (for ablation_runner) when
+#    RUN_ABLATIONS=1.
+ML_DEP="afterok:$EMBEDDING_JOB_ID"
+if [[ "${RUN_ABLATIONS}" == 1 ]]; then
+  ML_DEP="${ML_DEP}:$ABLATION_JOB_ID"
+fi
+echo "Launching the classical-ML job (dependency: ${ML_DEP})..."
+ML_JOB_ID=$(sbatch --parsable --dependency=${ML_DEP} slurm_jobs/short_pipeline/run_classical_ml_short.sbatch)
+echo "scancel ${ML_JOB_ID} # Classical ML" >> "${CANCEL_SCRIPT}"
+
+# 6) Mirror: the SINGLE results rsync into the repo, after BOTH arms succeed, so
+#    it copies a complete result set exactly once.
+echo "Launching the results-mirror job (dependency: afterok:${ANALYSIS_JOB_ID}:${ML_JOB_ID})..."
+MIRROR_JOB_ID=$(sbatch --parsable --dependency=afterok:${ANALYSIS_JOB_ID}:${ML_JOB_ID} slurm_jobs/short_pipeline/run_results_mirror_short.sbatch)
+echo "scancel ${MIRROR_JOB_ID} # Results Mirror" >> "${CANCEL_SCRIPT}"
 
 echo "scancel ${SLURM_JOB_ID} # Orchestrator (Self)" >> "${CANCEL_SCRIPT}"
 echo "Done. Cancel the whole chain with: bash slurm_jobs/short_pipeline/cancel_short_pipeline.sh"

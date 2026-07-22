@@ -23,13 +23,17 @@ finishes on `c3_accel`.
   regenerates narratives / vectors / embeddings for the 4B encoder.
 - Repo-side results mirror to the normal `results/<encoder>/<judge>/...` path
   (the 4B encoder name keeps it distinct from the live 8B mirror), done by the
-  analysis job.
+  terminal `mirror` job once both analysis arms succeed.
 
 ## DAG
 
-    baseline_embed ─┬─> prediction (array 0-0) ──────────┐
-                    │                                     ├─> analysis
-                    └─> ablation_embed (array 0-N%1) ─────┘
+    baseline_embed ─┬─> prediction (array 0-0) ──> analysis ──┐
+                    │                                          ├─> mirror
+                    └─> ablation_embed (array 0-N%1) ──> classical_ml ──┘
+
+The `analysis` (neighbor arm) and `classical_ml` arms are INDEPENDENT and run in
+parallel; the single results rsync lives in the terminal `mirror` job so it only
+copies a complete result set.
 
 - **baseline_embed** (`run_embedding_pipeline_short.sbatch`, GPU): narratives +
   feature vectors + the **baseline** embed. `forge_narratives` also writes every
@@ -45,12 +49,26 @@ finishes on `c3_accel`.
   pass that clears the wall. No single job embeds the cohort more than once,
   which is what blew the wall in the old all-in-one embedding job. Raise `%1` to
   `%N` if more GPUs free up and you want them parallel.
-- **analysis** (`run_trd_prediction_analysis_short.sbatch`, CPU): waits on
-  **both** prediction and the whole ablation array, so `ablation_runner` sees
-  every per-spec `embeddings.db`.
+- **analysis** (`run_trd_prediction_analysis_short.sbatch`, CPU, neighbor arm):
+  `embedding_audit` + `analyze_trd_prediction`. Depends on **prediction only** —
+  it never reads the per-spec embeddings, so it does not wait on the ablation
+  array.
+- **classical_ml** (`run_classical_ml_short.sbatch`, CPU, 9h wall): the
+  `classical_ml` GridSearchCV sweep + `feature_importance` + `ablation_runner`.
+  Split out of the analysis job (2026-07-22) because the EMBEDDED sweep alone
+  (~2.5h for logistic regression on the 2560-dim embeddings) blew the shared 8h
+  wall. Independent of the neighbor arm, so it runs in parallel with
+  prediction/analysis; depends on the baseline embed plus the whole ablation
+  array (for `ablation_runner`). Fitted searchers are joblib-cached
+  (`SCRUB_TRAINED_MODELS=0`), so a re-run resumes past any classifier that
+  already finished.
+- **mirror** (`run_results_mirror_short.sbatch`, CPU): the single results rsync,
+  `afterok` on **both** analysis and classical_ml, so it copies a complete
+  result set into `results/<encoder>/<judge>/` exactly once.
 
 Each ablation task fails in isolation: a dead spec does not block the other
-array tasks, only the final analysis (via its `afterok` on the array).
+array tasks, only `classical_ml` (via its `afterok` on the array) and, in turn,
+the terminal mirror.
 
 ## Run it
 

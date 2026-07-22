@@ -41,21 +41,11 @@ if [[ "$COMPUTE_LLM_SIMILARITY" == 1 ]]; then
 fi
 
 python -m scripts.pipeline.predictions.analyze_trd_prediction
-python -m scripts.pipeline.predictions.classical_ml
-python -m scripts.pipeline.predictions.feature_importance
 
-# The ablation report consumes per-spec ablated embeddings; only run it when the
-# ablation embeddings were actually built (see RUN_ABLATIONS in short_overrides.env).
-if [[ "${RUN_ABLATIONS}" == 1 ]]; then
-  python -m scripts.pipeline.predictions.ablation_runner
-fi
-
-# Mirror results into the repo under the normal results/<encoder>/<judge> path,
-# same as the main pipeline. The 4B encoder name keeps this distinct from the
-# live 8B run's mirror, so it is a first-class result, not a sandbox copy.
-LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
-mkdir -p "${LOCAL_RESULTS_DIR}"
-rsync -av "${RESULTS_DIR}/" "${LOCAL_RESULTS_DIR}/"
-
-# Cancel the (already-finished) orchestrator/self entries.
-bash slurm_jobs/short_pipeline/cancel_short_pipeline.sh
+# classical_ml (the grid-search wall-hitter), feature_importance, and the
+# ablation report were SPLIT OUT into run_classical_ml_short.sbatch (2026-07-22)
+# so this light neighbor-analysis arm no longer shares a wall with the ~2.5h
+# EMBEDDED GridSearchCV sweep. The SINGLE results rsync likewise moved to
+# run_results_mirror_short.sbatch, the terminal job that waits on BOTH this job
+# and the classical-ML job before copying a complete result set. See the
+# orchestrator DAG.
