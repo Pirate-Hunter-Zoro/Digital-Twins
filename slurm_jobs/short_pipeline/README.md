@@ -53,11 +53,14 @@ copies a complete result set.
   `embedding_audit` + `analyze_trd_prediction`. Depends on **prediction only** —
   it never reads the per-spec embeddings, so it does not wait on the ablation
   array.
-- **classical_ml** (`run_classical_ml_short.sbatch`, CPU, 9h wall): the
-  `classical_ml` GridSearchCV sweep + `feature_importance` + `ablation_runner`.
-  Split out of the analysis job (2026-07-22) because the EMBEDDED sweep alone
-  (~2.5h for logistic regression on the 2560-dim embeddings) blew the shared 8h
-  wall. Independent of the neighbor arm, so it runs in parallel with
+- **classical_ml** (`run_classical_ml_short.sbatch`, CPU, `c3` partition, 2-day
+  wall): the `classical_ml` GridSearchCV sweep + `feature_importance` +
+  `ablation_runner`. Split out of the analysis job (2026-07-22) because the
+  EMBEDDED sweep alone (~2.5h for logistic regression on the 2560-dim embeddings)
+  blew the shared 8h wall; then moved off `c3_short` to `c3` (2026-07-23) because
+  gradient_boosting alone breached even the 9h c3_short ceiling, and `c3` is the
+  only CPU partition with a longer (7-day) MaxTime. Independent of the neighbor
+  arm, so it runs in parallel with
   prediction/analysis; depends on the baseline embed plus the whole ablation
   array (for `ablation_runner`). Fitted searchers are joblib-cached
   (`SCRUB_TRAINED_MODELS=0`), so a re-run resumes past any classifier that

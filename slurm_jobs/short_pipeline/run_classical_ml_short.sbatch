@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=short_classical_ml
-#SBATCH --partition=c3_short
-#SBATCH --time=09:00:00
+#SBATCH --partition=c3
+#SBATCH --time=2-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=192G
@@ -11,11 +11,13 @@
 # =============================================================================
 # SHORT pipeline -- classical-ML arm (split out of the analysis job 2026-07-22).
 #
-# The EMBEDDED GridSearchCV sweep is the only step that threatened the c3_short
-# wall (logistic_regression alone took ~2.5h on the 2560-dim 4B embeddings, and
-# the old shared 8h analysis job died mid-gradient_boosting), so it now owns a
-# dedicated 9h job -- the c3_short MaxTime -- instead of sharing a wall with the
-# neighbor analysis. Fitted searchers are joblib-cached to
+# The EMBEDDED GridSearchCV sweep is the only step that threatened the wall
+# (logistic_regression alone took ~2.5h on the 2560-dim 4B embeddings, and the
+# old shared 8h analysis job died mid-gradient_boosting). Splitting it into its
+# own dedicated job was not enough -- gradient_boosting alone breached even the
+# 9h c3_short ceiling -- so this job runs on the c3 partition (2026-07-23), the
+# only CPU partition with a longer (7-day) MaxTime; it is given a 2-day wall
+# here. Fitted searchers are joblib-cached to
 # RESULTS_DIR/trained_models with SCRUB_TRAINED_MODELS=0, so a re-run loads any
 # classifier that already finished and resumes at the first that did not.
 #
