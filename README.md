@@ -3,6 +3,8 @@
 
 This repository contains the pipeline for converting Electronic Health Record (EHR) data into vectorized patient representations---embedded and rule-based feature vectors of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
 
+> **Companion documentation.** This README documents the *pipeline architecture*. The plain-language research narrative, manuscripts, planning docs, task list, and reference library live in the separate `Research-Journey/` repo (its own git repo, gitignored from this one; on GitHub as `Pirate-Hunter-Zoro/Research-Journey`). Start there for "where are we / what's the story"; the live task list is `Research-Journey/planning/TODO.txt`. (The former `writeup/` directory was relocated there on 2026-07-24.)
+
 The pipeline produces two independent patient vector representations (rule-based feature vectors and neural embedded vectors) and evaluates TRD risk prediction across an asymmetric evaluation matrix:
 
 | Method | Feature Vectors | Embedded Vectors |
