@@ -12,7 +12,6 @@ results/
 .claude/
 .vscode/
 figures/
-*.json
 node_modules/
 writeup/
 Research-Journey/
