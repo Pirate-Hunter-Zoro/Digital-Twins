@@ -1,9 +1,12 @@
 import sqlite3
 import json
 import os
+import sys
+import time
+import queue
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
-import sys
 import httpx
 
 from dotenv import load_dotenv
@@ -40,8 +43,13 @@ guided_json = {
     }
 }
 
+# Writer batching knobs: flush after this many queued rows or this many seconds idle.
+WRITE_BATCH_SIZE = 200
+WRITE_FLUSH_SECONDS = 5.0
+
+
 class Scorer:
-    
+
     def __init__(self, require_client:bool = True, save_time_hist:bool = True, shard_id:int = None):
         """Initialize vllm client and internal database
 
@@ -55,6 +63,12 @@ class Scorer:
         self.prompt_loader = PromptLoader()
         self.retriever = Retriever(save_time_hist=save_time_hist)
         self._init_db(shard_id)
+        # Single-writer, batched-commit queue. Judgement writes are pushed here
+        # and drained by one dedicated thread, so no SQLite commit ever runs on
+        # the asyncio event loop (which previously froze the judging loop) and
+        # only one connection ever writes the shard DB.
+        self._write_queue: queue.Queue = queue.Queue()
+        self._writer_thread: Optional[threading.Thread] = None
         
     def _init_db(self, shard_id: int=None):
         """Initialize database for judgement scores - dependent on shard ID
@@ -68,10 +82,16 @@ class Scorer:
         else:
             canonical_path = Path(os.environ['JUDGEMENTS_DIR']) / "judgements.db"
             if canonical_path.exists():
-                self.canonical_cursor = sqlite3.connect(f"file:{canonical_path}?mode=ro", uri=True).cursor()
+                self.canonical_cursor = sqlite3.connect(f"file:{canonical_path}?mode=ro", uri=True, check_same_thread=False).cursor()
             vectors_path = Path(os.environ['JUDGEMENTS_DIR']) / f"judgements_{shard_id}.db"
         os.makedirs(vectors_path.parent, exist_ok=True)
-        self.connection = sqlite3.connect(vectors_path)
+        self._db_path = vectors_path
+        # Reader connection (event-loop thread). check_same_thread=False is safe
+        # because the writer thread owns its own separate connection; a generous
+        # busy_timeout absorbs the brief reader/writer lock overlap instead of
+        # raising "database is locked".
+        self.connection = sqlite3.connect(vectors_path, timeout=30.0, check_same_thread=False)
+        self.connection.execute("PRAGMA busy_timeout=30000")
         self.cursor = self.connection.cursor()
         # Create table for judgements
         self.cursor.execute('''
@@ -83,6 +103,7 @@ CREATE TABLE IF NOT EXISTS llm_judgements (
     PRIMARY KEY (id_a, id_b)
 );
 ''')
+        self.connection.commit()
         
     def _get_cached_judgement(self, id_a: str, id_b: str) -> Optional[Dict]:
         """Return cached judgement if it exists
@@ -128,13 +149,66 @@ SELECT full_response FROM llm_judgements WHERE id_a=? AND id_b=?
         """
         pair = (id_a, id_b) if id_a <= id_b else (id_b, id_a)
         score = response_json['overall_similarity']
-        self.connection.execute('''
-INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response) VALUES (?, ?, ?, ?)
-''',
-                (pair[0], pair[1], score, json.dumps(response_json, indent=4))
-        )
-        self.connection.commit()
-        
+        # Non-blocking hand-off to the writer thread; never touches SQLite on the
+        # event loop.
+        self._write_queue.put((pair[0], pair[1], score, json.dumps(response_json, indent=4)))
+
+    def _writer_loop(self):
+        """Dedicated single-writer thread: drains the queue and commits in
+        batches against its own connection. Being the only writer to the shard
+        DB removes the per-row event-loop commits and the lock contention they
+        caused."""
+        conn = sqlite3.connect(self._db_path, timeout=30.0)
+        conn.execute("PRAGMA busy_timeout=30000")
+        pending = []
+
+        def _flush():
+            if not pending:
+                return
+            for attempt in range(10):
+                try:
+                    conn.executemany(
+                        "INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response) VALUES (?, ?, ?, ?)",
+                        pending,
+                    )
+                    conn.commit()
+                    pending.clear()
+                    return
+                except sqlite3.OperationalError as exc:
+                    print(f"writer: commit retry {attempt + 1}/10 after {repr(exc)}", file=sys.stderr, flush=True)
+                    time.sleep(1.0)
+            # Drop rather than wedge the writer forever; dropped pairs are simply
+            # re-judged on a later resume (cache miss).
+            print(f"writer: DROPPING batch of {len(pending)} judgements after repeated lock failures", file=sys.stderr, flush=True)
+            pending.clear()
+
+        while True:
+            try:
+                item = self._write_queue.get(timeout=WRITE_FLUSH_SECONDS)
+            except queue.Empty:
+                _flush()
+                continue
+            if item is None:
+                _flush()
+                break
+            pending.append(item)
+            if len(pending) >= WRITE_BATCH_SIZE:
+                _flush()
+        conn.close()
+
+    def start_writer(self):
+        """Start the background judgement writer (idempotent)."""
+        if self._writer_thread is None:
+            self._writer_thread = threading.Thread(target=self._writer_loop, name="judgement-writer", daemon=True)
+            self._writer_thread.start()
+
+    def stop_writer(self):
+        """Signal the writer to flush its final batch and wait for it to exit."""
+        if self._writer_thread is not None:
+            self._write_queue.put(None)
+            self._writer_thread.join()
+            self._writer_thread = None
+
     async def judge_async(self, index_narrative: str, candidate_narrative: str, index_id: str, candidate_id: str) -> Dict[str, Any]:
         cached = self._get_cached_judgement(id_a=index_id, id_b=candidate_id)
         if cached != None:
@@ -161,7 +235,7 @@ INSERT OR REPLACE INTO llm_judgements (id_a, id_b, overall_score, full_response)
                 response_json = json.loads(response)
                 self._cache_judge(id_a=index_id, id_b=candidate_id, response_json=response_json)
                 return response_json
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, json.JSONDecodeError) as e:
                 print(f"{index_id} vs. {candidate_id}: {repr(e)}", file=sys.stderr, flush=True)
             
         # If we made it here, we failed

@@ -171,7 +171,7 @@ def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataF
         "logistic_regression": make_classifier(LogisticRegression(max_iter=1000, random_state=int(os.environ['SEED']))),
         "random_forest": make_classifier(RandomForestClassifier(random_state=int(os.environ['SEED']))),
         "gradient_boosting": make_classifier(GradientBoostingClassifier(random_state=int(os.environ['SEED']))),
-        "xgboost": make_classifier(XGBClassifier(random_state=int(os.environ['SEED']), eval_metric='logloss'))
+        "xgboost": make_classifier(XGBClassifier(random_state=int(os.environ['SEED']), eval_metric='logloss', n_jobs=1))
     }
     # Fit each classifier on the training data
     classifier_predictions = {}
@@ -186,7 +186,7 @@ def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataF
             print(f"Starting {name} classifier...", flush=True)
             param_grid = HYPERPARAMETERS[name]
             # Hyperparameter grid search to enable the model to perform as best it can
-            searcher = GridSearchCV(classifier, param_grid, scoring='roc_auc', cv=5, n_jobs=-1)
+            searcher = GridSearchCV(classifier, param_grid, scoring='roc_auc', cv=5, n_jobs=16)
             searcher.fit(X=X_train, y=y_train)
             elapsed = time.perf_counter() - start
             print(f"{name} classifier finished in {elapsed:.1f} seconds running {len(searcher.cv_results_['params'])} different models...", flush=True)

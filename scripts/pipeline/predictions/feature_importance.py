@@ -71,7 +71,7 @@ def refit_best_model(
         "logistic_regression": LogisticRegression(max_iter=1000, random_state=seed),
         "random_forest": RandomForestClassifier(random_state=seed),
         "gradient_boosting": GradientBoostingClassifier(random_state=seed),
-        "xgboost": XGBClassifier(random_state=seed, eval_metric="logloss")
+        "xgboost": XGBClassifier(random_state=seed, eval_metric="logloss", n_jobs=1)
     }
     base_estimator_pipeline = make_classifier(models[model_name])
     hyperparams = load_best_params(model_name, source)

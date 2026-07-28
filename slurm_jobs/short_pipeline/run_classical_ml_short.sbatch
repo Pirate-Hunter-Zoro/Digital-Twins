@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=short_classical_ml
 #SBATCH --partition=c3
-#SBATCH --time=2-00:00:00
+#SBATCH --time=7-00:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=48
-#SBATCH --mem=192G
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH -o slurm_jobs/short_pipeline/logs/classical_ml_out.txt
 #SBATCH -e slurm_jobs/short_pipeline/logs/classical_ml_err.txt
 

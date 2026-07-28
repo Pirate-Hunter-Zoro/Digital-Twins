@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path
 import os
+import sys
 import numpy as np
 import asyncio
 
@@ -67,24 +68,33 @@ async def main():
 
     # Now that we have all of the work items, we want to throw them at the server LLM_MAX_CONCURRENCY at a time
     if predictor.judge_sims:
+        predictor.scorer.start_writer()
         sem = asyncio.Semaphore(int(os.environ['LLM_MAX_CONCURRENCY']))
         async def judge_one(item) -> dict:
             record, index_narrative, neighbor_narrative, pid, neighbor_id = item
             async with sem: # If the maximum amount are already bombarding the server, we wait
-                judgement = await predictor.scorer.judge_async(index_narrative, neighbor_narrative, pid, neighbor_id)
-                record['llm_sim'] = judgement['overall_similarity']    
+                try:
+                    judgement = await predictor.scorer.judge_async(index_narrative, neighbor_narrative, pid, neighbor_id)
+                    record['llm_sim'] = judgement['overall_similarity']
+                except Exception as e:
+                    # One unrecoverable pair must not tear down the whole run; leave
+                    # llm_sim as NaN and let the resume re-judge it later.
+                    print(f"Skipping {pid} vs {neighbor_id} after unrecoverable error: {repr(e)}", file=sys.stderr, flush=True)
                 return record
-            
+
         total = len(work_items)
         done = 0
         coroutines = [judge_one(item) for item in work_items]
         results = []
-        for res in asyncio.as_completed(coroutines):
-            results.append(await res)
-            done += 1
-            if (done % LOG_EVERY) == 0:
-                print(f"Finished {done} judgements out of {total} total...", flush=True)
-        await predictor.scorer.client.async_client.aclose()
+        try:
+            for res in asyncio.as_completed(coroutines):
+                results.append(await res)
+                done += 1
+                if (done % LOG_EVERY) == 0:
+                    print(f"Finished {done} judgements out of {total} total...", flush=True)
+        finally:
+            predictor.scorer.stop_writer()
+            await predictor.scorer.client.async_client.aclose()
     else:
         results = [item[0] for item in work_items]
     pd.DataFrame(results).to_csv(RESULTS_DIR / f"neighbor_results_{slurm_task_id}.csv")
