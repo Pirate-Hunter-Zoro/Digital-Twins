@@ -44,4 +44,4 @@ python -m scripts.pipeline.causal.validate
 # of accumulating as stale orphans (the whole causal_pipeline tree is a derived artifact).
 LOCAL_RESULTS_DIR="results/causal_pipeline"
 mkdir -p "${LOCAL_RESULTS_DIR}"
-rsync -av --delete "${ARTIFACTS_DIR}/causal_pipeline/" "${LOCAL_RESULTS_DIR}/"
+rsync -av "${ARTIFACTS_DIR}/causal_pipeline/" "${LOCAL_RESULTS_DIR}/"
