@@ -13,6 +13,7 @@ load_dotenv()
 from scripts.pipeline.predictions.trd_prediction_computation import compute_metrics
 from scripts.pipeline.neighbors.neighbor_scheme import NeighborScheme
 from scripts.pipeline.predictions.weighting_strategy import WeightingStrategy
+from scripts.shared.plots import plot_receiving_operator_characteristic
 
 def load_predictions() -> pd.DataFrame:
     """Load the predictions data frame that includes all the patients with their risk scores given weighting strategy and weighting scheme
@@ -63,3 +64,22 @@ def fuse_df(pivoted_df: pd.DataFrame) -> pd.DataFrame:
     pivoted_df['p_fused'] = 0.5*(pivoted_df['p_near'] + (1 - pivoted_df['p_far']))
     pivoted_df['rank_score'] = pivoted_df['p_near'] - pivoted_df['p_far']
     return pivoted_df
+
+def score_column(fuse_df: pd.DataFrame, risk_col: str, mode: str) -> dict:
+    """Report all of the scoring metrics given the fused data frame and the specified KNN weighting scheme
+
+    Args:
+        fuse_df (pd.DataFrame): Fused data frame
+        risk_col (str): Label to specify which risk score matters
+        mode (str): Used for plot filename
+
+    Returns:
+        dict: Metrics for the specified column
+    """
+    labels = fuse_df['true_label'].to_numpy()
+    risk_scores = fuse_df[risk_col].to_numpy()
+    metrics = compute_metrics(labels, risk_scores)
+    _, ci_low, ci_high = plot_receiving_operator_characteristic(labels, risk_scores, mode)
+    metrics['roc_score_ci_low'] = ci_low
+    metrics['roc_score_ci_high'] = ci_high
+    return metrics
