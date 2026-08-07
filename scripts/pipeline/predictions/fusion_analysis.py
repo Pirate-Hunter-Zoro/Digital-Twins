@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, roc_curve
+from scipy.stats import rankdata
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -13,7 +14,13 @@ load_dotenv()
 from scripts.pipeline.predictions.trd_prediction_computation import compute_metrics
 from scripts.pipeline.neighbors.neighbor_scheme import NeighborScheme
 from scripts.pipeline.predictions.weighting_strategy import WeightingStrategy
-from scripts.shared.plots import plot_receiving_operator_characteristic
+from scripts.shared.plots import (
+    plot_receiving_operator_characteristic, 
+    bootstrap_roc_band,
+    N_BOOTSTRAP
+)
+
+ALPHA_GRID = np.linspace(0, 1, 21).reshape(-1,1) # ALPHA 1 recovers p_near; ALPHA 0 recovers 1-p_far
 
 def load_predictions() -> pd.DataFrame:
     """Load the predictions data frame that includes all the patients with their risk scores given weighting strategy and weighting scheme
@@ -83,3 +90,90 @@ def score_column(fuse_df: pd.DataFrame, risk_col: str, mode: str) -> dict:
     metrics['roc_score_ci_low'] = ci_low
     metrics['roc_score_ci_high'] = ci_high
     return metrics
+
+def blend_oof(fused_df: pd.DataFrame) -> tuple[list[float], pd.DataFrame]:
+    """Calculate the blended risk score and add it to the returned data frame
+
+    Args:
+        fused_df (pd.DataFrame): Original dataframe
+
+    Returns:
+        tuple[list[float], pd.DataFrame]: explored alpha values, paired with same dataframe with blended risk score returned
+    """
+    labels, p_near, inverted_p_far = fused_df['true_label'].to_numpy(), fused_df['p_near'].to_numpy(), 1 - fused_df['p_far'].to_numpy()
+    p_blend = np.full((len(fused_df),), np.nan)
+    fold_splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=int(os.environ['SEED']))
+    alphas = []
+    for (train_indices, test_indices) in fold_splitter.split(p_near.reshape(-1,1), labels):
+        # Iterate over the different partitions of training and testing indices for each fold
+        train_blends = ALPHA_GRID * p_near[train_indices].reshape(1,-1) + (1 - ALPHA_GRID) * inverted_p_far[train_indices].reshape(1,-1)
+        # (num_alpha, 1) x (1, num_train) -> (num_alpha, num_train), weighted scores over all the alphas
+        # Over each alpha value, rank the risk scores
+        ranks = rankdata(train_blends, axis=1) # (num_alpha, n_train)
+        fold_labels = labels[train_indices]
+        positives_mask = fold_labels == 1
+        positive_ranks_sums = ranks[:, positives_mask].sum(axis=1) # (num_alpha,) - for each alpha, sum the ranks of all the TRD positive patients
+        n_pos = fold_labels.sum()
+        n_neg = fold_labels.shape[0] - n_pos
+        rocs = (positive_ranks_sums - n_pos*(n_pos+1)/2) / (n_pos * n_neg) # (num_alpha,) - for each alpha, fraction of pos/neg pairings where pos has higher risk score
+        
+        # Select the winning alpha, and if any tied, take the middle of the tied group
+        max_roc = rocs.max()
+        tied_positions = np.flatnonzero(rocs >= max_roc-1e-12)
+        best_position = tied_positions[len(tied_positions) // 2]
+        best_alpha = ALPHA_GRID.ravel()[best_position]
+        alphas.append(best_alpha)
+        
+        # Use picked alpha value on test set - you can actually subscript it on assignment
+        p_blend[test_indices] = best_alpha * p_near[test_indices] + (1 - best_alpha) * inverted_p_far[test_indices] # (n_patients,) filled in on test patient indices
+    
+    assert not np.isnan(p_blend).any() # All the folds should have been taken care of - every index was a test index at some point
+    fused_df['p_blend'] = p_blend
+    return alphas, fused_df # Each fold got a potentially different alpha value to generate the risk scores for that fold's test set
+
+def stack_oof(fused_df: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
+    """Apply logistic regression to find the best weights for p_near and p_far to find a joint estimate for risk score
+
+    Args:
+        fused_df (pd.DataFrame): Original dataframe
+
+    Returns:
+        tuple[np.ndarray, pd.DataFrame]: coefficients from inspection fit, and resulting newly modified data frame
+    """
+    labels, p_near, p_far = fused_df['true_label'].to_numpy(), fused_df['p_near'].to_numpy(), fused_df['p_far'].to_numpy()
+    feature_matrix = np.column_stack([p_near, p_far])
+    estimator = LogisticRegression()
+    fold_splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=int(os.environ['SEED']))
+    # Takes care of all the book keeping we had to do in blend_oof
+    risk_scores = cross_val_predict(estimator, feature_matrix, labels, cv=fold_splitter, method='predict_proba') # shape (n_patients, 2), where the columns are complements of each other (binary probabilities)
+    p_stack = risk_scores[:, 1] # probability for TRD positive
+    fused_df['p_stack'] = p_stack
+    
+    # Fit a separate estimator on the feature matrix and labels, and return its coefficients
+    inspector_estimator = LogisticRegression()
+    inspector_estimator.fit(feature_matrix, labels)
+    return inspector_estimator.coef_, fused_df
+
+def paired_delta_ci(fused_df: pd.DataFrame, baseline_col: str, variant_col: str) -> tuple[float, float, float]:
+    """Use bootstrapping to gain a confidence interval on the difference between the AUC scores from the baseline and variant risk score columns
+
+    Args:
+        fused_df (pd.DataFrame): Data frame containing all risk score values over all variants
+        baseline_col (str): Column containing baseline risk scores
+        variant_col (str): Column containing variant risk scores
+
+    Returns:
+        tuple[float, float, float]: middle, lower, and upper bounds for difference between two respective AUC scores with 95% confidence interval
+    """
+    labels = fused_df['true_label'].to_numpy()
+    base_risk_scores = fused_df[baseline_col].to_numpy()
+    variant_risk_scores = fused_df[variant_col].to_numpy()
+    rng = np.random.default_rng(int(os.environ['SEED']))
+    # Create bootstrapped index samples - basically samples out of the indices which can repeat, sample size equal to the number of observations
+    index_matrix = rng.integers(low=0, high=len(labels), size=(N_BOOTSTRAP, len(labels)))
+    _, auc_base_over_bootstraps = bootstrap_roc_band(labels, base_risk_scores, index_matrix)
+    _, auc_variant_over_bootstraps = bootstrap_roc_band(labels, variant_risk_scores, index_matrix)
+    deltas = auc_variant_over_bootstraps - auc_base_over_bootstraps
+    lower, upper = np.nanpercentile(deltas, 2.5), np.nanpercentile(deltas, 97.5)
+    delta_point_estimate = roc_auc_score(labels, variant_risk_scores) - roc_auc_score(labels, base_risk_scores)
+    return delta_point_estimate, lower, upper
