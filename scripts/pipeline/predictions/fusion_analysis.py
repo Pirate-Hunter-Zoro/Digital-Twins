@@ -7,6 +7,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, roc_curve
 from scipy.stats import rankdata
+import json
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -21,6 +22,8 @@ from scripts.shared.plots import (
 )
 
 ALPHA_GRID = np.linspace(0, 1, 21).reshape(-1,1) # ALPHA 1 recovers p_near; ALPHA 0 recovers 1-p_far
+FUSION_SCORE_COLUMNS = ['p_near', 'p_fused', 'p_blend', 'p_stack']
+ORDERED_RESULT_COLUMNS = ['score', 'roc_score', 'roc_score_ci_low', 'roc_score_ci_high', 'delta_roc_score', 'delta_roc_score_ci_low', 'delta_roc_score_ci_high', 'auprc', 'brier_score', 'weighted_calibration_error', 'calibration_slope', 'calibration_intercept', 'proportion_risk_score_<0.1', 'proportion_risk_score_>0.9']
 
 def load_predictions() -> pd.DataFrame:
     """Load the predictions data frame that includes all the patients with their risk scores given weighting strategy and weighting scheme
@@ -72,19 +75,19 @@ def fuse_df(pivoted_df: pd.DataFrame) -> pd.DataFrame:
     pivoted_df['rank_score'] = pivoted_df['p_near'] - pivoted_df['p_far']
     return pivoted_df
 
-def score_column(fuse_df: pd.DataFrame, risk_col: str, mode: str) -> dict:
+def score_column(fused_df: pd.DataFrame, risk_col: str, mode: str) -> dict:
     """Report all of the scoring metrics given the fused data frame and the specified KNN weighting scheme
 
     Args:
-        fuse_df (pd.DataFrame): Fused data frame
+        fused_df (pd.DataFrame): Fused data frame
         risk_col (str): Label to specify which risk score matters
         mode (str): Used for plot filename
 
     Returns:
         dict: Metrics for the specified column
     """
-    labels = fuse_df['true_label'].to_numpy()
-    risk_scores = fuse_df[risk_col].to_numpy()
+    labels = fused_df['true_label'].to_numpy()
+    risk_scores = fused_df[risk_col].to_numpy()
     metrics = compute_metrics(labels, risk_scores)
     _, ci_low, ci_high = plot_receiving_operator_characteristic(labels, risk_scores, mode)
     metrics['roc_score_ci_low'] = ci_low
@@ -124,7 +127,7 @@ def blend_oof(fused_df: pd.DataFrame) -> tuple[list[float], pd.DataFrame]:
         best_alpha = ALPHA_GRID.ravel()[best_position]
         alphas.append(best_alpha)
         
-        # Use picked alpha value on test set - you can actually subscript it on assignment
+        # Use picked alpha value on test set
         p_blend[test_indices] = best_alpha * p_near[test_indices] + (1 - best_alpha) * inverted_p_far[test_indices] # (n_patients,) filled in on test patient indices
     
     assert not np.isnan(p_blend).any() # All the folds should have been taken care of - every index was a test index at some point
@@ -177,3 +180,64 @@ def paired_delta_ci(fused_df: pd.DataFrame, baseline_col: str, variant_col: str)
     lower, upper = np.nanpercentile(deltas, 2.5), np.nanpercentile(deltas, 97.5)
     delta_point_estimate = roc_auc_score(labels, variant_risk_scores) - roc_auc_score(labels, base_risk_scores)
     return delta_point_estimate, lower, upper
+
+def build_comparison_table(fused_df: pd.DataFrame) -> pd.DataFrame:
+    """Given the dataframe full of fused scores, return a report of all confidence intervals and every other scoring characteristic over the scored columns
+
+    Args:
+        fused_df (pd.DataFrame): Dataframe with fused scores
+
+    Returns:
+        pd.DataFrame: Resulting score report
+    """
+    results = []
+    for col in FUSION_SCORE_COLUMNS:
+        result = score_column(fused_df, col, f"fusion_{col}")
+        result['score'] = col
+        if col != 'p_near':
+            delta_point_estimate, delta_low, delta_high = paired_delta_ci(fused_df, 'p_near', col)
+        else:
+            delta_point_estimate, delta_low, delta_high = np.nan, np.nan, np.nan
+        result['delta_roc_score'] = delta_point_estimate
+        result['delta_roc_score_ci_low'] = delta_low
+        result['delta_roc_score_ci_high'] = delta_high
+        results.append(result)
+    df = pd.DataFrame(results)[ORDERED_RESULT_COLUMNS]
+    df.to_csv(Path(os.environ['RESULTS_DIR']) / 'fusion_comparison.csv', index=False)
+    return df
+
+def plot_fusion_roc_overlay(fused_df: pd.DataFrame, comparison_results: pd.DataFrame):
+    """Plot overlaying ROC curves for the different fusion analyses
+
+    Args:
+        fused_df (pd.DataFrame): Risk scores for all different kinds of 
+        comparison_results (pd.DataFrame): Contains all score metrics for the different fusion techniques
+    """
+    labels = fused_df['true_label'].to_numpy()
+    indexed_results = comparison_results.set_index('score')
+    fig, ax = plt.subplots()
+    for col in FUSION_SCORE_COLUMNS:
+        risk_array = fused_df[col].to_numpy()
+        false_positives, true_positives, _ = roc_curve(labels, risk_array)
+        label = f"{col} ROC: {indexed_results.loc[col, 'roc_score']:.4f}\nROC CI: [{indexed_results.loc[col, 'roc_score_ci_low']:.4f},{indexed_results.loc[col, 'roc_score_ci_high']:.4f}]"
+        ax.plot(false_positives, true_positives, label=label)
+    ax.plot([0,1], [0,1], linestyle='--', color='gray', label='Chance')
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.legend(loc='lower right')
+    save_path = Path(os.environ['RESULTS_DIR']) / 'roc_curves/roc_curve_fusion_overlay.png'
+    os.makedirs(save_path.parent, exist_ok=True)
+    fig.savefig(save_path)
+    plt.close(fig)
+
+def main():
+    working_df = fuse_df(pivot_df(filter_df(load_predictions())))
+    per_fold_alphas, blended_results_df = blend_oof(working_df)
+    lr_coefs, lr_results_df = stack_oof(blended_results_df)
+    comparison_results = build_comparison_table(lr_results_df)
+    plot_fusion_roc_overlay(lr_results_df, comparison_results)
+    with open(Path(os.environ['RESULTS_DIR']) / 'fusion_fit_parameters.json', 'w') as f:
+        json.dump({'per_fold_alphas': per_fold_alphas, 'lr_coefs': lr_coefs.tolist()}, f, indent=4)
+
+if __name__=="__main__":
+    main()
