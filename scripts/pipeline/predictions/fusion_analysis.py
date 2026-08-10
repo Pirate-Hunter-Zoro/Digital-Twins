@@ -94,45 +94,57 @@ def score_column(fused_df: pd.DataFrame, risk_col: str, mode: str) -> dict:
     metrics['roc_score_ci_high'] = ci_high
     return metrics
 
-def blend_oof(fused_df: pd.DataFrame) -> tuple[list[float], pd.DataFrame]:
+def select_best_alpha(nearest_risk_scores: np.ndarray, inverted_farthest_risk_scores: np.ndarray, binary_labels: np.ndarray) -> float:
+    """Return the alpha value that would be used on unobserved new instances when predicted said new instance's risk score given their nearest and inverted-farthest risks cores
+
+    Args:
+        nearest_risk_scores (np.ndarray): Test patient knn-nearest risk scores
+        inverted_farthest_risk_scores (np.ndarray): Test patient kfn-farthest risk scores
+        binary_labels (np.ndarray): Actual TRD flags of test set
+
+    Returns:
+        float: Resulting alpha value
+    """
+    train_blends = ALPHA_GRID * nearest_risk_scores.reshape(1,-1) + (1 - ALPHA_GRID) * inverted_farthest_risk_scores.reshape(1,-1)
+    # (num_alpha, 1) x (1, num_train) -> (num_alpha, num_train), weighted scores over all the alphas
+    # Over each alpha value, rank the risk scores
+    ranks = rankdata(train_blends, axis=1) # (num_alpha, n_train)
+    positives_mask = binary_labels == 1
+    positive_ranks_sums = ranks[:, positives_mask].sum(axis=1) # (num_alpha,) - for each alpha, sum the ranks of all the TRD positive patients
+    n_pos = binary_labels.sum()
+    n_neg = binary_labels.shape[0] - n_pos
+    rocs = (positive_ranks_sums - n_pos*(n_pos+1)/2) / (n_pos * n_neg) # (num_alpha,) - for each alpha, fraction of pos/neg pairings where pos has higher risk score
+    
+    # Select the winning alpha, and if any tied, take the middle of the tied group
+    max_roc = rocs.max()
+    tied_positions = np.flatnonzero(rocs >= max_roc-1e-12)
+    best_position = tied_positions[len(tied_positions) // 2]
+    best_alpha = ALPHA_GRID.ravel()[best_position]
+    return best_alpha
+
+def blend_oof(fused_df: pd.DataFrame) -> tuple[list[float], float, pd.DataFrame]:
     """Calculate the blended risk score and add it to the returned data frame
 
     Args:
         fused_df (pd.DataFrame): Original dataframe
 
     Returns:
-        tuple[list[float], pd.DataFrame]: explored alpha values, paired with same dataframe with blended risk score returned
+        tuple[list[float], float, pd.DataFrame]: best alpha values per batch, final reported alpha over the whole test set, and the same dataframe with blended risk score returned
     """
     labels, p_near, inverted_p_far = fused_df['true_label'].to_numpy(), fused_df['p_near'].to_numpy(), 1 - fused_df['p_far'].to_numpy()
     p_blend = np.full((len(fused_df),), np.nan)
     fold_splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=int(os.environ['SEED']))
     alphas = []
     for (train_indices, test_indices) in fold_splitter.split(p_near.reshape(-1,1), labels):
-        # Iterate over the different partitions of training and testing indices for each fold
-        train_blends = ALPHA_GRID * p_near[train_indices].reshape(1,-1) + (1 - ALPHA_GRID) * inverted_p_far[train_indices].reshape(1,-1)
-        # (num_alpha, 1) x (1, num_train) -> (num_alpha, num_train), weighted scores over all the alphas
-        # Over each alpha value, rank the risk scores
-        ranks = rankdata(train_blends, axis=1) # (num_alpha, n_train)
-        fold_labels = labels[train_indices]
-        positives_mask = fold_labels == 1
-        positive_ranks_sums = ranks[:, positives_mask].sum(axis=1) # (num_alpha,) - for each alpha, sum the ranks of all the TRD positive patients
-        n_pos = fold_labels.sum()
-        n_neg = fold_labels.shape[0] - n_pos
-        rocs = (positive_ranks_sums - n_pos*(n_pos+1)/2) / (n_pos * n_neg) # (num_alpha,) - for each alpha, fraction of pos/neg pairings where pos has higher risk score
-        
-        # Select the winning alpha, and if any tied, take the middle of the tied group
-        max_roc = rocs.max()
-        tied_positions = np.flatnonzero(rocs >= max_roc-1e-12)
-        best_position = tied_positions[len(tied_positions) // 2]
-        best_alpha = ALPHA_GRID.ravel()[best_position]
+        best_alpha = select_best_alpha(p_near[train_indices], inverted_p_far[train_indices], labels[train_indices])
         alphas.append(best_alpha)
-        
-        # Use picked alpha value on test set
+        # Use picked alpha value on test set for evaluation
         p_blend[test_indices] = best_alpha * p_near[test_indices] + (1 - best_alpha) * inverted_p_far[test_indices] # (n_patients,) filled in on test patient indices
     
     assert not np.isnan(p_blend).any() # All the folds should have been taken care of - every index was a test index at some point
+    final_alpha = select_best_alpha(p_near, inverted_p_far, labels)
     fused_df['p_blend'] = p_blend
-    return alphas, fused_df # Each fold got a potentially different alpha value to generate the risk scores for that fold's test set
+    return alphas, final_alpha, fused_df # Each fold got a potentially different alpha value to generate the risk scores for that fold's test set
 
 def stack_oof(fused_df: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
     """Apply logistic regression to find the best weights for p_near and p_far to find a joint estimate for risk score
@@ -141,7 +153,7 @@ def stack_oof(fused_df: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
         fused_df (pd.DataFrame): Original dataframe
 
     Returns:
-        tuple[np.ndarray, pd.DataFrame]: coefficients from inspection fit, and resulting newly modified data frame
+        tuple[np.ndarray, np.ndarray, pd.DataFrame]: coefficients from fit, intercept from fit, and resulting newly modified data frame
     """
     labels, p_near, p_far = fused_df['true_label'].to_numpy(), fused_df['p_near'].to_numpy(), fused_df['p_far'].to_numpy()
     feature_matrix = np.column_stack([p_near, p_far])
@@ -155,7 +167,7 @@ def stack_oof(fused_df: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
     # Fit a separate estimator on the feature matrix and labels, and return its coefficients
     inspector_estimator = LogisticRegression()
     inspector_estimator.fit(feature_matrix, labels)
-    return inspector_estimator.coef_, fused_df
+    return inspector_estimator.coef_, inspector_estimator.intercept_, fused_df
 
 def paired_delta_ci(fused_df: pd.DataFrame, baseline_col: str, variant_col: str) -> tuple[float, float, float]:
     """Use bootstrapping to gain a confidence interval on the difference between the AUC scores from the baseline and variant risk score columns
@@ -232,12 +244,12 @@ def plot_fusion_roc_overlay(fused_df: pd.DataFrame, comparison_results: pd.DataF
 
 def main():
     working_df = fuse_df(pivot_df(filter_df(load_predictions())))
-    per_fold_alphas, blended_results_df = blend_oof(working_df)
-    lr_coefs, lr_results_df = stack_oof(blended_results_df)
+    per_fold_alphas, final_used_alpha, blended_results_df = blend_oof(working_df)
+    lr_coefs, lr_intercept, lr_results_df = stack_oof(blended_results_df)
     comparison_results = build_comparison_table(lr_results_df)
     plot_fusion_roc_overlay(lr_results_df, comparison_results)
     with open(Path(os.environ['RESULTS_DIR']) / 'fusion_fit_parameters.json', 'w') as f:
-        json.dump({'per_fold_alphas': per_fold_alphas, 'lr_coefs': lr_coefs.tolist()}, f, indent=4)
+        json.dump({'per_fold_alphas': per_fold_alphas, 'used_alpha': final_used_alpha, 'lr_coefs': lr_coefs.tolist(), 'lr_intercept': lr_intercept[0]}, f, indent=4)
 
 if __name__=="__main__":
     main()
