@@ -31,11 +31,8 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
-# Pin to the GPU with the most free memory (works around bare-metal squatters slurm cannot see)
-FREE_GPU=$(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits \
-           | sort -t, -k2 -n -r | head -1 | awk -F, '{print $1}' | tr -d ' ')
-export CUDA_VISIBLE_DEVICES="${FREE_GPU}"
-echo "Pinning to GPU ${CUDA_VISIBLE_DEVICES} on $(hostname)"
+# Log the allocated GPU so a later CUDA OOM is explainable from this log alone
+echo "Running on $(hostname)"
 nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
 
 python -m scripts.pipeline.predictions.classical_ml
