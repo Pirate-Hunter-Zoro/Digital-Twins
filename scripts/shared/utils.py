@@ -7,6 +7,8 @@ import numpy as np
 from dotenv import load_dotenv
 load_dotenv()
 
+from scripts.data_loading.med_definitions import get_med_arm
+
 class VectorSource(Enum):
     EMBEDDED = 0
     FEATURE = 1
@@ -56,3 +58,15 @@ def load_feature_matrix(patient_ids: set[str]) -> pd.DataFrame:
     X = cohort_df.loc[sorted(list(patient_ids))]
     X = X.drop(columns=list(VITAL_COLUMNS))
     return X
+
+def get_AD_mappings() -> dict[str, str]:
+    """For every patient, return which antidepressant arm their anchor date prescription belongs to
+
+    Returns:
+        dict[str, str]: Patient ID, AD prescription arm
+    """
+    med_dates = pd.read_csv(Path(os.environ['MDD_MED_DATE_CSV_PATH'])).set_index('PatientEpicId_SH')
+    med_dates = med_dates.sort_values(by='MedStartInstant', ascending=True)
+    earliest_mask = ~med_dates.index.duplicated(keep='first') # Indexed by patient ID
+    med_dates = med_dates[earliest_mask]
+    return med_dates['MedName'].apply(get_med_arm).to_dict()

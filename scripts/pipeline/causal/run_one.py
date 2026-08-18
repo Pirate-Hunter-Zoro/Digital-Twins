@@ -1,9 +1,8 @@
 import os
 import numpy as np
-from pathlib import Path
 import json
 
-from scripts.pipeline.causal.treatment_registry import TREATMENT_REGISTRY
+from scripts.shared.treatment_registry import TREATMENT_REGISTRY
 from scripts.pipeline.causal.core import (
     load_encoded_data,
     build_treatment,

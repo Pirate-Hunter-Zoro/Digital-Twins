@@ -4,32 +4,18 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from econml.dml import CausalForestDML
 from econml.validate import DRTester
-from typing import Any
 from pathlib import Path
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 
 from scripts.pipeline.predictions.create_train_test_split import create_train_test_split
-from scripts.shared.utils import load_trd_set, load_feature_matrix
-from scripts.data_loading.med_definitions import get_med_arm
+from scripts.shared.utils import load_trd_set, load_feature_matrix, get_AD_mappings
 
 from dotenv import load_dotenv
 load_dotenv()
 
 OVERLAP_FLOOR = 0.1
 OVERLAP_CEILING = 1 - OVERLAP_FLOOR
-
-def get_AD_mappings() -> dict[str, str]:
-    """For every patient, return which antidepressant arm their anchor date prescription belongs to
-
-    Returns:
-        dict[str, str]: Patient ID, AD prescription arm
-    """
-    med_dates = pd.read_csv(Path(os.environ['MDD_MED_DATE_CSV_PATH'])).set_index('PatientEpicId_SH')
-    med_dates = med_dates.sort_values(by='MedStartInstant', ascending=True)
-    earliest_mask = ~med_dates.index.duplicated(keep='first') # Indexed by patient ID
-    med_dates = med_dates[earliest_mask]
-    return med_dates['MedName'].apply(get_med_arm).to_dict()
 
 def passes_overlap(train_treatment_array: np.ndarray) -> bool:
     """Given all of the training population's treatment flags, determine if enough patients were both treated and untreated to warrant CATE analysis
@@ -167,7 +153,6 @@ def fit_dr_tester(fitted_forest: CausalForestDML, X_fit_train: pd.DataFrame, X_f
         cv=5, # Cross validation sweep
     )
     # Estimate m_1(x), m_2(x), e(x)
-    # TODO - Clusters seem to show up - are they treatment groups? Try to investigate
     tester.fit_nuisance(
         Xval=X_fit_test.to_numpy(), # Patients with the treatment attribute removed and all others kept
         Dval=treatments_test, # Binary treatment flags

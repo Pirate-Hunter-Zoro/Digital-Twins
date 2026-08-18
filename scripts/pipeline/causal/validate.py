@@ -10,7 +10,7 @@ from scripts.pipeline.causal.core import (
     contrast_output_dir,
     plot_cate_overlay,
 )
-from scripts.pipeline.causal.treatment_registry import TREATMENT_REGISTRY
+from scripts.shared.treatment_registry import TREATMENT_REGISTRY
 
 from dotenv import load_dotenv
 load_dotenv()
