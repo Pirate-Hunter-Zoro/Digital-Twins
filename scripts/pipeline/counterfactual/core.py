@@ -195,3 +195,34 @@ def count_weighted_slope(bin_table: pd.DataFrame) -> dict:
         "weighted_cal_slope": float(model.coef_[0]),
         "weighted_cal_intercept": float(model.intercept_)
     }
+    
+def attach_propensity(population: EligiblePopulations, risk_frame: pd.DataFrame) -> pd.DataFrame:
+    """For each patient, determine their probability of being in the comparison arm, and whether that lands in a reasonable interval
+
+    Args:
+        population (EligiblePopulations): Population broken up into the two medication arms
+        risk_frame (pd.DataFrame): Inputted risk scores for the given counterfactual treatment
+
+    Returns:
+        pd.DataFrame: Risk dataframe with propensity scores appended
+    """
+    train_matrix = pd.concat([population.ref_arm_train_matrix, population.comp_arm_train_matrix])
+    arm_target = np.concat([np.zeros(len(population.ref_arm_train_labels)), np.ones(len(population.comp_arm_train_labels))])
+    classifier_pipeline = make_classifier(LogisticRegression(max_iter=1000))
+    classifier_pipeline.fit(train_matrix, arm_target)
+    arm_probs = classifier_pipeline.predict_proba(population.eligible_test_matrix)[:, 1]
+    risk_frame['propensity'] = arm_probs
+    risk_frame['in_overlap'] = risk_frame['propensity'].between(OVERLAP_FLOOR, OVERLAP_CEILING, inclusive='neither')
+    return risk_frame
+
+def estimate_effect(risk_df: pd.DataFrame) -> dict:
+    """Calculate treatment effect estimate given the risk scores and propensity scores for each patient
+
+    Args:
+        risk_df (pd.DataFrame): Containing risk scores with propensity scores
+
+    Returns:
+        dict: Report of how many patients fell out of each arm due to unreasonable propensity score, average effect estimate over patients falling in specified propensity range AND weighted average effect estimate over all patients
+        (NOTE - effect is comparison risk score minus reference risk score, so positive means the first-named arm raises P(TRD))
+    """
+    pass
