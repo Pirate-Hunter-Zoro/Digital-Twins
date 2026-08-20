@@ -141,22 +141,39 @@ def plot_feature_importance(
     else:
         colors = ['steelblue' if val >= 0 else 'firebrick' for val in top_directions.tolist()]
 
-    fig, ax = plt.subplots(figsize=(10, max(6, top_k * 0.3)))
+    # Sizing: these panels are placed in the manuscript at 6in wide, so what
+    # matters is the label size AFTER downscaling, not the nominal font size. A
+    # 10in-wide figure at matplotlib's 8pt default ticks lands near 4.8pt on the
+    # page, which is unreadable. Keeping the figure close to the display width
+    # (7.5in) costs only a 0.8x downscale, so 12pt tick labels arrive at ~9.6pt.
+    fig, ax = plt.subplots(figsize=(7.5, max(5.5, top_k * 0.34)))
     # Create bars of length corresponding to importance magnitudes
     ax.barh(range(len(top_names)), np.abs(top_importances), color=colors)
     ax.set_yticks(range(len(top_names)))
-    ax.set_yticklabels(humanize_feature_names(top_names))
+    ax.set_yticklabels(humanize_feature_names(top_names), fontsize=12)
+    ax.tick_params(axis='x', labelsize=12)
     ax.invert_yaxis()
-    ax.set_xlabel("Feature importance (magnitude)")
-    title = f"{model_name}: " + "(blue: raises TRD risk, red: lowers TRD risk)" \
-                                if model_name == "logistic_regression" or (direction_signs is not None)\
-                                    else "(direction unspecified)"
-    ax.set_title(title)
+    ax.set_xlabel("Feature importance (magnitude)", fontsize=13)
+    # NOTE: assigning the conditional to a name first is load-bearing. Inlined
+    # without parentheses, Python's precedence binds the conditional to the
+    # second operand only, so the "direction unspecified" branch silently drops
+    # the model name from the title.
+    direction_known = model_name == "logistic_regression" or direction_signs is not None
+    suffix = "blue: raises TRD risk, red: lowers TRD risk" if direction_known \
+        else "direction unspecified"
+    # Title is split across two lines: on one line the colour key overruns the
+    # figure width and gets clipped.
+    pretty_name = model_name.replace('_', ' ').capitalize()
+    ax.set_title(f"{pretty_name}\n({suffix})", fontsize=12, fontweight='bold')
+    ax.grid(axis='x', linestyle=':', linewidth=0.8, alpha=0.6)
+    ax.set_axisbelow(True)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
     fig.tight_layout()
     save_path = Path(os.environ['RESULTS_DIR']) / "feature_importance" /\
         f"feature_importance_{model_name}.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    fig.savefig(str(save_path), dpi=120)
+    fig.savefig(str(save_path), dpi=220)
     plt.close(fig)
 
 def compute_univariate_spearman(

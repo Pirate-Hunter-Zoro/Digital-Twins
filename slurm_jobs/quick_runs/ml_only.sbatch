@@ -37,6 +37,7 @@ nvidia-smi --query-gpu=index,memory.used,memory.free --format=csv
 
 python -m scripts.pipeline.predictions.classical_ml
 python -m scripts.pipeline.predictions.feature_importance
+python -m scripts.pipeline.predictions.plot_discrimination_forest
 python -m scripts.pipeline.predictions.ablation_runner
 
 # Copy all files from the RESULTS_DIR to the local results/ directory for easier access

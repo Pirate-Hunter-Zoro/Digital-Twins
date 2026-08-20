@@ -53,6 +53,7 @@ set -a; source "${OVERRIDES_FILE}"; set +a
 
 python -m scripts.pipeline.predictions.classical_ml
 python -m scripts.pipeline.predictions.feature_importance
+python -m scripts.pipeline.predictions.plot_discrimination_forest
 
 # The ablation report consumes per-spec ablated embeddings; only run it when the
 # ablation embeddings were actually built (see RUN_ABLATIONS in short_overrides.env).

@@ -105,8 +105,30 @@ RAW_TO_DISPLAY: dict[str, str] = {
 
 PREFIX_PATTERN = re.compile(r"^(num__|cat__|bool__)")
 
+# Display prefix for each one-hot-encoded categorical field, used to name the
+# automatic "Missing" level. The encoder emits that level as "<field>_nan", so it
+# has no entry of its own in RAW_TO_DISPLAY. Keeping the field names in one place
+# means a newly-missing field renders sensibly without anyone having to remember
+# to add a matching "<field>_nan" row above.
+CATEGORICAL_FIELD_DISPLAY: dict[str, str] = {
+    "Sex":               "Sex",
+    "PreferredLanguage": "Preferred language",
+    "MaritalStatus":     "Marital status",
+    "Religion":          "Religion",
+    "SmokingStatus":     "Smoking",
+    "Race_Ethnicity":    "Race/ethnicity",
+    "mdd_recurrence":    "MDD recurrence",
+    "mdd_severity":      "MDD severity",
+}
+
+MISSING_LEVEL_SUFFIX = "_nan"
+
 def humanize_feature_names(raw_names: Iterable[str]) -> list[str]:
     """Without mutating the input, return the humanized names of the raw names associated with the input
+
+    Falls back for one-hot "Missing" levels: a column named "<field>_nan" renders
+    as "<field display name>: Missing" rather than leaking the raw "_nan" token
+    into a figure label.
 
     Args:
         raw_names (Iterable[str]): Names from a dataframe
@@ -117,5 +139,9 @@ def humanize_feature_names(raw_names: Iterable[str]) -> list[str]:
     out = []
     for name in raw_names:
         stripped = re.sub(PREFIX_PATTERN, "", name)
-        out.append(RAW_TO_DISPLAY.get(stripped, stripped))
+        display = RAW_TO_DISPLAY.get(stripped)
+        if display is None and stripped.endswith(MISSING_LEVEL_SUFFIX):
+            field = stripped[: -len(MISSING_LEVEL_SUFFIX)]
+            display = f"{CATEGORICAL_FIELD_DISPLAY.get(field, field)}: Missing"
+        out.append(display if display is not None else stripped)
     return out
