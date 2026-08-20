@@ -12,6 +12,14 @@ RESULTS_DIR = Path(os.environ['RESULTS_DIR'])
 N_BOOTSTRAP = 1000
 FPR_GRID = np.linspace(0,1,100)
 
+# Raster resolution for every figure written by this module. Matplotlib's default
+# of 100 dpi yields a 640x480 PNG, which is ~107 dpi once placed at the
+# manuscript's 6in text width -- legible but visibly soft in print. These figures
+# are line art at publication size, so they are saved at a resolution that
+# survives it. Font sizes are unaffected: dpi scales the raster, not the
+# figure-relative text metrics.
+FIGURE_DPI = 220
+
 def bootstrap_roc_band(y_true: np.ndarray, y_prob: np.ndarray, sample_indices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Boostrapping logic on the given flags and predicted probabilities
 
@@ -73,7 +81,7 @@ def plot_receiving_operator_characteristic(y_true: np.ndarray, y_prob: np.ndarra
     plt.legend()
     save_path = RESULTS_DIR / "roc_curves" / f"roc_curve_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    plt.savefig(str(save_path))
+    plt.savefig(str(save_path), dpi=FIGURE_DPI)
     plt.close()
     return float(score), float(ci_low), float(ci_high)
 
@@ -97,7 +105,7 @@ def plot_precision_recall(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
     plt.legend()
     save_path = RESULTS_DIR / "pr_curves" / f"pr_curve_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    plt.savefig(str(save_path))
+    plt.savefig(str(save_path), dpi=FIGURE_DPI)
     plt.close()
 
 def plot_calibration(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
@@ -121,7 +129,7 @@ def plot_calibration(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
     plt.legend()
     save_path = RESULTS_DIR / "calibration_curves" / f"calibration_curve_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    plt.savefig(str(save_path))
+    plt.savefig(str(save_path), dpi=FIGURE_DPI)
     plt.close()
 
 def plot_decision_curve_analysis(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
@@ -174,7 +182,7 @@ def plot_decision_curve_analysis(y_true: np.ndarray, y_prob: np.ndarray, mode: s
     plt.legend()
     save_path = RESULTS_DIR / "decision_curves" / f"decision_curve_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    plt.savefig(str(save_path))
+    plt.savefig(str(save_path), dpi=FIGURE_DPI)
     plt.close()
 
 def plot_effective_sample_size_distribution(ess_values: np.ndarray, mode: str):
@@ -194,7 +202,7 @@ def plot_effective_sample_size_distribution(ess_values: np.ndarray, mode: str):
     plt.legend()
     save_path = RESULTS_DIR / "ess_distributions" / f"ess_distribution_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    plt.savefig(str(save_path))
+    plt.savefig(str(save_path), dpi=FIGURE_DPI)
     plt.close()
     
 def plot_optimal_confusion_matrix(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
@@ -239,7 +247,7 @@ Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
     plt.title(f'Threshold: {threshold}')
     save_path = RESULTS_DIR / "confusion_matrices" / f"confusion_matrix_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    plt.savefig(save_path, bbox_inches='tight')
+    plt.savefig(save_path, bbox_inches='tight', dpi=FIGURE_DPI)
     plt.close()
     
 def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: np.ndarray, ablated_scores: dict[str, np.ndarray], ablated_names: dict[str, str]) -> dict[str, tuple[float, float]]:
@@ -294,6 +302,6 @@ def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: 
     fig.tight_layout()
     save_path = RESULTS_DIR / f"ROC_ablated_vs_baseline_{classifier_name}_EMBEDDED.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    plt.savefig(save_path)
+    plt.savefig(save_path, dpi=FIGURE_DPI)
     plt.close(fig)
     return deltas
