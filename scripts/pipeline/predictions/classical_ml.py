@@ -200,6 +200,35 @@ def evaluate_models(X_train: pd.DataFrame, y_train: np.ndarray, X_test: pd.DataF
         }
     return classifier_predictions, model_grid_search_results
 
+def write_test_predictions(test_ids: set[str], test_y: np.ndarray, model_predictions: dict[str, np.ndarray], source: VectorSource) -> Path:
+    """Persist the per-patient held-out predicted probabilities for this representation.
+
+    The metrics JSON records only summary statistics, which is enough to tabulate a
+    model but not enough to compare two of them: a paired test needs both score
+    vectors on the same patients in the same order. Row order here is
+    sorted(test_ids), which is exactly the order load_data_set imposes on both
+    VectorSources, so row i is the same patient in the EMBEDDED and FEATURE files
+    and the two can be compared row-for-row without a join.
+
+    Args:
+        test_ids (set[str]): Held-out cohort IDs.
+        test_y (np.ndarray): Held-out labels, shape (n_test,), aligned to sorted(test_ids).
+        model_predictions (dict[str, np.ndarray]): Classifier name -> predicted TRD
+            probability for each held-out patient, each of shape (n_test,).
+        source (VectorSource): EMBEDDED or FEATURE.
+
+    Returns:
+        Path: Where the table was written.
+    """
+    ordered_ids = sorted(list(test_ids))
+    predictions_df = pd.DataFrame({'patient_id': ordered_ids, 'true_label': test_y})
+    for model_name, predictions in model_predictions.items():
+        predictions_df[model_name.lower()] = predictions
+    save_path = Path(os.environ['RESULTS_DIR']) / f'test_predictions_{source.name}.parquet'
+    predictions_df.to_parquet(save_path, index=False)
+    print(f"Wrote {save_path} with shape {predictions_df.shape}", flush=True)
+    return save_path
+
 def run_source_pass(source: VectorSource, train_ids: set[str], test_ids: set[str]):
     """Run a single ML pass for the given vector source: load, fit/predict, score, plot, persist.
 
@@ -214,6 +243,7 @@ def run_source_pass(source: VectorSource, train_ids: set[str], test_ids: set[str
     model_predictions, grid_search_results = evaluate_models(train_X, train_y, test_X, source)
     with open(Path(os.environ['RESULTS_DIR']) / f"grid_search_ml_results_{source.name}.json", 'w') as f:
         json.dump(grid_search_results, f, indent=4)
+    write_test_predictions(test_ids, test_y, model_predictions, source)
     results = {}
     for model_name, predictions in model_predictions.items():
         metrics = compute_metrics(y_true=test_y, y_prob=predictions)

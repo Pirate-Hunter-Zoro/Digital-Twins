@@ -8,12 +8,16 @@
 #SBATCH -o slurm_jobs/quick_runs/logs/plot_manuscript_figures_out.txt
 #SBATCH -e slurm_jobs/quick_runs/logs/plot_manuscript_figures_err.txt
 
-# Regenerates the presentation-layer figures from metrics already on disk:
-#   - the discrimination forest plot across both representations
+# Regenerates the presentation-layer figures from artifacts already on disk:
+#   - the two-panel discrimination figure: per-model AUCs with marginal intervals,
+#     above the paired EMBEDDED-minus-FEATURE differences
 #   - the four per-classifier feature-importance panels
 # Neither step refits a model, so this is safe and cheap to re-run whenever only
 # figure styling changes. It needs a completed classical_ml + feature_importance
 # run to read from; it will fail loudly rather than recompute if either is absent.
+# The paired panel additionally needs classical_ml's test_predictions_*.parquet
+# tables, so a results tree predating those will fail on the missing file rather
+# than quietly drop the panel.
 
 # Exit immediately if command fails
 set -e
@@ -44,4 +48,5 @@ python -m scripts.pipeline.predictions.redraw_feature_importance
 LOCAL_RESULTS_DIR="results/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}"
 mkdir -p "${LOCAL_RESULTS_DIR}"
 rsync -av "${RESULTS_DIR}/discrimination_forest_EMBEDDED_vs_FEATURE.png" "${LOCAL_RESULTS_DIR}/"
+rsync -av "${RESULTS_DIR}/discrimination_paired_deltas.json" "${LOCAL_RESULTS_DIR}/"
 rsync -av "${RESULTS_DIR}/feature_importance/" "${LOCAL_RESULTS_DIR}/feature_importance/"
