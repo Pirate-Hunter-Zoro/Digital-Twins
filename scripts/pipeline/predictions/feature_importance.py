@@ -142,18 +142,24 @@ def plot_feature_importance(
         colors = ['steelblue' if val >= 0 else 'firebrick' for val in top_directions.tolist()]
 
     # Sizing: these panels are placed in the manuscript at 6in wide, so what
-    # matters is the label size AFTER downscaling, not the nominal font size. A
-    # 10in-wide figure at matplotlib's 8pt default ticks lands near 4.8pt on the
-    # page, which is unreadable. Keeping the figure close to the display width
-    # (7.5in) costs only a 0.8x downscale, so 12pt tick labels arrive at ~9.6pt.
-    fig, ax = plt.subplots(figsize=(7.5, max(5.5, top_k * 0.34)))
+    # matters is the label size AFTER downscaling, not the nominal font size.
+    # Two constraints have to hold at once. The type has to survive the
+    # downscale, and the panel has to be short enough on the page that two of
+    # them fit inside the 9in text column: a 7.5x6.8in panel arrives 5.44in
+    # tall at 6in wide, so only one fits per page and the remainder of the page
+    # is left blank -- which is the gap this layout is fixing. Widening to 10in
+    # and pacing the rows at 0.255in puts the panel near 3.7in on the page (two
+    # per page, no gap), and the label size rises from 12 to 16pt to pay for
+    # the deeper 0.6x downscale, so the labels land where they did before.
+    LABEL_POINT_SIZE = 16
+    fig, ax = plt.subplots(figsize=(10.0, max(4.5, 1.0 + top_k * 0.255)))
     # Create bars of length corresponding to importance magnitudes
     ax.barh(range(len(top_names)), np.abs(top_importances), color=colors)
     ax.set_yticks(range(len(top_names)))
-    ax.set_yticklabels(humanize_feature_names(top_names), fontsize=12)
-    ax.tick_params(axis='x', labelsize=12)
+    ax.set_yticklabels(humanize_feature_names(top_names), fontsize=LABEL_POINT_SIZE)
+    ax.tick_params(axis='x', labelsize=LABEL_POINT_SIZE)
     ax.invert_yaxis()
-    ax.set_xlabel("Feature importance (magnitude)", fontsize=13)
+    ax.set_xlabel("Feature importance (magnitude)", fontsize=LABEL_POINT_SIZE + 1)
     # NOTE: assigning the conditional to a name first is load-bearing. Inlined
     # without parentheses, Python's precedence binds the conditional to the
     # second operand only, so the "direction unspecified" branch silently drops
@@ -164,7 +170,7 @@ def plot_feature_importance(
     # Title is split across two lines: on one line the colour key overruns the
     # figure width and gets clipped.
     pretty_name = model_name.replace('_', ' ').capitalize()
-    ax.set_title(f"{pretty_name}\n({suffix})", fontsize=12, fontweight='bold')
+    ax.set_title(f"{pretty_name}\n({suffix})", fontsize=LABEL_POINT_SIZE, fontweight='bold')
     ax.grid(axis='x', linestyle=':', linewidth=0.8, alpha=0.6)
     ax.set_axisbelow(True)
     for spine in ("top", "right"):

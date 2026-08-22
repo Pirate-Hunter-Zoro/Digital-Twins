@@ -457,18 +457,29 @@ def main():
     rows, scores, error_bar_lengths = build_rows(results_by_group)
     delta_rows = build_delta_rows(predictions_by_group, results_by_group)
 
-    # Panel A carries eight rows to panel B's five plus a gap, hence the height split.
+    # Panel A carries eight rows to panel B's five plus a gap, hence the height
+    # split. The figure is deliberately wide and short: it goes into the
+    # manuscript at the 6in text width, and a near-square raster there stands
+    # 5.9in tall, too tall to share its page with the table it belongs beside,
+    # so the rest of that page came out blank. Row labels and the annotation
+    # columns sit outside the axes, so height is bought back by pacing the rows
+    # tighter rather than by shrinking any text.
     fig, (forest_ax, delta_ax) = plt.subplots(
         nrows=2, ncols=1,
-        figsize=(9.6, 9.4),
+        figsize=(9.6, 6.0),
         gridspec_kw={"height_ratios": [1.5, 1.0], "hspace": 0.42},
     )
     draw_forest_panel(forest_ax, rows, scores, error_bar_lengths)
     draw_delta_panel(delta_ax, delta_rows)
 
     # Leave room on the right for both annotation columns and on the left for the
-    # bold group headers -- all outside the axes.
-    fig.subplots_adjust(left=0.30, right=0.71, top=0.955, bottom=0.075)
+    # bold group headers -- all outside the axes. The horizontal span is wider
+    # than it was: at the old 0.30-0.71 the plotted axes used 41% of the canvas
+    # and the rest was margin, which is what made the figure near-square. The
+    # right edge is set by panel B, whose signed annotations ("+0.028 (+0.017 to
+    # +0.039)") are six characters longer than panel A's and are the first thing
+    # to run off the canvas if this is pushed further out.
+    fig.subplots_adjust(left=0.235, right=0.765, top=0.945, bottom=0.095)
 
     save_path = results_dir / OUTPUT_NAME
     os.makedirs(save_path.parent, exist_ok=True)

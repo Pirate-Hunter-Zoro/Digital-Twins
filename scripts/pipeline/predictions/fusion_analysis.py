@@ -18,7 +18,9 @@ from scripts.pipeline.predictions.weighting_strategy import WeightingStrategy
 from scripts.shared.plots import (
     plot_receiving_operator_characteristic, 
     bootstrap_roc_band,
-    N_BOOTSTRAP
+    N_BOOTSTRAP,
+    PANEL_FIGSIZE,
+    FIGURE_DPI
 )
 
 ALPHA_GRID = np.linspace(0, 1, 21).reshape(-1,1) # ALPHA 1 recovers p_near; ALPHA 0 recovers 1-p_far
@@ -227,7 +229,9 @@ def plot_fusion_roc_overlay(fused_df: pd.DataFrame, comparison_results: pd.DataF
     """
     labels = fused_df['true_label'].to_numpy()
     indexed_results = comparison_results.set_index('score')
-    fig, ax = plt.subplots()
+    # Same wide-and-short panel geometry as every other figure in the
+    # supplement, so that this one does not take a page to itself.
+    fig, ax = plt.subplots(figsize=PANEL_FIGSIZE)
     for col in FUSION_SCORE_COLUMNS:
         risk_array = fused_df[col].to_numpy()
         false_positives, true_positives, _ = roc_curve(labels, risk_array)
@@ -237,9 +241,10 @@ def plot_fusion_roc_overlay(fused_df: pd.DataFrame, comparison_results: pd.DataF
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
     ax.legend(loc='lower right')
+    fig.tight_layout()
     save_path = Path(os.environ['RESULTS_DIR']) / 'roc_curves/roc_curve_fusion_overlay.png'
     os.makedirs(save_path.parent, exist_ok=True)
-    fig.savefig(save_path)
+    fig.savefig(save_path, dpi=FIGURE_DPI)
     plt.close(fig)
 
 def main():

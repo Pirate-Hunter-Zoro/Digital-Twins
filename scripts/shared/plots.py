@@ -20,6 +20,31 @@ FPR_GRID = np.linspace(0,1,100)
 # figure-relative text metrics.
 FIGURE_DPI = 220
 
+# Panel geometry for the manuscript. Every panel is placed one per row at the
+# 6in text width of a US Letter page with 1in top/bottom margins, which leaves
+# 9in of column height. Word cannot reflow text around an image, so a panel
+# taller than about half that column cannot share a page with a second panel:
+# the remainder of the page is left blank and the next panel starts overleaf.
+# Drawing the panels wide and short is what removes those gaps without giving
+# up any display width -- at 6in on the page a 10x5.4in panel is 3.24in tall,
+# so two panels, their bold labels, and the shared caption all fit one page.
+#
+# Font sizes are absolute points, so widening the figure without raising them
+# would shrink the type on the page: 10in placed at 6in is a 0.6x downscale.
+# The sizes below are set to land near 8-10pt after that downscale, which is
+# where the previous 6.4x4.8in panels already sat.
+PANEL_FIGSIZE = (10.0, 5.4)
+plt.rcParams.update({
+    "font.size": 15,
+    "axes.titlesize": 17,
+    "axes.labelsize": 15,
+    "xtick.labelsize": 13,
+    "ytick.labelsize": 13,
+    "legend.fontsize": 13,
+    "figure.figsize": PANEL_FIGSIZE,
+})
+
+
 def bootstrap_roc_band(y_true: np.ndarray, y_prob: np.ndarray, sample_indices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Boostrapping logic on the given flags and predicted probabilities
 
@@ -64,7 +89,8 @@ def plot_receiving_operator_characteristic(y_true: np.ndarray, y_prob: np.ndarra
     rng = np.random.default_rng(seed=int(os.environ['SEED']))
     sample_indices = rng.integers(low=0, high=y_true.shape[0], size=(N_BOOTSTRAP, y_true.shape[0]))
     interpolated_tp, auc_arr = bootstrap_roc_band(y_true, y_prob, sample_indices)
-    
+
+    plt.figure(figsize=PANEL_FIGSIZE)
     # Error bands are 2.5 percentile and 97.5 percentile for each FP x-value on ROC curve which generates 95% confidence interval
     q_low = np.percentile(interpolated_tp, 2.5, axis=0)
     q_high = np.percentile(interpolated_tp, 97.5, axis=0)
@@ -79,6 +105,7 @@ def plot_receiving_operator_characteristic(y_true: np.ndarray, y_prob: np.ndarra
     plt.ylabel("True Positive Rate")
     
     plt.legend()
+    plt.tight_layout()
     save_path = RESULTS_DIR / "roc_curves" / f"roc_curve_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
     plt.savefig(str(save_path), dpi=FIGURE_DPI)
@@ -98,11 +125,13 @@ def plot_precision_recall(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
     """
     score = sklearn.metrics.average_precision_score(y_true=y_true, y_score=y_prob)
     precision, recall, _ = sklearn.metrics.precision_recall_curve(y_true=y_true, y_score=y_prob)
+    plt.figure(figsize=PANEL_FIGSIZE)
     plt.plot(recall, precision, label=f'PR Curve (Average Precision = {score:.2f})')
     plt.xlabel("Recall")
     plt.ylabel("Precision")
     plt.title("Precision Recall Curve")
     plt.legend()
+    plt.tight_layout()
     save_path = RESULTS_DIR / "pr_curves" / f"pr_curve_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
     plt.savefig(str(save_path), dpi=FIGURE_DPI)
@@ -121,12 +150,14 @@ def plot_calibration(y_true: np.ndarray, y_prob: np.ndarray, mode: str):
     """
     # For each bin, calculate average probability, and calculate true probability (average positive rating)
     prob_true_per_bin, prob_pred_per_bin = calibration.calibration_curve(y_true=y_true, y_prob=y_prob, n_bins=10)
+    plt.figure(figsize=PANEL_FIGSIZE)
     plt.plot(prob_pred_per_bin, prob_true_per_bin, marker='o', label="Model")
     plt.plot([0,1],[0,1]) # Representing perfect calibration
     plt.xlabel("Mean Predicted Probability")
     plt.ylabel("Fraction of Positives")
     plt.title("Calibration Curve")
     plt.legend()
+    plt.tight_layout()
     save_path = RESULTS_DIR / "calibration_curves" / f"calibration_curve_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
     plt.savefig(str(save_path), dpi=FIGURE_DPI)
@@ -240,15 +271,31 @@ Positive Likelihood Ratio: {positive_likelihood_ratio:.2f}\n\
 Negative Likelihood Ratio: {negative_likelihood_ratio:.2f}\
 "
 
-    # Create the confusion matrix display with the text report
+    # Create the confusion matrix display with the text report beside it rather
+    # than beneath it. Hanging the metrics off the bottom of the axes with
+    # figtext and then saving under bbox_inches='tight' grew the canvas
+    # downwards, which is what made this the tallest panel in the manuscript
+    # (a taller-than-wide raster that could not share a page with its
+    # companion panel). Side by side, the panel keeps PANEL_FIGSIZE.
+    fig, (matrix_ax, metrics_ax) = plt.subplots(
+        nrows=1, ncols=2,
+        figsize=PANEL_FIGSIZE,
+        gridspec_kw={"width_ratios": [2.0, 1.0]},
+    )
     display = sklearn.metrics.ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=['Non-TRD', 'TRD'])
-    display.plot(cmap='Blues')
-    plt.figtext(x=0.5, y=-0.25, ha='center', s=metrics)
-    plt.title(f'Threshold: {threshold}')
+    display.plot(cmap='Blues', ax=matrix_ax, colorbar=False)
+    fig.colorbar(display.im_, ax=matrix_ax)
+    metrics_ax.axis('off')
+    metrics_ax.text(0.0, 0.5, metrics, ha='left', va='center', transform=metrics_ax.transAxes)
+    # The threshold is a bootstrapped Youden-J cut point, not an exact
+    # quantity; printing its full float repr put ~16 significant figures in
+    # the title and disagreed with how the manuscript quotes it.
+    matrix_ax.set_title(f'Threshold: {threshold:.3f}')
+    fig.tight_layout()
     save_path = RESULTS_DIR / "confusion_matrices" / f"confusion_matrix_{mode}.png"
     os.makedirs(save_path.parent, exist_ok=True)
-    plt.savefig(save_path, bbox_inches='tight', dpi=FIGURE_DPI)
-    plt.close()
+    fig.savefig(save_path, dpi=FIGURE_DPI)
+    plt.close(fig)
     
 def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: np.ndarray, ablated_scores: dict[str, np.ndarray], ablated_names: dict[str, str]) -> dict[str, tuple[float, float]]:
     """For the given classifier, display its base and ablated roc curves, as well as differences between the base and each ablation
@@ -267,7 +314,13 @@ def display_ablated_roc_deltas(classifier_name: str, labels: np.ndarray, probs: 
     bands = {}
     base_fp, base_tp, _ = sklearn.metrics.roc_curve(labels, probs)
     base_roc_score = sklearn.metrics.roc_auc_score(labels, probs)
-    fig, axes = plt.subplots(nrows=1, ncols=5, figsize=(25,5))
+    # One panel per ablation spec. This was fixed at five, which is how many
+    # specs the slate happened to hold; a sixth spec indexed past the end of
+    # `axes`. It is derived from the slate now, and `squeeze=False` keeps the
+    # indexing below valid even for a single-spec slate.
+    n_specs = len(ablated_scores)
+    fig, axes = plt.subplots(nrows=1, ncols=n_specs, figsize=(5 * n_specs, 5), squeeze=False)
+    axes = axes[0]
     for i, (spec, abl_probs) in enumerate(ablated_scores.items()):
         rng = np.random.default_rng(seed=[i, int(os.environ['SEED'])])
         sample_indices = rng.integers(low=0, high=labels.shape[0], size=(N_BOOTSTRAP, labels.shape[0]))

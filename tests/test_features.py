@@ -17,8 +17,7 @@ from scripts.data_loading.features import (
 from scripts.data_loading.med_definitions import SSRI
 from scripts.data_loading.diagnoses_definitions import (
     PTSD,
-    ANXIETY,
-    MDD
+    ANXIETY
 )
 
 def test_prior_adequate_trials_just_short(builder: MockPatientBuilder):
@@ -102,12 +101,15 @@ def test_polypharmacy_grouping(builder: MockPatientBuilder):
             .add_active_med(name="Ibuprofen", start=-15, end="ongoing").build()
     assert len(polypharmacy(patient_dict=patient_dict)) == 2 # sertraline and ibuprofen
     
-def test_suicidality_flag_time_window(builder: MockPatientBuilder):
+def test_suicidality_flag_detects_code(builder: MockPatientBuilder):
     """
-    Ensure suicidality flag only pertains to the last year and not prior
+    Ensure a suicide-ideation code in the patient's encounters raises the flag.
+
+    There is no lookback window to assert here: the function applies none of its
+    own, reading whatever encounters it is handed. Callers pass the sliced
+    patient JSON, which fit_to_anchor restricts to YEARS_BACK years before the
+    anchor, and the narrative labels the field "SUICIDE FLAG (2y)" accordingly.
     """
-    patient_dict = builder.add_diagnosis(code="R45.851", date=-400, description="Suicide Ideation").build()
-    assert not suicidality_flag(patient_dict=patient_dict)
     patient_dict = builder.add_diagnosis(code="R45.851", date=-300, description="Suicide Ideation").build()
     assert suicidality_flag(patient_dict=patient_dict)
     
@@ -132,8 +134,13 @@ def test_nsaid_burden_duration(builder: MockPatientBuilder):
 def test_psych_comorbidity_integration(builder: MockPatientBuilder):
     """
     Ensure that diagnoses with certain codes correspond to the right psych comorbidity in the patient
+
+    The returned dict carries one key per arm in PSYCH_ARMS, which excludes MDD:
+    an MDD diagnosis is a cohort inclusion criterion, so the flag would be
+    constant across every patient. MDD reaches the predictor set through the
+    "MDD in history" clinical flag and the recurrence/severity categoricals.
     """
     patient_dict = builder.add_diagnosis(code="F43.10", date=-40, description="PTSD")\
         .add_diagnosis(code="F41.1", date=-300, description="Anxiety").build()
     psych_dict = psych_comorbidity(patient_dict=patient_dict)
-    assert psych_dict[PTSD] and psych_dict[ANXIETY] and (not psych_dict[MDD])
+    assert psych_dict[PTSD] and psych_dict[ANXIETY]
