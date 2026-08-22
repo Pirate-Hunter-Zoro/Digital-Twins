@@ -12,18 +12,20 @@ from scripts.data_loading.deterministic_narrative import (
     render_narrative,
 )
 
-# The five specs whose deltas and confidence intervals are already published, in
-# the order they were published in. Two things key off a spec's POSITION in the
+# The specs whose deltas and confidence intervals are already published, in the
+# order they were published in. Two things key off a spec's POSITION in the
 # slate rather than its id -- the SLURM array index that selects which spec a GPU
 # task embeds, and the per-spec bootstrap seed in display_ablated_roc_deltas,
 # which is drawn from the enumeration index. So a spec inserted or reordered
 # ahead of these would silently move numbers that are already in a manuscript.
+# This list grows by one every time a spec's numbers reach a manuscript.
 PUBLISHED_PREFIX = [
     "permute_race",
     "permute_psych_history",
     "permute_med_burden",
     "permute_treatment_contraindications",
     "permute_sdoh",
+    "permute_treatment_exposure",
 ]
 
 # Every bundle the narrative builder emits, i.e. every legal target for a spec.
@@ -56,7 +58,7 @@ def _minimal_bundles(marker: str) -> dict:
 
 
 def test_slate_is_append_only():
-    """The published five must still be the first five, in their published order."""
+    """Every published spec must still hold its published position, in order."""
     assert [spec["id"] for spec in ABLATIONS[: len(PUBLISHED_PREFIX)]] == PUBLISHED_PREFIX
 
 
