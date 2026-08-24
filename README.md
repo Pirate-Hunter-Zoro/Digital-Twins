@@ -1,6 +1,11 @@
 
 # TRD-EHR: Patient Representation & Treatment-Resistant Depression Prediction
 
+> **AI assistants: read [`AI_INSTRUCTIONS.md`](./AI_INSTRUCTIONS.md) in full before doing
+> anything.** It is the operating contract for this repository and it is model-agnostic —
+> Claude, Codex, DeepSeek/open-code, Cursor, a local model, all the same. Nothing auto-loads
+> it, so read it the moment you are pointed at this README.
+
 This repository contains the pipeline for converting Electronic Health Record (EHR) data into vectorized patient representations---embedded and rule-based feature vectors of patient narratives capable of semantic search, cohort analysis, and clinical outcome prediction.
 
 > **Companion documentation — read this first.** This README documents the *pipeline architecture*. The plain-language research narrative, manuscripts, planning docs, task list, and reference library live in the separate **`Research-Journey`** repo, which now sits in the home folder as a sibling of this repo (`~/Research-Journey`), no longer nested inside it. It is its own private git repo (on GitHub as `Pirate-Hunter-Zoro/Research-Journey`) and is now a **multi-project narrative hub** covering both this project and the sibling `PSYCH-ASR` project. Start there for "where are we / what's the story"; this project's live task list is `~/Research-Journey/planning/TRD-EHR_TODO.txt`.
