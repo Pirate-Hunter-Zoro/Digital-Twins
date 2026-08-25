@@ -15,3 +15,6 @@ figures/
 node_modules/
 writeup/
 slurm-*.out
+
+# live tutoring board (Tutor-Board) — scratch space, never tracked
+live/
