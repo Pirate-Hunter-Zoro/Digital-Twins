@@ -1,5 +1,8 @@
+import os
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
 from dataclasses import dataclass
 from sklearn.linear_model import (
     LogisticRegression,
@@ -14,9 +17,10 @@ from scripts.shared.utils import (
 from scripts.pipeline.predictions.create_train_test_split import create_train_test_split
 from scripts.pipeline.predictions.classical_ml import make_classifier
 from scripts.pipeline.predictions.trd_prediction_computation import compute_metrics
+from scripts.shared.plots import N_BOOTSTRAP
 
-OVERLAP_FLOOR = 0.1
-OVERLAP_CEILING = 0.9
+PROB_FLOOR = 0.1
+PROB_CEILING = 0.9
 
 @dataclass
 class EligiblePopulations:
@@ -212,7 +216,7 @@ def attach_propensity(population: EligiblePopulations, risk_frame: pd.DataFrame)
     classifier_pipeline.fit(train_matrix, arm_target)
     arm_probs = classifier_pipeline.predict_proba(population.eligible_test_matrix)[:, 1]
     risk_frame['propensity'] = arm_probs
-    risk_frame['in_overlap'] = risk_frame['propensity'].between(OVERLAP_FLOOR, OVERLAP_CEILING, inclusive='neither')
+    risk_frame['in_prob_interval'] = risk_frame['propensity'].between(PROB_FLOOR, PROB_CEILING, inclusive='neither')
     return risk_frame
 
 def estimate_effect(risk_df: pd.DataFrame) -> dict:
@@ -225,4 +229,117 @@ def estimate_effect(risk_df: pd.DataFrame) -> dict:
         dict: Report of how many patients fell out of each arm due to unreasonable propensity score, average effect estimate over patients falling in specified propensity range AND weighted average effect estimate over all patients
         (NOTE - effect is comparison risk score minus reference risk score, so positive means the first-named arm raises P(TRD))
     """
-    pass
+    # Per-patient contrast. Comparison minus reference, so a positive value means
+    # the first-named (comparison) arm raises P(TRD).
+    per_patient_effect = (risk_df['risk_comp'] - risk_df['risk_ref']).to_numpy()
+    # Probability of each patient being in the comparison arm.
+    propensity = risk_df['propensity'].to_numpy()
+    # Flag for whether that probability landed inside the band; its negation is the trimmed set.
+    in_prob_interval = risk_df['in_prob_interval'].to_numpy()
+    trimmed = ~in_prob_interval
+    is_comparison = (risk_df['is_comparison'] == 1).to_numpy()
+    is_reference = ~is_comparison
+
+    # Trim report, broken out by arm: trimming heavily from one arm and barely from
+    # the other localizes where overlap fails, which a pooled count hides.
+    ref_arm_n = int(is_reference.sum())
+    comp_arm_n = int(is_comparison.sum())
+    ref_trimmed_count = int((is_reference & trimmed).sum())
+    comp_trimmed_count = int((is_comparison & trimmed).sum())
+    
+    # Max weighting occurs at equal treatment probability
+    propensity_weights = propensity * (1 - propensity)
+    ate_trimmed = float(per_patient_effect[in_prob_interval].mean())
+    ate_weighted = float(np.average(per_patient_effect, weights=propensity_weights))
+    n_rows = len(risk_df)
+    generator = np.random.default_rng(seed=int(os.environ['SEED']))
+
+    trim_report = {
+        "n_eligible": int(len(risk_df)),
+        "reference_arm_n": ref_arm_n,
+        "comparison_arm_n": comp_arm_n,
+        "reference_trimmed_count": ref_trimmed_count,
+        "comparison_trimmed_count": comp_trimmed_count,
+        "reference_trimmed_share": float(ref_trimmed_count / ref_arm_n) if ref_arm_n else float("nan"),
+        "comparison_trimmed_share": float(comp_trimmed_count / comp_arm_n) if comp_arm_n else float("nan"),
+        # Observed extremes over the WHOLE column, in-band and out: how far the
+        # propensity model actually reached, not where the band was drawn.
+        "propensity_min": float(propensity.min()),
+        "propensity_max": float(propensity.max()),
+    }
+
+    # One patient-resampling bootstrap serving BOTH estimates. Sharing the draw is
+    # deliberate: the two then differ only by the averaging rule, not by sampling
+    # noise, which is what makes "do hard and soft agree" a meaningful question.
+    sample_indices = generator.integers(low=0, high=n_rows, size=(N_BOOTSTRAP, n_rows))
+    boot_trimmed = np.full(shape=(N_BOOTSTRAP,), fill_value=np.nan)
+    boot_weighted = np.full(shape=(N_BOOTSTRAP,), fill_value=np.nan)
+    for i in range(N_BOOTSTRAP):
+        draw = sample_indices[i]
+        drawn_effect = per_patient_effect[draw]
+        drawn_in_band = in_prob_interval[draw]
+        drawn_weights = propensity_weights[draw]
+        if drawn_in_band.any():
+            # We did pull some samples which had probability within the interval
+            boot_trimmed[i] = drawn_effect[drawn_in_band].mean()
+        if drawn_weights.sum() > 0:
+            # We did pull some samples with propensity scores greater than zero
+            boot_weighted[i] = np.average(drawn_effect, weights=drawn_weights)
+
+    trimmed_ci_low, trimmed_ci_high = np.nanpercentile(boot_trimmed, [2.5, 97.5])
+    weighted_ci_low, weighted_ci_high = np.nanpercentile(boot_weighted, [2.5, 97.5])
+
+    return {
+        **trim_report,
+        # HEADLINE: hard-trimmed average. Estimand is nameable in a sentence --
+        # "patients whose propensity fell inside the band" -- and the band matches
+        # the causal package's, keeping the two triangulating estimators comparable.
+        "ate_trimmed": ate_trimmed,
+        "ate_trimmed_ci_low": float(trimmed_ci_low),
+        "ate_trimmed_ci_high": float(trimmed_ci_high),
+        # SENSITIVITY: same per-patient contrasts re-averaged under overlap weights
+        # (Li, Morgan & Zaslavsky 2018). Smooth analogue, no cliff at the floor.
+        "ate_overlap_weighted": ate_weighted,
+        "ate_overlap_weighted_ci_low": float(weighted_ci_low),
+        "ate_overlap_weighted_ci_high": float(weighted_ci_high),
+    }
+
+def plot_effect_distribution(spec_dict: dict, risk_df: pd.DataFrame, save_dir: Path) -> None:
+    """Render the marginal distribution of the per-patient treatment-effect contrasts for one contrast.
+
+    The T-learner counterpart to causal/core.py's plot_cate_distribution, and deliberately drawn the
+    same way so the two triangulating estimators can be read side by side: same 1st/99th percentile
+    x-clip, same dashed zero line, same dashed mean line with the value called out in a box on the
+    axes. Restricted to the patients INSIDE the overlap band, because that trimmed subset is the
+    headline estimand -- drawing the trimmed patients too would show a spread no reported number
+    describes. Purely a side-effect plot, no returned metric.
+
+    Args:
+        spec_dict (dict): The pairwise contrast spec (its 'key', 'display_name').
+        risk_df (pd.DataFrame): Risk frame carrying risk_ref, risk_comp and in_prob_interval.
+        save_dir (Path): Directory to write the figure into.
+    """
+    per_patient_effect = (risk_df['risk_comp'] - risk_df['risk_ref']).to_numpy()
+    in_band = risk_df['in_prob_interval'].to_numpy()
+    effects = per_patient_effect[in_band]
+    mean_effect = float(effects.mean())
+
+    fig, ax = plt.subplots()
+    ax.hist(effects, bins=50, range=tuple(np.percentile(effects, [1, 99])))
+    ax.axvline(x=0, color='green', linestyle='--', label="No effect")
+    ax.axvline(x=mean_effect, color='red', linestyle='--', label=f"Average effect ({mean_effect:.4f})")
+    # Print the mean directly on the plot at the red line, so the ATE is readable off the
+    # figure itself and not only from the legend (and unambiguous when the mean sits close
+    # to the zero line). Placed at mid-height to clear the upper-right legend.
+    y_top = ax.get_ylim()[1]
+    ax.text(
+        mean_effect, y_top * 0.55, f" ATE = {mean_effect:.4f}",
+        color='red', ha='left', va='center', fontweight='bold', fontsize=10,
+        bbox=dict(boxstyle='round,pad=0.25', facecolor='white', edgecolor='red', alpha=0.85),
+    )
+    ax.set_xlabel("Effect on P(TRD): comparison arm minus reference arm")
+    ax.set_ylabel("Number of patients")
+    ax.set_title(spec_dict['display_name'])
+    ax.legend(loc='upper right')
+    fig.savefig(save_dir / "effect_histogram.png")
+    plt.close(fig)
