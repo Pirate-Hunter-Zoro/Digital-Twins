@@ -17,10 +17,16 @@ Artifacts written:
   per_patient_risks.csv                      the full-data risk frame
   effect_histogram.png                       per-patient effects, one number per patient
   bootstrap_effect_histogram_<scheme>.png    per-patient effects pooled over every draw
+  bootstrap_draws.csv                        the per-draw averages the intervals are cut from
+  ate_sampling_distribution_<estimand>_<scheme>.png
+                                             sampling distribution of the AVERAGE effect,
+                                             with the reported 95% CI shaded
 """
 
 import os
 import json
+
+import pandas as pd
 
 from scripts.shared.treatment_registry import TREATMENT_REGISTRY
 from scripts.pipeline.counterfactual.core import (
@@ -33,6 +39,7 @@ from scripts.pipeline.counterfactual.core import (
     bootstrap_effect,
     plot_effect_distribution,
     plot_bootstrap_effect_distribution,
+    plot_ate_sampling_distribution,
     contrast_output_dir,
 )
 
@@ -53,8 +60,12 @@ grades = grade_arm_models(risk_df)
 
 # Scheme A: model-estimation uncertainty only. Scheme B: that plus the sampling variability
 # of the population averaged over. B's band should contain A's.
-estimation_cis, estimation_effects = bootstrap_effect(population, resample_test=False, scheme=SCHEME_ESTIMATION)
-total_cis, total_effects = bootstrap_effect(population, resample_test=True, scheme=SCHEME_TOTAL)
+estimation_cis, estimation_effects, estimation_draws = bootstrap_effect(
+    population, resample_test=False, scheme=SCHEME_ESTIMATION
+)
+total_cis, total_effects, total_draws = bootstrap_effect(
+    population, resample_test=True, scheme=SCHEME_TOTAL
+)
 
 results = {
     'key': spec_dict['key'],
@@ -76,3 +87,32 @@ for scheme, pooled in ((SCHEME_ESTIMATION, estimation_effects), (SCHEME_TOTAL, t
     plot_bootstrap_effect_distribution(
         spec_dict, pooled, point_estimates['ate_trimmed'], scheme, save_dir
     )
+
+# The per-draw averages: the object the confidence interval is percentiles of. Persisted as
+# well as plotted, so any later figure or re-cut of the interval costs a read rather than a
+# 2 x N_BOOTSTRAP refit. One column per (field, scheme); columns may differ in length when a
+# scheme loses draws to degenerate replicates, which is why this is built from a dict of
+# Series rather than a 2-D array.
+draw_columns = {}
+for scheme, draws in ((SCHEME_ESTIMATION, estimation_draws), (SCHEME_TOTAL, total_draws)):
+    for field, values in draws.items():
+        draw_columns[f"{field}_{scheme}"] = pd.Series(values)
+pd.DataFrame(draw_columns).to_csv(save_dir / "bootstrap_draws.csv", index_label="draw")
+
+# Four sampling-distribution figures per contrast: the headline hard-trimmed estimand and
+# the overlap-weighted sensitivity one, each under both bootstrap schemes.
+for scheme, cis, draws in (
+    (SCHEME_ESTIMATION, estimation_cis, estimation_draws),
+    (SCHEME_TOTAL, total_cis, total_draws),
+):
+    for estimand in ('ate_trimmed', 'ate_overlap_weighted'):
+        plot_ate_sampling_distribution(
+            spec_dict,
+            draws[estimand],
+            point_estimates[estimand],
+            cis[f"{estimand}_ci_low_{scheme}"],
+            cis[f"{estimand}_ci_high_{scheme}"],
+            scheme,
+            estimand,
+            save_dir,
+        )

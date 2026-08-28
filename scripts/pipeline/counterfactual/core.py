@@ -526,10 +526,16 @@ def bootstrap_effect(population: EligiblePopulations, resample_test: bool, schem
         n_jobs (int, optional): Worker count. Defaults to SLURM_CPUS_PER_TASK if set, else 1.
 
     Returns:
-        tuple: (dict of percentile-interval keys suffixed with the scheme name, plus
-            'n_bootstrap_failures_<scheme>'; and the 1-D array of every in-band per-patient
-            contrast from every surviving draw, pooled -- which is what the bootstrap
-            effect-distribution figure is drawn from).
+        tuple: three elements.
+            [0] dict of percentile-interval keys suffixed with the scheme name, plus
+                'n_bootstrap_failures_<scheme>'.
+            [1] the 1-D array of every in-band per-patient contrast from every surviving
+                draw, pooled -- what plot_bootstrap_effect_distribution is drawn from.
+            [2] dict of field name -> 1-D array of that field's value ONE PER SURVIVING
+                DRAW, for 'ate_trimmed', 'ate_overlap_weighted' and the two trimmed
+                shares. The ATE entries are the sampling distribution of the average and
+                are what plot_ate_sampling_distribution is drawn from. Length is
+                N_BOOTSTRAP minus the failure count, not N_BOOTSTRAP.
     """
     if n_jobs is None:
         n_jobs = int(os.environ.get('SLURM_CPUS_PER_TASK', 1))
@@ -549,8 +555,20 @@ def bootstrap_effect(population: EligiblePopulations, resample_test: bool, schem
     survived = [draw for draw in draws if draw is not None]
     n_failures = len(draws) - len(survived)
 
+    # Every bootstrapped field's per-draw values, kept as arrays rather than collapsed
+    # straight to percentiles. The intervals below are percentiles OF THESE, and the arrays
+    # are handed back so the SAMPLING DISTRIBUTION OF THE AVERAGE can be plotted without
+    # paying for the bootstrap a second time. This is the object the CI is actually cut
+    # from -- one number per draw -- and it is not the pooled per-patient array, which is
+    # wider by roughly the square root of the sample size.
+    draw_values = {
+        field: np.array([draw[field] for draw in survived], dtype=float)
+        for field in ('ate_trimmed', 'ate_overlap_weighted',
+                      'reference_trimmed_share', 'comparison_trimmed_share')
+    }
+
     def interval(field: str) -> tuple[float, float]:
-        values = np.array([draw[field] for draw in survived], dtype=float)
+        values = draw_values[field]
         if values.size == 0 or np.isnan(values).all():
             return float("nan"), float("nan")
         low, high = np.nanpercentile(values, [2.5, 97.5])
@@ -580,7 +598,7 @@ def bootstrap_effect(population: EligiblePopulations, resample_test: bool, schem
         f"comparison_trimmed_share_ci_low_{scheme}": comp_share_low,
         f"comparison_trimmed_share_ci_high_{scheme}": comp_share_high,
         f"n_bootstrap_failures_{scheme}": int(n_failures),
-    }, pooled_effects
+    }, pooled_effects, draw_values
 
 
 def plot_effect_distribution(spec_dict: dict, risk_df: pd.DataFrame, save_dir: Path) -> None:
@@ -669,4 +687,83 @@ def plot_bootstrap_effect_distribution(spec_dict: dict, pooled_effects: np.ndarr
     ax.set_title(f"{spec_dict['display_name']} -- pooled over {N_BOOTSTRAP} bootstrap draws ({scheme})")
     ax.legend(loc='upper right')
     fig.savefig(save_dir / f"bootstrap_effect_histogram_{scheme}.png")
+    plt.close(fig)
+
+def plot_ate_sampling_distribution(
+    spec_dict: dict,
+    ate_draws: np.ndarray,
+    ate_point: float,
+    ci_low: float,
+    ci_high: float,
+    scheme: str,
+    estimand: str,
+    save_dir: Path,
+) -> None:
+    """Render the SAMPLING DISTRIBUTION OF THE AVERAGE effect -- one value per bootstrap draw.
+
+    The figure the other two histograms are not. plot_effect_distribution shows one number
+    per patient from a single fit; plot_bootstrap_effect_distribution pools patients across
+    draws, so its width mixes between-patient heterogeneity with estimation noise and is
+    several times the width of the interval. THIS one plots the estimator itself: each bar
+    counts bootstrap draws whose average effect landed in that bin, so the shaded 2.5/97.5
+    span is literally the reported confidence interval rather than a lookalike.
+
+    Read it for shape as well as width. A badly skewed or multi-modal sampling distribution
+    means the percentile interval is describing something a symmetric +/- summary would
+    misreport, which is exactly the thing that never shows up in a JSON key.
+
+    Args:
+        spec_dict (dict): The pairwise contrast spec (its 'key', 'display_name').
+        ate_draws (np.ndarray): Third element of bootstrap_effect's return, indexed by the
+            estimand -- one average per surviving draw. NaNs (degenerate draws that still
+            fit) are dropped here exactly as np.nanpercentile dropped them when the
+            interval was computed, so the figure and the interval see the same values.
+        ate_point (float): The full-data point estimate for this estimand.
+        ci_low (float): Lower reported bound, for the shaded span.
+        ci_high (float): Upper reported bound.
+        scheme (str): SCHEME_ESTIMATION or SCHEME_TOTAL; names the file and titles the plot.
+        estimand (str): 'ate_trimmed' or 'ate_overlap_weighted'; names the file too, so the
+            headline and sensitivity versions cannot overwrite each other.
+        save_dir (Path): Directory to write the figure into.
+    """
+    values = ate_draws[~np.isnan(ate_draws)]
+    if values.size == 0:
+        # Every draw was degenerate. A blank axes would be worse than no file.
+        return
+
+    fig, ax = plt.subplots()
+    ax.hist(values, bins=40, color='steelblue', edgecolor='white', linewidth=0.4)
+    ax.axvspan(ci_low, ci_high, color='orange', alpha=0.18,
+               label=f"95% CI [{ci_low:.4f}, {ci_high:.4f}]")
+    ax.axvline(x=ci_low, color='darkorange', linestyle=':', linewidth=1.5)
+    ax.axvline(x=ci_high, color='darkorange', linestyle=':', linewidth=1.5)
+    ax.axvline(x=0, color='green', linestyle='--', label="No effect")
+    ax.axvline(x=ate_point, color='red', linestyle='--',
+               label=f"Point estimate ({ate_point:.4f})")
+
+    y_top = ax.get_ylim()[1]
+    ax.text(
+        ate_point, y_top * 0.55, f" ATE = {ate_point:.4f}",
+        color='red', ha='left', va='center', fontweight='bold', fontsize=10,
+        bbox=dict(boxstyle='round,pad=0.25', facecolor='white', edgecolor='red', alpha=0.85),
+    )
+    # Whether the band clears zero is the single thing a reader looks for; say it in words
+    # on the axes rather than making them squint at the green line.
+    crosses = ci_low <= 0.0 <= ci_high
+    ax.text(
+        0.02, 0.98,
+        f"n = {values.size} draws\n{'CI SPANS zero' if crosses else 'CI EXCLUDES zero'}",
+        transform=ax.transAxes, ha='left', va='top', fontsize=9,
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='grey', alpha=0.85),
+    )
+
+    scheme_blurb = ("train rows resampled, test frame fixed" if scheme == SCHEME_ESTIMATION
+                    else "train AND test rows resampled")
+    ax.set_xlabel(f"Average effect on P(TRD) per bootstrap draw ({estimand})")
+    ax.set_ylabel("Bootstrap draws")
+    ax.set_title(f"{spec_dict['display_name']}\nsampling distribution of the ATE -- {scheme} ({scheme_blurb})",
+                 fontsize=10)
+    ax.legend(loc='upper right', fontsize=8)
+    fig.tight_layout()
+    fig.savefig(save_dir / f"ate_sampling_distribution_{estimand}_{scheme}.png", dpi=150)
     plt.close(fig)
