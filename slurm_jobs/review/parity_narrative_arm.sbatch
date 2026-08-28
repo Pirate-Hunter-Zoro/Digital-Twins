@@ -84,18 +84,21 @@ python -m scripts.pipeline.review.parity.render_narratives "${ARM}"
 echo "=== Stage 2/4: embed narratives ==="
 python -m scripts.pipeline.embeddings.forge_embeddings
 
-echo "=== Stage 3/4: neighbours (cosine only) ==="
+echo "=== Stage 3/4: fit classifiers and compare ==="
+# Deliberately BEFORE the neighbour stage. This is the half the parity decision
+# rests on; the neighbour stage is the cheaper corroboration. With 'set -e' a
+# failure in either kills the job, so the one that matters runs first.
+# RESULTS_DIR has to point back at the PUBLISHED results for this stage, since
+# that is where the published test_predictions parquet lives.
+RESULTS_DIR="${ARTIFACTS_DIR}/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}" \
+  python -m scripts.pipeline.review.parity.run_embedded_arm "${ARM}"
+
+echo "=== Stage 4/4: neighbours (cosine only) ==="
 # The neighbour constructor shards over a SLURM array; this is a single-process
 # run, so it is told it is task 0 of 1.
 SLURM_ARRAY_TASK_ID=0 SLURM_ARRAY_TASK_COUNT=1 \
   python -m scripts.pipeline.predictions.run_neighborhood_constructor
 python -m scripts.pipeline.predictions.analyze_trd_prediction
-
-echo "=== Stage 4/4: fit classifiers and compare ==="
-# RESULTS_DIR has to point back at the PUBLISHED results for this stage, since
-# that is where the published test_predictions parquet lives.
-RESULTS_DIR="${ARTIFACTS_DIR}/${EMBEDDER_MODEL_NAME}/${VLLM_MODEL_NAME}" \
-  python -m scripts.pipeline.review.parity.run_embedded_arm "${ARM}"
 
 LOCAL_RESULTS_DIR="results/review/parity"
 mkdir -p "${LOCAL_RESULTS_DIR}"
