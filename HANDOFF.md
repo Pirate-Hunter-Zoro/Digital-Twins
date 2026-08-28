@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated 2026-08-27, 20:40.
+Last updated 2026-08-27, 20:40 (results appended 20:39).
 
 **This repo is a project, not a course.** The agenda is the `<<< RESUME HERE >>>`
 marker in `~/Research-Journey/planning/TRD-EHR_TODO.txt`, never the README's
@@ -34,9 +34,40 @@ three minutes with `LokyBackend` across 24 workers and nothing on stderr but
 sklearn's `unknown categories` warning (expected: a resampled training draw can
 miss a level).
 
+## Job 2066883 finished, and the refit is real
+
+All three contrasts completed by 20:38, zero bootstrap failures in either scheme,
+no tracebacks in any stderr. Point estimates are unchanged from the dry run, as a
+pure refactor requires. The intervals are not:
+
+| contrast | ATE (trimmed) | old CI width | new CI width | now |
+|---|---|---|---|---|
+| `snri_vs_ssri` | +0.0337 | ~0.004 | 0.0243 | excludes zero |
+| `bupropion_vs_ssri` | +0.0407 | ~0.004 | 0.0283 | excludes zero |
+| `bupropion_vs_snri` | +0.0162 | ~0.004 | 0.0359 | **crosses zero** |
+
+Six to nine times wider, which is the model-estimation term arriving. The
+`bupropion_vs_snri` effect does not survive it — `[-0.0030, +0.0329]` trimmed,
+`[-0.0045, +0.0308]` overlap-weighted. That is the design working, not failing:
+the old ±0.002 band would have published it.
+
+**The two schemes barely differ** — `estimation` 0.0359 against `total` 0.0364 on
+the widest contrast. Test-set sampling variability is a rounding error next to
+estimation uncertainty here, which is worth a sentence in the paper: it says the
+choice between the schemes does not change any conclusion.
+
+Every sign is still positive under the comparison-arm-first convention, so the
+confounding-by-indication reading in the task list stands unchanged.
+
 ## First thing tomorrow
 
-Check `2066883` before anything else:
+Read the histograms before anything else —
+`bootstrap_effect_histogram_{estimation,total}.png` per contrast under
+`$ARTIFACTS_DIR/counterfactual_pipeline/<key>/` — and then start the
+falsification battery, which is what the `<<< RESUME HERE 2026-08-27 >>>` marker
+now sits on. The numbers above are not reportable without it.
+
+To re-check the run itself:
 
 ```
 sacct -j 2066883 --format=JobID,State,Elapsed,MaxRSS
