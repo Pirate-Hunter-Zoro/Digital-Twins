@@ -282,7 +282,9 @@ numbers, so a run that could overwrite one would make the comparison unfalsifiab
   cohort table row for row. Reads the frozen split from `create_train_test_split`, refits
   nothing, and keeps the vital-sign columns (unlike `load_feature_matrix`) because the
   question is whether the two halves of the cohort look alike, not what the classifiers
-  were fed. Runs in-process on CPU in under a minute; no sbatch.
+  were fed. Driven by `slurm_jobs/review/holdout_representativeness.sbatch` — it is a
+  minutes-long job that could run in-process, but the mirror into `results/` is part of
+  the analysis and an artifact copied by hand is one nobody can reproduce.
 * **`judge_prompt/`**: `core.py` plus `run_comparison.py`. Draws a seed-reproducible
   uniform sample of already-cached pairs from `judgements.db`, re-judges them under the
   phenotype-free rubric with one vLLM instance, and reports the agreement between cached
@@ -306,18 +308,38 @@ numbers, so a run that could overwrite one would make the comparison unfalsifiab
   patients. `render_narratives.py` deliberately does not reuse
   `narratives/forge_narratives.py`: that driver also writes the six ablated narratives per
   patient, which are out of scope here.
-* **`subgroups/`**: `core.py` plus `run_subgroups.py`. Partitions the persisted
-  per-patient held-out probabilities (`test_predictions_{EMBEDDED,FEATURE}.parquet`) by
-  recorded sex and race and recomputes discrimination and calibration inside each group.
-  **Nothing is refit**, which is the design and not an economy: the question is how the
-  published models behave on subpopulations of the patients they were already scored on.
-  Within-group intervals are bootstraps over that group's own patients; between-group
-  intervals are *unpaired* bootstraps, because the groups are disjoint patient sets and
-  the paired machinery used elsewhere does not apply. Calibration slope is computed as the
-  coefficient of a logistic regression of the outcome on the logit of predicted risk
-  rather than through `compute_metrics`, whose bin-mean fit describes the bin grid more
-  than the model at a few thousand rows. Groups whose smaller class holds fewer than
-  `MIN_EVENTS` (20) are emitted as not estimable rather than as a number. CPU, seconds.
+* **`subgroups/`**: `core.py` plus `run_subgroups.py`, driven by
+  `slurm_jobs/review/subgroup_performance.sbatch`. Partitions the persisted per-patient
+  held-out probabilities (`test_predictions_{EMBEDDED,FEATURE}.parquet`) by stratum and
+  recomputes discrimination and calibration inside each group. **Nothing is refit**, which
+  is the design and not an economy: the question is how the published models behave on
+  subpopulations of the patients they were already scored on.
+  * **`STRATUM_FAMILIES`** is the registry the whole analysis iterates: six
+    sociodemographic families (sex, race, age band, marital status, smoking status,
+    religion) and two clinical ones (MDD severity, MDD recurrence). Preferred language is
+    deliberately absent — 98.9% of the cohort prefers English, so only one level is
+    estimable and a one-level family admits no contrast. Sex and race keep hand-written
+    masks rather than generated ones, both because their numbers are published and
+    because a majority/minority collapse is not something a level enumeration produces.
+  * **Two contrast forms.** Two-arm families are contrasted directly, arm A minus arm B.
+    Multi-level families are contrasted level against the union of the rest, because a
+    best-versus-worst contrast over five levels selects the comparison on the same data
+    that estimates it and is biased away from zero by construction.
+  * **Unpaired intervals, and Benjamini-Hochberg across the whole set.** Two subgroups are
+    disjoint patient sets, so each is resampled independently and the difference
+    recomputed — the paired machinery used for the representation contrasts does not
+    apply. Each contrast also carries a two-sided bootstrap p-value taken from the same
+    draws, BH-adjusted across every contrast reported, since the multiplicity that matters
+    is the number of comparisons a reader is shown.
+  * **Calibration slope** is the coefficient of a logistic regression of the outcome on
+    the logit of predicted risk, not `compute_metrics`' binned fit, which at a few thousand
+    rows describes the bin grid more than the model.
+  * **Estimability** is a floor of `MIN_EVENTS` (20) on *both* classes; a group under it
+    is emitted as not estimable rather than as a number nobody should read.
+  * CPU only, but not free: roughly 200 contrasts and 250 group-model cells, each drawing
+    `N_BOOTSTRAP` resamples and scoring an AUC per draw. `SUBGROUP_JOBS` fans both loops
+    over cores with joblib; every unit re-seeds from `SEED`, so results do not depend on
+    how the work was split.
 
 ### 6. Models (`scripts/models`)
 
