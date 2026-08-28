@@ -1,0 +1,32 @@
+INDEX PATIENT:
+{narrative_a}
+
+CANDIDATE PATIENT:
+{narrative_b}
+
+Limit "top_similarity_drivers" and "key_mismatches" to at most 5 items each. Return this JSON:
+{
+    "overall_similarity": 0-100,
+    "psych_comorbidity": 0-100,
+    "metabolic_pain": 0-100,
+    "treatment_burden": 0-100,
+    "social_functional": 0-100,
+    "safety": 0-100,
+    "top_similarity_drivers": [
+        "driver 1",
+        "driver 2",
+        "driver 3",
+        "driver 4",
+        "driver 5"
+    ],
+    "key_mismatches": [
+        "mismatch 1",
+        "mismatch 2",
+        "mismatch 3"
+    ]
+}
+
+Scoring rules:
+- Same band (e.g., NSAID 0 vs 1) = small penalty; different band (0 vs >=2) = large penalty.
+- Reward matches on polypharmacy, pain/NSAIDs, anxiety/fatigue most.
+- If a dimension has 'Missing' data, strictly output the value 0 for that score.

@@ -28,6 +28,16 @@ from scripts.data_loading.ablation_registry import ABLATIONS
 YEARS_BACK = int(os.environ['YEARS_BACK'])
 SEED = int(os.environ['SEED'])
 
+# Representation parity. pre_anchor_history_days is a feature-vector column that the
+# narrative never rendered, which is one half of the field mismatch between the two
+# representations (the other half being the vitals, the sexual-orientation field and the
+# anchor date, which the narrative renders and the feature matrix does not). Rendering it
+# changes the narrative text, and therefore every embedding, neighbour set and judgement
+# downstream of it, so it is OFF by default: the published narratives on disk must keep
+# reproducing byte for byte. The parity analysis turns it on and renders into its own
+# directory.
+INCLUDE_HISTORY_LENGTH = int(os.environ.get('NARRATIVE_INCLUDE_HISTORY_LENGTH', '0')) == 1
+
 # For each information section, each patient has a Dict value for that information section
 _DONOR_POOL: Dict[str, Dict[str, Dict]] = {} # Section -> Patient -> Values
 # For each section, each patient is paired with another patient for swapping
@@ -99,6 +109,7 @@ def extract_fields(sliced_json: Dict) -> Dict[str, Dict]:
     cohort_index_bundle = {
         "condition": condition,
         "anchor_date": sliced_json["anchor_date"],
+        "pre_anchor_history_days": sliced_json["pre_anchor_history_days"],
         "baseline_window_days": -365 * YEARS_BACK,
         "mdd_to_anchor_days": sliced_json["mdd_to_anchor_days"],
         "num_encounters": sliced_json["num_encounters"],
@@ -165,6 +176,15 @@ def extract_fields(sliced_json: Dict) -> Dict[str, Dict]:
 def render_narrative(bundles: Dict[str, Dict]) -> str:
     """Given the bundles of a patient, return the new corresponding narrative
 
+    Every list of flags is emitted in sorted key order. The flag dictionaries are built
+    by iterating PSYCH_ARMS, MEDICAL_ARMS, SAFETY_ARMS and ALL_ARMS, which are Python
+    sets, so their insertion order -- and before this was sorted, the rendered order --
+    varied between processes. The text was therefore not reproducible run to run, which
+    matters because the embeddings, neighbour sets and judgement cache are all keyed to
+    the exact text that was rendered when they were built. Sorting makes a re-render
+    deterministic; it does NOT make it match the narratives already on disk, which were
+    written under an arbitrary order.
+
     Args:
         bundles (Dict[str, Dict]): All patient information
 
@@ -183,10 +203,14 @@ def render_narrative(bundles: Dict[str, Dict]) -> str:
     ]
 
     cohort = bundles["cohort_index"]
+    history_length = ""
+    if INCLUDE_HISTORY_LENGTH:
+        history_length = f"Pre-anchor history: {cohort['pre_anchor_history_days']} days | "
     HEADER = f"### COHORT & INDEX\nCondition: {cohort['condition']} | \
 Index date: {cohort['anchor_date']} | \
 Baseline window: {cohort['baseline_window_days']}...0 days | \
 MDD-to-anchor gap: {cohort['mdd_to_anchor_days']} days | \
+{history_length}\
 Encounters in window: {cohort['num_encounters']} | \
 MDD within window: {get_bool_str(cohort['mdd_within_window'])}\n"
 
@@ -206,18 +230,18 @@ MDD within window: {get_bool_str(cohort['mdd_within_window'])}\n"
     VITALS = f"### PHYSICAL HEALTH\nBMI: {bmi_str} | BP (mean): {bp_str}\n"
 
     psych = bundles["psych_history"]
-    psych_comorbidities = [f"{psych_arm}: {get_bool_str(psych['comorbidities'][psych_arm])}" for psych_arm in psych["comorbidities"].keys()]
+    psych_comorbidities = [f"{psych_arm}: {get_bool_str(psych['comorbidities'][psych_arm])}" for psych_arm in sorted(psych["comorbidities"].keys())]
     substances = ' | '.join([sud_name for sud_name in sorted(list(psych["substances"].keys())) if psych["substances"][sud_name]])
     PSYCH_HISTORY = f"### PSYCH HISTORY\n{' | '.join(psych_comorbidities)}\nSUICIDE FLAG ({YEARS_BACK}y): {get_bool_str(psych['suicide_flag'])}\nSUBSTANCE ABUSE: {substances if len(substances) > 0 else 'None'}\n"
 
     medcom = bundles["medical_comorbidity"]
-    med_comorbidities = [f"{med_arm}: {get_bool_str(medcom['comorbidities'][med_arm])}" for med_arm in medcom["comorbidities"].keys()]
+    med_comorbidities = [f"{med_arm}: {get_bool_str(medcom['comorbidities'][med_arm])}" for med_arm in sorted(medcom["comorbidities"].keys())]
     MED_HISTORY = f"### MEDICAL COMORBIDITY\n{' | '.join(med_comorbidities)}\n"
 
     treat = bundles["treatment_exposure"]
     adequate_trials_count = treat["adequate_trials"]
     hypnotics_burden_set = treat["hypnotics"]
-    TREAT_EXPOSURE = f"### TREATMENT EXPOSURE\nPrior adequate AD trials: {' | '.join([f'{arm}: {adequate_trials_count[arm]}' for arm in adequate_trials_count.keys()]) if len(adequate_trials_count) > 0 else 'Absent'}\n\
+    TREAT_EXPOSURE = f"### TREATMENT EXPOSURE\nPrior adequate AD trials: {' | '.join([f'{arm}: {adequate_trials_count[arm]}' for arm in sorted(adequate_trials_count.keys())]) if len(adequate_trials_count) > 0 else 'Absent'}\n\
 Benzodiazepine days ({YEARS_BACK}y): {treat['benzo_days']}\n\
 Hypnotics: {' | '.join([hypnotic for hypnotic in sorted(hypnotics_burden_set)]) if len(hypnotics_burden_set) > 0 else 'Absent'}\n\
 Augmentation: {get_bool_str(treat['augmentation'])}\n"
@@ -232,7 +256,7 @@ NSAID burden: {len(distinct_nsaid_ingredients)} ({', '.join([ingredient for ingr
     UTILIZATION = f"### UTILIZATION\nPsych inpatient days: {util['psych_inpatient_days']} ({YEARS_BACK}y) | ED psych visits: {util['ed_psych_visits']} ({YEARS_BACK}y)\n"
 
     contraindications = bundles["treatment_contraindications"]
-    SAFETY = "### SAFETY\n"+' | '.join([arm + ": " + get_bool_str(contraindications['comorbidities'][arm]) for arm in contraindications['comorbidities'].keys()]) + '\n'
+    SAFETY = "### SAFETY\n"+' | '.join([arm + ": " + get_bool_str(contraindications['comorbidities'][arm]) for arm in sorted(contraindications['comorbidities'].keys())]) + '\n'
 
     return "\n".join([HEADER, DEMOGRAPHICS, VITALS, PSYCH_HISTORY, MED_HISTORY, TREAT_EXPOSURE, MED_BURDEN, UTILIZATION, SAFETY])
 

@@ -8,6 +8,7 @@ import joblib
 import sqlite3
 import pandas as pd
 from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, FunctionTransformer
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import (
@@ -65,21 +66,37 @@ f"SELECT embedding FROM embeddings WHERE patient_id IN ({placeholders}) ORDER BY
     print(f"Shape of X from source {source.name}: {X.shape}; Shape of y: {y.shape}", flush=True)
     return (X, y)
 
-def make_classifier(model) -> Pipeline:
+def make_classifier(model, impute_numeric: bool = False) -> Pipeline:
     """Return a Pipeline tailored with the given model
 
     Args:
         model (SKLEARN model): Underlying model
+        impute_numeric (bool, optional): Prepend a median imputer to the numeric branch.
+            Needed only when the matrix carries a numeric column with missing values --
+            in practice the vital signs, which load_feature_matrix(include_vitals=True)
+            keeps. The imputer is inside the Pipeline so its median is learnt from the
+            training rows of each grid-search fold rather than from the whole cohort.
+            Defaults to False, which reproduces the published pipeline exactly; neither
+            representation as published carries a numeric NaN, so the flag changes nothing
+            for them either way.
 
     Returns:
         Pipeline: Resulting data pre-processing and machine learning pipeline
     """
+    # The default hands the ColumnTransformer a bare StandardScaler, exactly as the
+    # published pipeline did, so nothing about the published fits changes structurally.
+    numeric_transformer = StandardScaler()
+    if impute_numeric:
+        numeric_transformer = Pipeline(steps=[
+            ("impute", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+        ])
     return Pipeline(steps=[
                     ("preprocess",
                         ColumnTransformer(
                             transformers=[
                                 ("num",
-                                    StandardScaler(),
+                                    numeric_transformer,
                                     make_column_selector(dtype_include="number")
                                 ),
                                 ("cat",

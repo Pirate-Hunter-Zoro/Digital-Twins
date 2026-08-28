@@ -50,6 +50,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 set -a; source "${ENV_FILE}"; set +a
 
+python -m scripts.pipeline.predictions.plot_time_zero_timeline
 python -m scripts.pipeline.predictions.plot_discrimination_forest
 python -m scripts.pipeline.predictions.redraw_feature_importance
 python -m scripts.pipeline.predictions.redraw_manuscript_panels
