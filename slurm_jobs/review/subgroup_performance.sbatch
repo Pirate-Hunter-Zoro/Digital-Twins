@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=subgroup_perf
 #SBATCH --partition=c3
-#SBATCH --time=02:00:00
+#SBATCH --time=03:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
@@ -17,18 +17,27 @@
 # MDD recurrence). Preferred language is absent because 98.9% of the cohort
 # prefers English, leaving one estimable level and therefore no contrast.
 #
-# NOTHING IS REFIT and no GPU is needed. The analysis reads the per-patient
-# held-out probabilities the pipeline already persisted
-# (test_predictions_{EMBEDDED,FEATURE}.parquet) and partitions them. Refitting
-# per subgroup would answer a different question and would break comparability
-# with every published number.
+# THREE ARMS, not two. The embedded and feature-vector classifiers come from
+# test_predictions_{EMBEDDED,FEATURE}.parquet; the neighbour-weighted predictor
+# comes from summary_predictions.csv, whose sixteen retrieval-scheme x
+# weighting-strategy pairs are each scored per group. Only nearest retrieval is
+# CONTRASTED across groups -- whether a deliberately uninformative retrieval
+# scheme is evenly uninformative across subgroups is not a fairness question,
+# and the three negative-control schemes would triple the multiplicity burden on
+# the contrasts that are.
 #
-# The wall is bootstrap, not modelling: roughly 200 between-group contrasts and
-# 250 group-model cells, each drawing N_BOOTSTRAP resamples and scoring an AUC
-# per draw. That is a few hundred thousand roc_auc_score calls, which is why
-# this has cores at all -- SUBGROUP_JOBS fans the two loops over them with
-# joblib. Every unit re-seeds from SEED, so the numbers do not depend on how the
-# work was split; the parallelism buys wall-clock and nothing else.
+# NOTHING IS REFIT and no GPU is needed. Subsetting a per-patient prediction
+# vector by group is arithmetically identical to scoring that model on the
+# group, so the published numbers cannot drift. Refitting per subgroup would
+# answer a different question -- how a model trained only on one group predicts
+# that group -- and would break comparability with everything published.
+#
+# The wall is bootstrap, not modelling: roughly 290 between-group contrasts and
+# 750 group-model cells, each drawing N_BOOTSTRAP resamples and scoring an AUC
+# per draw. That is over a million roc_auc_score calls, which is why this has
+# cores at all -- SUBGROUP_JOBS fans the two loops over them with joblib. Every
+# unit re-seeds from SEED, so the numbers do not depend on how the work was
+# split; the parallelism buys wall-clock and nothing else.
 # =============================================================================
 
 set -e

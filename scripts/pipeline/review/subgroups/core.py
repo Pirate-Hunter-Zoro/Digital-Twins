@@ -47,11 +47,39 @@ load_dotenv()
 
 from scripts.pipeline.review.paths import review_output_dir
 from scripts.shared.plots import N_BOOTSTRAP
-from scripts.shared.utils import VectorSource
+# Arms are named by string rather than by VectorSource, because the KNN arm is not a
+# vector source at all -- it is a predictor over the embedded neighbourhood, and forcing
+# it into that enum would misdescribe it.
 
 ANALYSIS_NAME = "subgroups"
 
 MODELS = ("logistic_regression", "random_forest", "gradient_boosting", "xgboost")
+
+# The three prediction arms this analysis covers, and the per-patient prediction table
+# each one is read from. Nothing is refit in any of them: subsetting a per-patient
+# prediction vector by group is arithmetically identical to scoring that model on the
+# group, so the published numbers cannot drift.
+#
+#   EMBEDDED / FEATURE  the four classifiers, from test_predictions_<arm>.parquet
+#   KNN                 the neighbour-weighted predictor, from summary_predictions.csv,
+#                       whose "models" are retrieval-scheme x weighting-strategy pairs
+ARM_EMBEDDED = "EMBEDDED"
+ARM_FEATURE = "FEATURE"
+ARM_KNN = "KNN"
+CLASSIFIER_ARMS = (ARM_EMBEDDED, ARM_FEATURE)
+
+# Retrieval schemes and weighting strategies as they appear in summary_predictions.csv.
+KNN_SCHEMES = ("NEAREST", "FARTHEST", "RANDOM", "SUBSAMPLE")
+KNN_STRATEGIES = ("UNIFORM", "COSINE", "LLM", "COMBINED")
+KNN_MODELS = tuple(
+    f"{scheme}_{strategy}" for scheme in KNN_SCHEMES for strategy in KNN_STRATEGIES
+)
+# Only the nearest-retrieval arm is contrasted across subgroups. The farthest, random and
+# subsampled schemes exist as negative controls for the retrieval geometry -- asking
+# whether a deliberately uninformative retrieval is *evenly* uninformative across groups
+# is not a fairness question, and including them would triple the multiplicity burden on
+# the contrasts that are. Their per-group discrimination is still tabulated.
+KNN_CONTRAST_MODELS = tuple(f"NEAREST_{strategy}" for strategy in KNN_STRATEGIES)
 
 # The stratum families, in reporting order. Each entry names the column the levels come
 # from, whether that column lives in the prediction frame or has to be joined from the
@@ -111,19 +139,53 @@ def subgroup_dir() -> Path:
     return review_output_dir(ANALYSIS_NAME)
 
 
-def load_predictions_with_demographics(source: VectorSource) -> pd.DataFrame:
-    """Join the published held-out probabilities to each patient's sex and race.
+def load_knn_predictions() -> pd.DataFrame:
+    """Reshape the neighbour-weighted predictions into one column per scheme-strategy.
+
+    summary_predictions.csv is long -- one row per (patient, weighting strategy, retrieval
+    scheme) -- and everything downstream expects the wide layout the classifier arms use,
+    one column per model. The pivot is what makes the KNN arm scoreable by exactly the
+    same code as the classifiers, with no refit and no second implementation of the
+    bootstrap.
+
+    Returns:
+        pd.DataFrame: patient_id, true_label, and one column per retrieval-scheme x
+            weighting-strategy pair.
+    """
+    long = pd.read_csv(Path(os.environ['RESULTS_DIR']) / "summary_predictions.csv")
+    long['model'] = long['neighbor_scheme'] + "_" + long['weighting_strategy']
+    wide = long.pivot(index='anchor_patient_id', columns='model', values='predicted_risk')
+    labels = long.groupby('anchor_patient_id')['true_label'].first()
+    # The label must be constant for a patient across all 16 rows; if it is not, the long
+    # table was built from more than one run and the whole arm is untrustworthy.
+    if long.groupby('anchor_patient_id')['true_label'].nunique().max() != 1:
+        raise ValueError(
+            "summary_predictions.csv gives a patient two different true labels; the "
+            "neighbour predictions were not all written by one run."
+        )
+    frame = wide.join(labels).reset_index().rename(columns={'anchor_patient_id': 'patient_id'})
+    missing = [model for model in KNN_MODELS if model not in frame.columns]
+    if missing:
+        raise KeyError(f"summary_predictions.csv is missing KNN arms: {missing}")
+    return frame[['patient_id', 'true_label', *KNN_MODELS]]
+
+
+def load_predictions_with_demographics(arm: str) -> pd.DataFrame:
+    """Join one arm's published held-out predictions to each patient's stratum fields.
 
     Args:
-        source (VectorSource): EMBEDDED or FEATURE.
+        arm (str): ARM_EMBEDDED, ARM_FEATURE, or ARM_KNN.
 
     Returns:
         pd.DataFrame: One row per held-out patient: patient_id, true_label, one column per
-            model, plus Sex and Race_Ethnicity.
+            model in that arm, plus every stratum column.
     """
-    predictions = pd.read_parquet(
-        Path(os.environ['RESULTS_DIR']) / f"test_predictions_{source.name}.parquet"
-    )
+    if arm == ARM_KNN:
+        predictions = load_knn_predictions()
+    else:
+        predictions = pd.read_parquet(
+            Path(os.environ['RESULTS_DIR']) / f"test_predictions_{arm}.parquet"
+        )
     demographics = pd.read_parquet(
         Path(os.environ['FEATURE_DATAFRAME_PATH']),
         columns=['Sex', 'Race_Ethnicity', *JOINED_COLUMNS],
@@ -137,6 +199,32 @@ def load_predictions_with_demographics(source: VectorSource) -> pd.DataFrame:
         joined['AgeInYears'], bins=AGE_BINS, labels=list(AGE_LABELS), right=False
     ).astype('object')
     return joined
+
+
+def arm_models(arm: str) -> tuple[str, ...]:
+    """The model column names one arm contributes.
+
+    Args:
+        arm (str): ARM_EMBEDDED, ARM_FEATURE, or ARM_KNN.
+
+    Returns:
+        tuple[str, ...]: Column names to score.
+    """
+    return KNN_MODELS if arm == ARM_KNN else MODELS
+
+
+def arm_contrast_models(arm: str) -> tuple[str, ...]:
+    """The model column names one arm contributes to the CONTRAST set.
+
+    Narrower than arm_models for the KNN arm, where only nearest retrieval is contrasted.
+
+    Args:
+        arm (str): ARM_EMBEDDED, ARM_FEATURE, or ARM_KNN.
+
+    Returns:
+        tuple[str, ...]: Column names to contrast across groups.
+    """
+    return KNN_CONTRAST_MODELS if arm == ARM_KNN else MODELS
 
 
 def family_levels(frame: pd.DataFrame, family: dict) -> list[str]:
@@ -328,15 +416,15 @@ def unpaired_auc_difference(
     )
 
 
-def score_groups(frame: pd.DataFrame, source: VectorSource) -> pd.DataFrame:
+def score_groups(frame: pd.DataFrame, arm: str) -> pd.DataFrame:
     """Per-group, per-model discrimination and calibration.
 
     Args:
         frame (pd.DataFrame): Output of load_predictions_with_demographics.
-        source (VectorSource): Which representation these predictions came from.
+        arm (str): Which prediction arm these came from.
 
     Returns:
-        pd.DataFrame: One row per (representation, group, model).
+        pd.DataFrame: One row per (arm, group, model).
     """
     masks = group_masks(frame)
 
@@ -347,7 +435,7 @@ def score_groups(frame: pd.DataFrame, source: VectorSource) -> pd.DataFrame:
         y_true = subset['true_label'].to_numpy()
         n_events = int(y_true.sum())
         row = {
-            'representation': source.name,
+            'representation': arm,
             'group': group,
             'model': model,
             'n': int(len(subset)),
@@ -381,12 +469,12 @@ def score_groups(frame: pd.DataFrame, source: VectorSource) -> pd.DataFrame:
     rows = Parallel(n_jobs=int(os.environ.get('SUBGROUP_JOBS', '1')))(
         delayed(one_cell)(group, mask, model)
         for group, mask in masks.items()
-        for model in MODELS
+        for model in arm_models(arm)
     )
     return pd.DataFrame(rows)
 
 
-def score_contrasts(frame: pd.DataFrame, source: VectorSource) -> pd.DataFrame:
+def score_contrasts(frame: pd.DataFrame, arm: str) -> pd.DataFrame:
     """Every between-group AUC contrast the stratum registry defines.
 
     Two-arm families are contrasted directly, arm A minus arm B. Multi-level families are
@@ -399,10 +487,10 @@ def score_contrasts(frame: pd.DataFrame, source: VectorSource) -> pd.DataFrame:
 
     Args:
         frame (pd.DataFrame): Output of load_predictions_with_demographics.
-        source (VectorSource): Which representation these predictions came from.
+        arm (str): Which prediction arm these came from.
 
     Returns:
-        pd.DataFrame: One row per (representation, family, contrast, model).
+        pd.DataFrame: One row per (arm, family, contrast, model).
     """
     masks = group_masks(frame)
     jobs = []
@@ -421,7 +509,7 @@ def score_contrasts(frame: pd.DataFrame, source: VectorSource) -> pd.DataFrame:
             subset_a, subset_b = frame[mask_a], frame[mask_b]
             if not (estimable(subset_a['true_label']) and estimable(subset_b['true_label'])):
                 continue
-            for model in MODELS:
+            for model in arm_contrast_models(arm):
                 jobs.append((family['name'], label, model, subset_a, subset_b))
 
     # Every job re-seeds from SEED, so the result does not depend on how the work was
@@ -434,7 +522,7 @@ def score_contrasts(frame: pd.DataFrame, source: VectorSource) -> pd.DataFrame:
             rng,
         )
         return {
-            'representation': source.name,
+            'representation': arm,
             'family': family_name,
             'contrast': label,
             'model': model,

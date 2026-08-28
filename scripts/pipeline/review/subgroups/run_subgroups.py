@@ -9,11 +9,19 @@ can actually support (age band, marital status, smoking status) plus religion, a
 clinical families (MDD severity, MDD recurrence) that ask a different question — whether
 discrimination is even across illness presentation rather than across people.
 
+Covers all three prediction arms, not just the classifiers: the embedded and
+feature-vector classifiers from their prediction parquets, and the neighbour-weighted
+predictor from summary_predictions.csv, whose sixteen retrieval-scheme x
+weighting-strategy pairs are scored per group. Only nearest retrieval is *contrasted*
+across groups — asking whether a deliberately uninformative retrieval scheme is evenly
+uninformative across subgroups is not a fairness question, and including the three
+negative controls would triple the multiplicity burden on the contrasts that are.
+
 Preferred language is absent by necessity, not oversight: 98.9% of the cohort prefers
 English, leaving one estimable level and therefore no contrast.
 
 Artifacts, in ARTIFACTS_DIR/review/subgroups/:
-  subgroup_performance.csv    every (representation, group, model) row
+  subgroup_performance.csv    every (arm, group, model) row across all three arms
   subgroup_contrasts.csv      every between-group contrast, with raw and BH-adjusted p
   subgroup_table.md           the fairness-family supplement table, primary model
   subgroup_clinical_table.md  the clinical-family table, primary model
@@ -34,6 +42,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from scripts.pipeline.review.subgroups.core import (
+    ARM_EMBEDDED,
+    ARM_FEATURE,
+    ARM_KNN,
+    CLASSIFIER_ARMS,
+    KNN_CONTRAST_MODELS,
+    KNN_MODELS,
     MIN_EVENTS,
     MODELS,
     PRIMARY_MODEL,
@@ -44,7 +58,25 @@ from scripts.pipeline.review.subgroups.core import (
     score_groups,
     subgroup_dir,
 )
-from scripts.shared.utils import VectorSource
+
+# The neighbour-weighted arm's headline configuration: nearest retrieval with the
+# LLM-judged weighting, which is the arm the main text reports.
+PRIMARY_KNN_MODEL = "NEAREST_LLM"
+ARMS = (ARM_EMBEDDED, ARM_FEATURE, ARM_KNN)
+
+# One representative model per arm for the primary tables and the forest plot. The full
+# grid stays in the CSVs; a table showing 24 models against 30 groups would be unreadable
+# and would bury the comparison it exists to make.
+PRIMARY_BY_ARM = {
+    ARM_EMBEDDED: PRIMARY_MODEL,
+    ARM_FEATURE: PRIMARY_MODEL,
+    ARM_KNN: PRIMARY_KNN_MODEL,
+}
+ARM_LABELS = {
+    ARM_EMBEDDED: "Embedded (logistic regression)",
+    ARM_FEATURE: "Feature vector (logistic regression)",
+    ARM_KNN: "Neighbour-weighted (nearest, LLM)",
+}
 
 # Families reported as fairness evidence, against families reported as clinical
 # heterogeneity. The split is editorial rather than statistical -- the arithmetic is
@@ -110,10 +142,12 @@ def performance_table(performance: pd.DataFrame, families: tuple[str, ...]) -> s
         str: A GitHub-flavoured markdown table.
     """
     lines = [
-        "| Group | n | TRD+ | Representation | ROC AUC (95% CI) | Brier | Calibration slope | Calibration-in-the-large |",
+        "| Group | n | TRD+ | Arm | ROC AUC (95% CI) | Brier | Calibration slope | Calibration-in-the-large |",
         "| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |",
     ]
-    primary = performance[performance['model'] == PRIMARY_MODEL].copy()
+    primary = performance[
+        [row['model'] == PRIMARY_BY_ARM[row['representation']] for _, row in performance.iterrows()]
+    ].copy()
     primary['family'] = primary['group'].map(group_family)
     ordered = ['overall'] if 'overall' in families or families == FAIRNESS_FAMILIES else []
     keys = ordered + [
@@ -121,7 +155,7 @@ def performance_table(performance: pd.DataFrame, families: tuple[str, ...]) -> s
         if key != 'overall' and group_family(key) in families
     ]
     for key in keys:
-        for representation in ('EMBEDDED', 'FEATURE'):
+        for representation in ARMS:
             row = primary[(primary['group'] == key) & (primary['representation'] == representation)]
             if row.empty:
                 continue
@@ -137,7 +171,7 @@ def performance_table(performance: pd.DataFrame, families: tuple[str, ...]) -> s
                 ]
             lines.append(
                 f"| {group_label(key)} | {int(row['n']):,} | {int(row['n_events']):,} | "
-                f"{representation.title()} | " + " | ".join(cells) + " |"
+                f"{ARM_LABELS[representation]} | " + " | ".join(cells) + " |"
             )
     return "\n".join(lines)
 
@@ -154,7 +188,7 @@ def contrast_table(contrasts: pd.DataFrame, families: tuple[str, ...]) -> str:
     """
     subset = contrasts[contrasts['family'].isin(families)]
     lines = [
-        "| Contrast | Representation | Model | ΔROC AUC (95% CI) | p | p (BH) |",
+        "| Contrast | Arm | Model | ΔROC AUC (95% CI) | p | p (BH) |",
         "| --- | --- | --- | ---: | ---: | ---: |",
     ]
     for _, row in subset.iterrows():
@@ -195,16 +229,17 @@ def plot_forest(performance: pd.DataFrame, save_dir):
         Path: The written figure.
     """
     primary = performance[
-        (performance['model'] == PRIMARY_MODEL) & performance['estimable']
+        [row['model'] == PRIMARY_BY_ARM[row['representation']] and row['estimable']
+         for _, row in performance.iterrows()]
     ].copy()
     primary['family'] = primary['group'].map(group_family)
     keys = ['overall'] + [
         key for key in primary['group'].unique()
         if key != 'overall' and group_family(key) in FAIRNESS_FAMILIES
     ]
-    figure, ax = plt.subplots(figsize=(6.0, 0.30 * len(keys) + 1.1))
-    offsets = {'EMBEDDED': +0.18, 'FEATURE': -0.18}
-    colours = {'EMBEDDED': '#1f77b4', 'FEATURE': '#d62728'}
+    figure, ax = plt.subplots(figsize=(6.0, 0.34 * len(keys) + 1.2))
+    offsets = {ARM_EMBEDDED: +0.24, ARM_FEATURE: 0.0, ARM_KNN: -0.24}
+    colours = {ARM_EMBEDDED: '#1f77b4', ARM_FEATURE: '#d62728', ARM_KNN: '#2ca02c'}
     for representation, offset in offsets.items():
         subset = primary[primary['representation'] == representation]
         positions, scores, lows, highs = [], [], [], []
@@ -220,13 +255,13 @@ def plot_forest(performance: pd.DataFrame, save_dir):
         ax.errorbar(
             scores, positions, xerr=[lows, highs], fmt='o', markersize=4.0,
             capsize=2.0, linewidth=1.0, color=colours[representation],
-            label=representation.title(),
+            label=ARM_LABELS[representation],
         )
     ax.axvline(0.5, color='grey', linewidth=0.8, linestyle=':')
     ax.set_yticks(range(len(keys)))
     ax.set_yticklabels([group_label(k) for k in reversed(keys)], fontsize=7)
     ax.set_xlabel("ROC AUC (95% CI)", fontsize=8)
-    ax.set_title(f"Subgroup discrimination, {PRIMARY_MODEL.replace('_', ' ')}", fontsize=9)
+    ax.set_title("Subgroup discrimination, one representative model per arm", fontsize=9)
     ax.legend(fontsize=7, loc='lower right')
     ax.tick_params(axis='x', labelsize=7)
     figure.tight_layout()
@@ -239,10 +274,10 @@ def plot_forest(performance: pd.DataFrame, save_dir):
 def main():
     save_dir = subgroup_dir()
     performance_frames, contrast_frames = [], []
-    for source in (VectorSource.EMBEDDED, VectorSource.FEATURE):
-        frame = load_predictions_with_demographics(source)
-        performance_frames.append(score_groups(frame, source))
-        contrast_frames.append(score_contrasts(frame, source))
+    for arm in ARMS:
+        frame = load_predictions_with_demographics(arm)
+        performance_frames.append(score_groups(frame, arm))
+        contrast_frames.append(score_contrasts(frame, arm))
     performance = pd.concat(performance_frames, ignore_index=True)
     contrasts = pd.concat(contrast_frames, ignore_index=True)
 
@@ -265,8 +300,11 @@ def main():
     surviving = contrasts[contrasts['survives_bh']]
     not_estimable = sorted(set(performance[~performance['estimable']]['group']))
     summary = {
-        'primary_model': PRIMARY_MODEL,
-        'models': list(MODELS),
+        'arms': list(ARMS),
+        'primary_model_by_arm': PRIMARY_BY_ARM,
+        'classifier_models': list(MODELS),
+        'knn_models': list(KNN_MODELS),
+        'knn_models_contrasted': list(KNN_CONTRAST_MODELS),
         'min_events_for_estimability': MIN_EVENTS,
         'families': [f['name'] for f in STRATUM_FAMILIES],
         'groups_not_estimable': not_estimable,
