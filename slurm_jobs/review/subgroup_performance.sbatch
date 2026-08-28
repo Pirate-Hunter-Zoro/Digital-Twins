@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=subgroup_perf
-#SBATCH --partition=c3
+#SBATCH --partition=c3_short
 #SBATCH --time=03:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
@@ -8,6 +8,15 @@
 #SBATCH -o slurm_jobs/review/logs/subgroup_perf_out.txt
 #SBATCH -e slurm_jobs/review/logs/subgroup_perf_err.txt
 
+# PARTITION: c3_short, not c3. They run on the SAME nodes (compute300-305);
+# what differs is scheduling policy. c3_short has PriorityTier=20 against c3's
+# 10, and tier is a hard ordering rather than a weighted factor -- every job in
+# a higher tier is considered before any job in a lower one. It also carries
+# PriorityJobFactor=2 against 1, doubling the partition term in the multifactor
+# priority. Measured 2026-08-28: these jobs sat pending on c3 behind 62 others
+# with no projected start time, and started within three seconds of being moved.
+# The cost is the 9-hour wall. This job asks for 03:00:00, so it fits with room to
+# spare -- but anything that grows past nine hours belongs back on c3.
 # =============================================================================
 # Review round of 2026-08-28, subgroup-performance item.
 #
