@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated 2026-08-27, 20:35.
+Last updated 2026-08-27, 20:40.
 
 **This repo is a project, not a course.** The agenda is the `<<< RESUME HERE >>>`
 marker in `~/Research-Journey/planning/TRD-EHR_TODO.txt`, never the README's
@@ -15,13 +15,44 @@ models inside every draw**. `estimate_effect` is gone, split into
 `estimation` and `total` — so CI keys carry a scheme suffix. `run_one.py` and
 `slurm_jobs/pipeline/counterfactual/counterfactual_effects.sbatch` exist.
 
-Written under the override phrase at 19:55 — **override expired; no-code rule is
-back on.** Verified: imports clean under `embedder_pipeline`. Dry run held point
+Written under the override phrase at 19:55; that mechanism is now moot here —
+see the stance note below. Verified: imports clean under `embedder_pipeline`. Dry run held point
 estimates (`+0.016151`) while `bupropion_vs_snri`'s band went ±0.003 → (−0.001,
 +0.037), crossing zero.
 
-**Blocked: the job has never been queued.** `sbatch` is not allowlisted headless.
-Nothing has run; no post-refit numbers exist.
+**Unblocked and submitted.** `sbatch`, `squeue`, `scancel`, `sacct` and the git
+commands are now allowlisted, `defaultMode` is `acceptEdits`, and
+`~/Research-Journey` is in `additionalDirectories` — so the task list is
+writable from here rather than only greppable. This repository's
+`tutorboard.json` also now carries **`"stance": "do"`**: the tutor writes the
+code, runs it, and commits. No override phrase is needed and none should be
+asked for.
+
+**Slurm job 2066883** — array `0-2`, partition `c3`, 24 cores, 64G, 4h wall —
+submitted 2026-08-27 20:33 from compute301, running on compute305, healthy at
+three minutes with `LokyBackend` across 24 workers and nothing on stderr but
+sklearn's `unknown categories` warning (expected: a resampled training draw can
+miss a level).
+
+## First thing tomorrow
+
+Check `2066883` before anything else:
+
+```
+sacct -j 2066883 --format=JobID,State,Elapsed,MaxRSS
+ls results/counterfactual_pipeline/*/effect_results.json
+```
+
+Then read the widths. The whole refactor exists because the old intervals were
+about ±0.002 against per-patient effects spreading over roughly ±0.10. **If the
+new ones come back near ±0.002, the refit is not happening** and the job wiring
+is what to suspect, not the statistics — the old bootstrap was instantaneous, so
+a run that finished in seconds is the same signal. If they are wide and cross
+zero, that is the honest answer the design was built to produce, not a failure.
+
+Next unbuilt thing after that is the **falsification battery** — SMD, E-value,
+negative control; overlap/positivity has been built and verified since
+2026-08-19. The `<<< RESUME HERE 2026-08-27 >>>` marker sits on it.
 
 ## Right, do not re-teach
 
