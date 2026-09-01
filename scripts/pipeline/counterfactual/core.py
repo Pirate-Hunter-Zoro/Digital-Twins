@@ -370,6 +370,196 @@ def in_band_effects(risk_df: pd.DataFrame) -> np.ndarray:
     return per_patient_effect[risk_df['in_prob_interval'].to_numpy()]
 
 
+# The label an index prescription carries when it maps to no antidepressant class at all.
+# Named once here because it appears as a dictionary key in every population report and a
+# reader has to be able to tell it apart from a real arm.
+UNMAPPED_ARM = "unmapped"
+
+
+def split_arm_census() -> pd.DataFrame:
+    """One row per patient in the frozen 80/20 split: which side, which index class, TRD or not.
+
+    The population report's denominators are SPLIT-WIDE -- every patient on each side,
+    including the third arm and the patients whose index prescription maps to no class at
+    all -- so they cannot be recovered from an EligiblePopulations, which has already
+    dropped everyone outside the contrast's two arms. Built from the split id lists and the
+    arm mapping directly rather than from the feature parquet: create_train_test_split
+    reads that file's index to produce the ids in the first place, so the ids ARE the
+    cohort and a second full-width read would buy nothing.
+
+    Returns:
+        pd.DataFrame: Indexed by patient_id. Columns 'split' ('train' or 'test'), 'arm' (the
+            med_definitions class string, or UNMAPPED_ARM) and 'trd_label' (0/1 int).
+    """
+    train_ids, test_ids = create_train_test_split()
+    mappings = get_AD_mappings()
+    trd_patients = load_trd_set()
+
+    census = pd.DataFrame(index=pd.Index(sorted(train_ids | test_ids), name='patient_id'))
+    census['split'] = np.where(census.index.isin(test_ids), 'test', 'train')
+    # A patient missing from the mapping, or carrying a med that get_med_arm could not
+    # classify, lands as NaN. Both are the same thing to this report and both must be
+    # counted rather than dropped, or the per-arm shares stop summing to the split.
+    census['arm'] = census.index.map(mappings)
+    census['arm'] = census['arm'].where(census['arm'].notna(), UNMAPPED_ARM)
+    census['trd_label'] = census.index.isin(trd_patients).astype(int)
+    return census
+
+
+def _side_accounting(side_census: pd.DataFrame, ref_arm: str, comp_arm: str) -> dict:
+    """Per-arm counts, shares and event rates for one side of the split.
+
+    Args:
+        side_census (pd.DataFrame): The rows of split_arm_census for a single split side.
+        ref_arm (str): The contrast's reference (T=0) class.
+        comp_arm (str): The contrast's comparison (T=1) class.
+
+    Returns:
+        dict: 'total_rows', 'contrast_rows', 'excluded_rows', and an 'arms' mapping from
+            class name to its count, share of the split side, TRD events, TRD rate, and the
+            'role' it plays in this contrast ('reference', 'comparison' or 'excluded').
+    """
+    total = int(len(side_census))
+    arms = {}
+    for arm_name, arm_rows in side_census.groupby('arm', observed=True):
+        count = int(len(arm_rows))
+        events = int(arm_rows['trd_label'].sum())
+        arms[str(arm_name)] = {
+            "count": count,
+            "share_of_split": float(count / total) if total else float("nan"),
+            "trd_events": events,
+            "trd_rate": float(events / count) if count else float("nan"),
+            "role": (
+                "reference" if arm_name == ref_arm
+                else "comparison" if arm_name == comp_arm
+                else "excluded"
+            ),
+        }
+    contrast_rows = sum(a['count'] for a in arms.values() if a['role'] != "excluded")
+    return {
+        "total_rows": total,
+        "contrast_rows": contrast_rows,
+        "excluded_rows": total - contrast_rows,
+        "arms": arms,
+    }
+
+
+def _trim_accounting(risk_df: pd.DataFrame) -> dict:
+    """Who the overlap band kept and who it removed, per arm, with the ratios either side of it.
+
+    summarize_effect already reports the TRIMMED counts; this reports the RETAINED ones
+    beside them, because nothing else in the artifacts states the analysis population and a
+    reader who mistakes the trimmed count for the survivors misreads it by threefold. The
+    before/after arm ratios are here for the same reason: the floor cuts the larger arm
+    harder, so the trim does not merely shrink the population, it re-weights it.
+
+    Args:
+        risk_df (pd.DataFrame): Output of attach_propensity.
+
+    Returns:
+        dict: Per-arm eligible/trimmed/retained counts and shares, the in-band total, the
+            observed propensity extremes, the band edges, and the reference-to-comparison
+            arm ratio before and after trimming.
+    """
+    is_comparison = (risk_df['is_comparison'] == 1).to_numpy()
+    in_band = risk_df['in_prob_interval'].to_numpy()
+    propensity = risk_df['propensity'].to_numpy()
+
+    report = {
+        "band_floor": PROB_FLOOR,
+        "band_ceiling": PROB_CEILING,
+        "propensity_min": float(propensity.min()),
+        "propensity_max": float(propensity.max()),
+        "eligible_total": int(len(risk_df)),
+        "in_band_total": int(in_band.sum()),
+    }
+    retained = {}
+    for role, mask in (("reference", ~is_comparison), ("comparison", is_comparison)):
+        eligible = int(mask.sum())
+        kept = int((mask & in_band).sum())
+        trimmed = eligible - kept
+        retained[role] = kept
+        report[f"{role}_eligible_count"] = eligible
+        report[f"{role}_trimmed_count"] = trimmed
+        report[f"{role}_trimmed_share"] = float(trimmed / eligible) if eligible else float("nan")
+        report[f"{role}_retained_count"] = kept
+        report[f"{role}_retained_share"] = float(kept / eligible) if eligible else float("nan")
+
+    # Reference patients per comparison patient, before the band and after it. These differ
+    # whenever the two arms are trimmed at different rates, which is the composition shift.
+    before_denominator = int(is_comparison.sum())
+    report["arm_ratio_before_trim"] = (
+        float(int((~is_comparison).sum()) / before_denominator) if before_denominator else float("nan")
+    )
+    report["arm_ratio_after_trim"] = (
+        float(retained["reference"] / retained["comparison"]) if retained["comparison"] else float("nan")
+    )
+    return report
+
+
+def population_report(spec_dict: dict, census: pd.DataFrame, risk_df: pd.DataFrame) -> dict:
+    """Everything about WHO this contrast was estimated on, on both sides of the split.
+
+    Both sides are reported, not just the test side, because they answer different
+    questions: the test side defines the ESTIMAND, while the train side bounds how well the
+    three models can be known at all. Without it a reader cannot tell a small-arm precision
+    problem from a trim problem.
+
+    Args:
+        spec_dict (dict): The pairwise contrast spec.
+        census (pd.DataFrame): Output of split_arm_census.
+        risk_df (pd.DataFrame): Output of attach_propensity, for the overlap-trim block.
+            The propensity column is scored on TEST patients only, so the trim accounting
+            has no train-side counterpart.
+
+    Returns:
+        dict: 'key', 'display_name', the two arm names, a 'train' and a 'test' accounting
+            block, and an 'overlap_trim' block covering the test side.
+    """
+    ref_arm, comp_arm = spec_dict['reference_arm'], spec_dict['comparison_arm']
+    return {
+        "key": spec_dict['key'],
+        "display_name": spec_dict['display_name'],
+        "reference_arm": ref_arm,
+        "comparison_arm": comp_arm,
+        "train": _side_accounting(census[census['split'] == 'train'], ref_arm, comp_arm),
+        "test": _side_accounting(census[census['split'] == 'test'], ref_arm, comp_arm),
+        "overlap_trim": _trim_accounting(risk_df),
+    }
+
+
+def balance_frame(population: EligiblePopulations, risk_df: pd.DataFrame) -> pd.DataFrame:
+    """The test-side feature matrix with arm, band membership and overlap weight attached.
+
+    The single object the covariate-balance work reads: every covariate as the models saw
+    it, plus the three columns that decide which patients each version of the balance table
+    is computed over -- raw (all rows), hard-trimmed (in_prob_interval), and overlap-weighted
+    (overlap_weight). Assembling it once means the three tables cannot silently disagree
+    about which patient sat in which arm.
+
+    Categorical columns arrive with their native dtype and are deliberately NOT expanded
+    here. How a multi-level nominal field turns into a set of balance rows is a reporting
+    decision rather than plumbing, and it belongs where the table is computed.
+
+    Args:
+        population (EligiblePopulations): The contrast's populations; only the test side is read.
+        risk_df (pd.DataFrame): Output of attach_propensity, sharing the test matrix's index.
+
+    Returns:
+        pd.DataFrame: The eligible test matrix with 'is_comparison' (0/1 int),
+            'in_prob_interval' (bool) and 'overlap_weight' (e(x)(1-e(x))) appended.
+    """
+    frame = population.eligible_test_matrix.copy()
+    collisions = {'is_comparison', 'in_prob_interval', 'overlap_weight'} & set(frame.columns)
+    if collisions:
+        raise ValueError(f"feature matrix already carries balance column(s): {sorted(collisions)}")
+    aligned = risk_df.loc[frame.index]
+    frame['is_comparison'] = aligned['is_comparison'].to_numpy()
+    frame['in_prob_interval'] = aligned['in_prob_interval'].to_numpy()
+    frame['overlap_weight'] = (aligned['propensity'] * (1 - aligned['propensity'])).to_numpy()
+    return frame
+
+
 def resample_populations(population: EligiblePopulations, generator: np.random.Generator, resample_test: bool) -> EligiblePopulations:
     """Draw one bootstrap replicate of the eligible populations.
 
@@ -637,6 +827,62 @@ def plot_effect_distribution(spec_dict: dict, risk_df: pd.DataFrame, save_dir: P
     ax.set_title(spec_dict['display_name'])
     ax.legend(loc='upper right')
     fig.savefig(save_dir / "effect_histogram.png")
+    plt.close(fig)
+
+
+def plot_propensity_by_arm(spec_dict: dict, risk_df: pd.DataFrame, save_dir: Path) -> None:
+    """Render the propensity distribution with the two arms in distinguishable colours.
+
+    The standard positivity diagnostic, and the half of the overlap screen the trim report
+    cannot supply: two counts stand in for a distribution, and a count cannot show WHERE the
+    mass sits relative to the band. The shaded margins are the trimmed regions, so the
+    removed mass is visible rather than inferred.
+
+    Read it for the asymmetry, which tracks how unequal the two arms are. e(x) is
+    P(comparison arm | X), so the more the reference arm outnumbers the comparison arm the
+    further below a half the whole distribution sits, and the further INSIDE its bulk the
+    floor lands -- against the 4:1 arms of snri_vs_ssri the mass centres near 0.2 and the
+    floor cuts the reference arm in quantity, while a reference-arm patient would need
+    e(x) > 0.9 to be cut at all. On the near-balanced arms of bupropion_vs_snri the same
+    band is close to symmetric in its effect. So a fixed band over unequal arms is lopsided
+    by construction rather than by defect, and how lopsided is what this figure shows.
+
+    Drawn on the TEST side only, because that is where the propensity column is scored.
+    Purely a side-effect plot, no returned metric.
+
+    Args:
+        spec_dict (dict): The pairwise contrast spec (its 'display_name' and the two arm names).
+        risk_df (pd.DataFrame): Output of attach_propensity.
+        save_dir (Path): Directory to write the figure into.
+    """
+    propensity = risk_df['propensity'].to_numpy()
+    is_comparison = (risk_df['is_comparison'] == 1).to_numpy()
+    in_band = risk_df['in_prob_interval'].to_numpy()
+
+    # Fixed bins over the whole unit interval, shared by both arms: a shared grid is what
+    # makes the two histograms comparable bar for bar, and the full [0, 1] range keeps the
+    # band edges in their true position instead of rescaling to the observed support.
+    bins = np.linspace(0.0, 1.0, 51)
+
+    fig, ax = plt.subplots()
+    ax.axvspan(0.0, PROB_FLOOR, color='grey', alpha=0.12,
+               label=f"Trimmed (outside {PROB_FLOOR:g}-{PROB_CEILING:g})")
+    ax.axvspan(PROB_CEILING, 1.0, color='grey', alpha=0.12)
+    for mask, colour, role in ((~is_comparison, 'tab:blue', 'reference'),
+                               (is_comparison, 'tab:orange', 'comparison')):
+        arm_n = int(mask.sum())
+        trimmed_share = float((mask & ~in_band).sum() / arm_n) if arm_n else float("nan")
+        ax.hist(
+            propensity[mask], bins=bins, color=colour, alpha=0.55,
+            label=f"{spec_dict[f'{role}_arm']} ({role}, n={arm_n}, {trimmed_share:.1%} trimmed)",
+        )
+    ax.axvline(PROB_FLOOR, color='black', linestyle='--', linewidth=1.2)
+    ax.axvline(PROB_CEILING, color='black', linestyle='--', linewidth=1.2)
+    ax.set_xlabel("Propensity e(x) = P(comparison arm | X)")
+    ax.set_ylabel("Number of patients")
+    ax.set_title(f"{spec_dict['display_name']} -- propensity by arm (test set)")
+    ax.legend(loc='upper right')
+    fig.savefig(save_dir / "propensity_by_arm.png")
     plt.close(fig)
 
 

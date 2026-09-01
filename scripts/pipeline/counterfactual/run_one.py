@@ -14,7 +14,14 @@ once per scheme -- because the two are nested rather than rival:
 Artifacts written:
   effect_results.json                        point estimates, trim report, 8 CI keys, failure counts
   model_grades.json                          gradeable (non-counterfactual) metrics per arm
+  population_report.json                     who the contrast was estimated on: per-arm counts,
+                                             shares and TRD rates on BOTH sides of the split,
+                                             plus retained-and-trimmed counts and the arm ratio
+                                             either side of the overlap band
   per_patient_risks.csv                      the full-data risk frame
+  balance_frame.csv                          test-side covariates with arm, band membership and
+                                             overlap weight attached; the input to the balance tables
+  propensity_by_arm.png                      e(x) coloured by arm with the band edges drawn
   effect_histogram.png                       per-patient effects, one number per patient
   bootstrap_effect_histogram_<scheme>.png    per-patient effects pooled over every draw
   bootstrap_draws.csv                        the per-draw averages the intervals are cut from
@@ -37,7 +44,11 @@ from scripts.pipeline.counterfactual.core import (
     summarize_effect,
     grade_arm_models,
     bootstrap_effect,
+    split_arm_census,
+    population_report,
+    balance_frame,
     plot_effect_distribution,
+    plot_propensity_by_arm,
     plot_bootstrap_effect_distribution,
     plot_ate_sampling_distribution,
     contrast_output_dir,
@@ -57,6 +68,20 @@ population = build_eligible_populations(spec_dict)
 risk_df = estimate_once(population)
 point_estimates = summarize_effect(risk_df)
 grades = grade_arm_models(risk_df)
+
+# Who this contrast was estimated on, and what the overlap band did to that population.
+# Written BEFORE the bootstrap, which costs 2 x N_BOOTSTRAP refits: none of these three
+# artifacts depends on it, and a re-run wanting only the accounting should not have to wait
+# for an interval it already has.
+census = split_arm_census()
+with open(save_dir / "population_report.json", 'w') as f:
+    json.dump(population_report(spec_dict, census, risk_df), f, indent=4)
+
+# The object the covariate-balance tables are computed from -- persisted so the balance work
+# is a read rather than a refit.
+balance_frame(population, risk_df).to_csv(save_dir / "balance_frame.csv", index_label="patient_id")
+
+plot_propensity_by_arm(spec_dict, risk_df, save_dir)
 
 # Scheme A: model-estimation uncertainty only. Scheme B: that plus the sampling variability
 # of the population averaged over. B's band should contain A's.
