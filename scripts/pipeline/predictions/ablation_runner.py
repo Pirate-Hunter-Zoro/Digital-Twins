@@ -86,7 +86,10 @@ def plot_ablation_roc_ci(rows: list[dict], baseline_metrics: dict[str, dict[str,
     ablation_labels = ["Baseline"] + [spec_labels[diff[0]] for diff in diffs]
     
     # Now plot the confidence intervals for each classifier over the different ablations
-    fig, axes = plt.subplots(nrows=1, ncols=4, sharex=True, figsize=(20,len(ABLATIONS)+1))
+    # 2x2 rather than 1x4: at the manuscript's 6in text width a four-wide
+    # strip downscales ~3.3x and the tick labels stop being readable.
+    fig, axes = plt.subplots(nrows=2, ncols=2, sharex=True, figsize=(10.0, 7.4))
+    axes = axes.ravel()
     for i, classifier in enumerate(classifier_order):
         ax = axes[i]
         lows, mids, highs = np.zeros(len(ABLATIONS)+1),\
@@ -105,10 +108,12 @@ def plot_ablation_roc_ci(rows: list[dict], baseline_metrics: dict[str, dict[str,
         ax.errorbar(mids, np.arange(len(ABLATIONS)+1), xerr=errors, fmt='o', capsize=5)
         ax.axvline(baseline_metrics[classifier]["roc_score"], linestyle='--', linewidth=1, alpha=0.5)
         ax.set_yticks(np.arange(len(ABLATIONS)+1))
-        ax.set_yticklabels(ablation_labels if i==0 else [""]*len(ablation_labels))
+        # Every panel carries its own row labels now that they sit in a grid.
+        ax.set_yticklabels(ablation_labels)
         ax.invert_yaxis() # Baseline row should go at top
-        ax.set_title(classifier)
-        ax.set_xlabel("ROC AUC")
+        ax.set_title(classifier.replace("_", " "))
+        if i >= 2:
+            ax.set_xlabel("ROC AUC")
     
     fig.tight_layout()
     fig.savefig(baseline_results_dir / f"ablation_roc_ci_{VectorSource.EMBEDDED.name}.png")
